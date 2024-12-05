@@ -36,7 +36,7 @@ jobs:
 
       # Create .env file
       - name: Create .env file from GitHub Secrets
-        run: echo "${{ secrets.DOTNET_ENV_FILE }}" > ./publish/.env
+        run: echo '${{ secrets.DOTNET_ENV_FILE }}' > ./publish/.env
 
       # Deploy to Azure Web App
       - name: Deploy to Azure Web App
