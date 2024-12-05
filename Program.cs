@@ -1,28 +1,37 @@
-using Api_Project_Prn.Infra.Constants;
-using Api_Project_Prn.Services.CacheService;
+using Sep490_Backend.Infra.Constants;
+using Sep490_Backend.Services.AuthenService;
+using Sep490_Backend.Services.CacheService;
 using System.ComponentModel.Design;
 
-namespace Api_Project_Prn
+namespace Sep490_Backend
 {
     public class Program
     {
         public static void Main(string[] args)
         {
+            AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+            //AppContext.SetSwitch("Npgsql.DisableDateTimeInfinityConversions", true);
+
+            // Load environment variables from .env
+            DotNetEnv.Env.Load();
+
             var builder = WebApplication.CreateBuilder(args);
             // Add services to the container.
             builder.ConfigureServices();
 
             var app = builder.Build().ConfigurePipeline();
 
-            var scope = app.Services.GetService<IServiceScopeFactory>().CreateScope();
-            scope.ServiceProvider.GetService<IPubSubService>().SubscribeInternal();
+            using (var scope = app.Services.GetService<IServiceScopeFactory>().CreateScope())
+            {
+                // Initialize services within the scope
+                scope.ServiceProvider.GetService<IPubSubService>()?.SubscribeInternal();
+            }
 
+            // Setting the static variable
             var utcNow = DateTime.UtcNow;
             int timeToday = utcNow.Year + utcNow.Month + utcNow.Day;
             StaticVariable.TimeToday = timeToday;
 
-            //scope.ServiceProvider.GetService<IDiscussionService>()?.InitDiscussionMemory();
-            //scope.ServiceProvider.GetService<IHelpService>()?.InitHelpMemory();
             app.Run();
         }
     }

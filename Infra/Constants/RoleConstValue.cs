@@ -1,4 +1,4 @@
-﻿namespace Api_Project_Prn.Infra.Constants
+﻿namespace Sep490_Backend.Infra.Constants
 {
 	public class RoleConstValue
 	{

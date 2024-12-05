@@ -1,4 +1,4 @@
-﻿namespace Api_Project_Prn.DTO.Configuration
+﻿namespace Sep490_Backend.DTO.Configuration
 {
     public class AppSettings
     {

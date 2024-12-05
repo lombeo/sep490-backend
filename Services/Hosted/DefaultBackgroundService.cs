@@ -1,7 +1,7 @@
-﻿using Api_Project_Prn.Infra.Constants;
+﻿using Sep490_Backend.Infra.Constants;
 using System.ComponentModel.Design;
 
-namespace Api_Project_Prn.Services.Hosted
+namespace Sep490_Backend.Services.Hosted
 {
     public class DefaultBackgroundService : CustomBackgroundService<DefaultBackgroundService>
     {

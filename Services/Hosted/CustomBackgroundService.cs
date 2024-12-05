@@ -1,4 +1,4 @@
-﻿namespace Api_Project_Prn.Services.Hosted
+﻿namespace Sep490_Backend.Services.Hosted
 {
     public abstract class CustomBackgroundService<T> : IHostedService, IDisposable
     {

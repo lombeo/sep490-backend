@@ -1,4 +1,4 @@
-﻿namespace Api_Project_Prn.DTO.AuthenDTO
+﻿namespace Sep490_Backend.DTO.AuthenDTO
 {
     public class ReturnSignInDTO
     {

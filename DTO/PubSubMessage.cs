@@ -1,6 +1,6 @@
-﻿using Api_Project_Prn.Infra.Enums;
+﻿using Sep490_Backend.Infra.Enums;
 
-namespace Api_Project_Prn.DTO
+namespace Sep490_Backend.DTO
 {
     public class PubSubMessage
     {

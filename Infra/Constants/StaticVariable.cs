@@ -1,8 +1,8 @@
-﻿using Api_Project_Prn.DTO;
-using Api_Project_Prn.DTO.Configuration;
-using Api_Project_Prn.Infra.Entities;
+﻿using Sep490_Backend.DTO;
+using Sep490_Backend.DTO.Configuration;
+using Sep490_Backend.Infra.Entities;
 
-namespace Api_Project_Prn.Infra.Constants
+namespace Sep490_Backend.Infra.Constants
 {
     public static class StaticVariable
     {

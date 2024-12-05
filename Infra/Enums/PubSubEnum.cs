@@ -1,4 +1,4 @@
-﻿namespace Api_Project_Prn.Infra.Enums
+﻿namespace Sep490_Backend.Infra.Enums
 {
     public enum PubSubEnum : int
     {

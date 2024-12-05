@@ -1,4 +1,4 @@
-# Api_Project_Prn
+# Sep490_Backend
 
 
 
@@ -15,14 +15,14 @@ Already a pro? Just edit this README.md and make it your own. Want to make it ea
 
 ```
 cd existing_repo
-git remote add origin https://gitlab.com/lombeo/Api_Project_Prn.git
+git remote add origin https://gitlab.com/lombeo/Sep490_Backend.git
 git branch -M main
 git push -uf origin main
 ```
 
 ## Integrate with your tools
 
-- [ ] [Set up project integrations](https://gitlab.com/lombeo/Api_Project_Prn/-/settings/integrations)
+- [ ] [Set up project integrations](https://gitlab.com/lombeo/Sep490_Backend/-/settings/integrations)
 
 ## Collaborate with your team
 

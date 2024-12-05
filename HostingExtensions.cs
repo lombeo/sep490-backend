@@ -1,8 +1,8 @@
-﻿using Api_Project_Prn.DTO.Configuration;
-using Api_Project_Prn.Infra;
-using Api_Project_Prn.Infra.Constants;
-using Api_Project_Prn.Services.CacheService;
-using Api_Project_Prn.Services.Hosted;
+﻿using Sep490_Backend.DTO.Configuration;
+using Sep490_Backend.Infra;
+using Sep490_Backend.Infra.Constants;
+using Sep490_Backend.Services.CacheService;
+using Sep490_Backend.Services.Hosted;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -10,8 +10,9 @@ using Serilog;
 using System.ComponentModel.Design;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using Sep490_Backend.Services.AuthenService;
 
-namespace Api_Project_Prn
+namespace Sep490_Backend
 {
     public static class HostingExtensions
     {
@@ -41,6 +42,7 @@ namespace Api_Project_Prn
             builder.Services.AddMemoryCache();
             builder.Services.AddScoped<ICacheService, CacheService>();
             builder.Services.AddScoped<IPubSubService, PubSubService>();
+            builder.Services.AddScoped<IAuthenService, AuthenService>();
             builder.Services.AddScoped<RedisConnManager>();
             builder.Services.AddHostedService<DefaultBackgroundService>();
 
@@ -89,8 +91,11 @@ namespace Api_Project_Prn
                 };
             });
 
-            builder.Services.AddDbContext<PrnProjectApiContext>(options => options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
-            builder.Services.AddScoped<PrnProjectApiContext>();
+            var connectionString = Environment.GetEnvironmentVariable("DATABASE_CONNECTION_STRING")
+                       ?? builder.Configuration.GetConnectionString("DefaultConnection");
+
+            builder.Services.AddDbContext<BackendContext>(options => options.UseNpgsql(connectionString));
+            builder.Services.AddScoped<BackendContext>();
         }
 
         public static WebApplication ConfigurePipeline(this WebApplication app)
@@ -113,7 +118,7 @@ namespace Api_Project_Prn
                 endpoints.MapHealthChecks("/author/healthy");
                 endpoints.MapGet("/", async context =>
                 {
-                    await context.Response.WriteAsync("[API] PRN Project");
+                    await context.Response.WriteAsync("[API] SEP490 Backend");
                 });
             });
 
@@ -126,7 +131,7 @@ namespace Api_Project_Prn
         {
             using (var serviceScope = app.ApplicationServices.GetService<IServiceScopeFactory>().CreateScope())
             {
-                var context = serviceScope.ServiceProvider.GetService<PrnProjectApiContext>();
+                var context = serviceScope.ServiceProvider.GetService<BackendContext>();
                 if (context.Database.GetPendingMigrations().Any())
                 {
                     context.Database.MigrateAsync();

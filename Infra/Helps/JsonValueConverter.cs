@@ -1,7 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Newtonsoft.Json;
 
-namespace Api_Project_Prn.Infra.Helps
+namespace Sep490_Backend.Infra.Helps
 {
     public class JsonValueConverter<T> : ValueConverter<T, string>
     {

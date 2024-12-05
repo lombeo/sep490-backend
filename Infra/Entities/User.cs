@@ -1,8 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
 
-namespace Api_Project_Prn.Infra.Entities
+namespace Sep490_Backend.Infra.Entities
 {
-    public class User
+    public class User : CommonEntity
     {
         public int Id { get; set; }
         public string Username { get; set; }
@@ -20,6 +20,11 @@ namespace Api_Project_Prn.Infra.Entities
                 entity.ToTable("Users");
                 entity.HasKey(e => e.Id);
 
+                entity.HasIndex(e => e.Deleted);
+                entity.Property(e => e.UpdatedAt)
+                    .HasColumnType("timestamp without time zone");
+                entity.Property(e => e.CreatedAt)
+                    .HasColumnType("timestamp without time zone");
                 entity.HasIndex(e => e.Username).IsUnique();
                 entity.HasIndex(e => e.Email).IsUnique();
             });

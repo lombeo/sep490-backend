@@ -2,7 +2,7 @@
 using Microsoft.Extensions.Caching.Memory;
 using Newtonsoft.Json;
 
-namespace Api_Project_Prn.Services.CacheService
+namespace Sep490_Backend.Services.CacheService
 {
     public interface ICacheService
     {

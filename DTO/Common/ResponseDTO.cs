@@ -1,6 +1,6 @@
 ﻿using Newtonsoft.Json;
 
-namespace Api_Project_Prn.DTO.Common
+namespace Sep490_Backend.DTO.Common
 {
     public class ResponseDTO<T>
     {

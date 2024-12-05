@@ -1,7 +1,7 @@
-﻿using Api_Project_Prn.Infra.Constants;
+﻿using Sep490_Backend.Infra.Constants;
 using StackExchange.Redis;
 
-namespace Api_Project_Prn.Services.CacheService
+namespace Sep490_Backend.Services.CacheService
 {
     public class RedisConnManager
     {

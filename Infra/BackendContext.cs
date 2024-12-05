@@ -1,17 +1,17 @@
 ﻿using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore;
 using System.Reflection;
-using Api_Project_Prn.Infra.Entities;
+using Sep490_Backend.Infra.Entities;
 
-namespace Api_Project_Prn.Infra
+namespace Sep490_Backend.Infra
 {
-    public partial class PrnProjectApiContext : DbContext
+    public partial class BackendContext : DbContext
     {
-        public PrnProjectApiContext()
+        public BackendContext()
         {
         }
 
-        public PrnProjectApiContext(DbContextOptions<PrnProjectApiContext> options)
+        public BackendContext(DbContextOptions<BackendContext> options)
              : base(options)
         {
         }
@@ -36,15 +36,19 @@ namespace Api_Project_Prn.Infra
 
         protected virtual void OnBeforeSaving()
         {
-            //foreach (var entry in ChangeTracker.Entries())
-            //{
-            //    if (entry.State == EntityState.Added)
-            //    {
-            //        ((CommonEntity)entry.Entity).CreatedAt = DateTime.UtcNow;
-            //    }
+            foreach (var entry in ChangeTracker.Entries())
+            {
+                if (entry != null && entry.Entity is CommonEntity commonEntity)
+                {
+                    if (entry.State == EntityState.Added)
+                    {
+                        ((CommonEntity)entry.Entity).CreatedAt = DateTime.UtcNow;
+                    }
 
-            //    ((CommonEntity)entry.Entity).UpdatedAt = DateTime.UtcNow;
-            //}
+                    ((CommonEntity)entry.Entity).UpdatedAt = DateTime.UtcNow;
+                }
+
+            }
         }
     }
 }

@@ -1,9 +1,9 @@
-﻿using Api_Project_Prn.DTO.Common;
-using Api_Project_Prn.Infra.Constants;
+﻿using Sep490_Backend.DTO.Common;
+using Sep490_Backend.Infra.Constants;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
-namespace Api_Project_Prn.Controllers
+namespace Sep490_Backend.Controllers
 {
     [ApiController]
     public class BaseAPIController : ControllerBase

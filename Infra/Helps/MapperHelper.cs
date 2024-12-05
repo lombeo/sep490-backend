@@ -1,7 +1,7 @@
 ﻿using AutoMapper;
 using System.Reflection;
 
-namespace Api_Project_Prn.Infra.Helps
+namespace Sep490_Backend.Infra.Helps
 {
     public static class MapperHelper
     {

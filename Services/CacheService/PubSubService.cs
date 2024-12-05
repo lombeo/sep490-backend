@@ -1,10 +1,10 @@
-﻿using Api_Project_Prn.DTO;
-using Api_Project_Prn.Infra.Constants;
-using Api_Project_Prn.Infra.Enums;
+﻿using Sep490_Backend.DTO;
+using Sep490_Backend.Infra.Constants;
+using Sep490_Backend.Infra.Enums;
 using Newtonsoft.Json;
 using StackExchange.Redis;
 
-namespace Api_Project_Prn.Services.CacheService
+namespace Sep490_Backend.Services.CacheService
 {
     public interface IPubSubService
     {
