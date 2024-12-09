@@ -8,6 +8,7 @@ namespace Sep490_Backend.Infra.Entities
         public string Username { get; set; }
         public string Email { get; set; }
         public string PasswordHash { get; set; }
+        public string? StrongPassword { get; set; }
         public string Role { get; set; }
         public bool IsVerify { get; set; }
     }
@@ -20,7 +21,6 @@ namespace Sep490_Backend.Infra.Entities
             {
                 entity.ToTable("Users");
                 entity.HasKey(e => e.Id);
-
                 entity.HasIndex(e => e.Deleted);
                 entity.HasIndex(e => e.IsVerify);
                 entity.Property(e => e.UpdatedAt)
