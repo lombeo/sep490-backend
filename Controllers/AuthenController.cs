@@ -38,5 +38,11 @@ namespace Sep490_Backend.Controllers
         {
             return await HandleException(_authenService.ForgetPassword(email));
         }
+
+        [HttpPost("change-password")]
+        public async Task<ResponseDTO<bool>> ChangePassword([FromQuery] ChangePasswordDTO model)
+        {
+            return await HandleException(_authenService.ChangePassword(model));
+        }
     }
 }
