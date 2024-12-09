@@ -17,12 +17,13 @@ namespace Sep490_Backend.Infra
         }
 
         public virtual DbSet<User> Users { get; set; }
-
+        public virtual DbSet<OTP> OTPs { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
             UserAuthenConfiguration.Config(modelBuilder);
+            OtpConfiguration.Config(modelBuilder);
             //OnModelCreatingPartial(modelBuilder);
         }
 

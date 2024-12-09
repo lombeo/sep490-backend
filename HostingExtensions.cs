@@ -12,6 +12,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Sep490_Backend.Services.AuthenService;
 using Microsoft.OpenApi.Models;
+using Sep490_Backend.Services.EmailService;
 
 namespace Sep490_Backend
 {
@@ -44,6 +45,7 @@ namespace Sep490_Backend
             builder.Services.AddScoped<ICacheService, CacheService>();
             builder.Services.AddScoped<IPubSubService, PubSubService>();
             builder.Services.AddScoped<IAuthenService, AuthenService>();
+            builder.Services.AddScoped<IEmailService, EmailService>();
             builder.Services.AddScoped<RedisConnManager>();
             builder.Services.AddHostedService<DefaultBackgroundService>();
 

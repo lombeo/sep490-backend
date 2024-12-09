@@ -9,6 +9,7 @@ namespace Sep490_Backend.Infra.Entities
         public string Email { get; set; }
         public string PasswordHash { get; set; }
         public string Role { get; set; }
+        public bool IsVerify { get; set; }
     }
 
     public static class UserAuthenConfiguration
@@ -21,6 +22,7 @@ namespace Sep490_Backend.Infra.Entities
                 entity.HasKey(e => e.Id);
 
                 entity.HasIndex(e => e.Deleted);
+                entity.HasIndex(e => e.IsVerify);
                 entity.Property(e => e.UpdatedAt)
                     .HasColumnType("timestamp without time zone");
                 entity.Property(e => e.CreatedAt)
