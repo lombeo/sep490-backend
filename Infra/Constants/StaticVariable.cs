@@ -14,5 +14,6 @@ namespace Sep490_Backend.Infra.Constants
 
         public static bool IsInitializedUser = false;
         public static IEnumerable<User> UserMemory = new List<User>();
+        public static readonly TimeSpan RefreshTokenExpiryDuration = TimeSpan.FromDays(7);
     }
 }

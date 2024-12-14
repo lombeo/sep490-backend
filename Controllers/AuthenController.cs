@@ -44,5 +44,18 @@ namespace Sep490_Backend.Controllers
         {
             return await HandleException(_authenService.ChangePassword(model));
         }
+
+        [AllowAnonymous]
+        [HttpPost("sign-in")]
+        public async Task<ResponseDTO<ReturnSignInDTO>> SignIn([FromBody] SignInDTO model)
+        {
+            return await HandleException(_authenService.SignIn(model));
+        }
+
+        [HttpPost("refresh")]
+        public async Task<ResponseDTO<string>> Refresh([FromBody] string refreshToken)
+        {
+            return await HandleException(_authenService.Refresh(refreshToken));
+        }
     }
 }

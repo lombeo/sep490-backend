@@ -27,6 +27,10 @@
             public const string INVALID_USER = "You need to update your profile!";
             public const string INVALID_CURRENT_PASSWORD = "Your current password is not correct!";
             public const string INVALID_CONFIRM_PASSWORD = "Your new password and confirm password is not match!";
+            public const string INVALID_CREDENTIALS = "Your account not registered or wrong information";
+            public const string ACCOUNT_NOT_VERIFIED = "Your account not verified!";
+            public const string INVALID_TOKEN = "Token outdate or revoked";
+
         }
     }
 }
