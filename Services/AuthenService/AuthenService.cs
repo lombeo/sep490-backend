@@ -284,9 +284,9 @@ namespace Sep490_Backend.Services.AuthenService
             {
                 throw new ApplicationException(Message.CommonMessage.NOT_FOUND);
             }
-            if(string.Compare(HashPassword(model.CurrentPassword), user.PasswordHash) != 0)
+            if(model.CurrentPassword != null)
             {
-                if (string.Compare(HashPassword(model.CurrentPassword), user.StrongPassword) != 0)
+                if (string.Compare(HashPassword(model.CurrentPassword), user.PasswordHash) != 0 && string.IsNullOrWhiteSpace(model.OtpCode))
                 {
                     throw new ApplicationException(Message.AuthenMessage.INVALID_CURRENT_PASSWORD);
                 }
@@ -296,10 +296,9 @@ namespace Sep490_Backend.Services.AuthenService
                 throw new ApplicationException(Message.AuthenMessage.INVALID_CONFIRM_PASSWORD);
             }
             user.PasswordHash = HashPassword(model.NewPassword);
-            user.StrongPassword = null;
             _context.Update(user);
             await _context.SaveChangesAsync();
-
+            TriggerUpdateUserMemory(user.Id);
             return true;
         }
 
@@ -464,7 +463,7 @@ namespace Sep490_Backend.Services.AuthenService
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
             if (user == null)
             {
-                throw new ApplicationException(Message.AuthenMessage.INVALID_USER);
+                throw new ApplicationException(Message.CommonMessage.NOT_FOUND);
             }
             return GenerateAccessToken(user);
         }

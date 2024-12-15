@@ -8,7 +8,6 @@ namespace Sep490_Backend.Infra.Entities
         public string Username { get; set; }
         public string Email { get; set; }
         public string PasswordHash { get; set; }
-        public string? StrongPassword { get; set; }
         public string Role { get; set; }
         public bool IsVerify { get; set; }
     }

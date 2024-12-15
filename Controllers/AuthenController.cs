@@ -28,7 +28,7 @@ namespace Sep490_Backend.Controllers
 
         [AllowAnonymous]
         [HttpPost("verify-otp")]
-        public async Task<ResponseDTO<bool>> VerifyOTP([FromQuery] VerifyOtpDTO model)
+        public async Task<ResponseDTO<bool>> VerifyOTP([FromBody] VerifyOtpDTO model)
         {
             if(UserId != 0)
             {
@@ -39,14 +39,14 @@ namespace Sep490_Backend.Controllers
 
         [AllowAnonymous]
         [HttpPost("reset-password")]
-        public async Task<ResponseDTO<int>> ForgetPassword ([FromQuery] string email)
+        public async Task<ResponseDTO<int>> ForgetPassword ([FromBody] string email)
         {
             return await HandleException(_authenService.ForgetPassword(email));
         }
 
         [AllowAnonymous]
         [HttpPost("change-password")]
-        public async Task<ResponseDTO<bool>> ChangePassword([FromQuery] ChangePasswordDTO model)
+        public async Task<ResponseDTO<bool>> ChangePassword([FromBody] ChangePasswordDTO model)
         {
             if(UserId != 0)
             {

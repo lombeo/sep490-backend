@@ -10,8 +10,8 @@ namespace Sep490_Backend.Infra.Constants
         public static RedisConfigDTO RedisConfig = AppSettings.Get<RedisConfigDTO>("RedisConfiguration");
         public static JwtValidationDTO JwtValidation = new JwtValidationDTO
         {
-            ValidIssuer = Environment.GetEnvironmentVariable("JWT_VALID_ISSUER"),
-            ValidAudience = Environment.GetEnvironmentVariable("JWT_VALID_AUDIENCE"),
+            ValidIssuer = Environment.GetEnvironmentVariable("JWT_VALID_ISSUER") ?? "Lombeo",
+            ValidAudience = Environment.GetEnvironmentVariable("JWT_VALID_AUDIENCE") ?? "Lombeo",
             CertificatePath = Environment.GetEnvironmentVariable("JWT_CERTIFICATE_PATH"),
             CertificatePassword = Environment.GetEnvironmentVariable("JWT_CERTIFICATE_PASSWORD")
         };
