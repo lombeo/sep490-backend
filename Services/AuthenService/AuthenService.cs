@@ -350,7 +350,7 @@ namespace Sep490_Backend.Services.AuthenService
             }
 
             //Tạo accesstoken + refresh token lưu trong db
-            var accessToken = GenerateAccessToken(user) ;
+            var accessToken = GenerateAccessToken(user);
             var refreshToken = GenerateRefreshToken();
 
             var existingToken = await _context.RefreshTokens.FirstOrDefaultAsync(rt => rt.UserId == user.Id);
