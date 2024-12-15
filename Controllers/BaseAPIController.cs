@@ -20,12 +20,12 @@ namespace Sep490_Backend.Controllers
 			}
 		}
 
-		public async Task<ResponseDTO<T>> HandleException<T>(Task<T> task)
+		public async Task<ResponseDTO<T>> HandleException<T>(Task<T> task, string successMessage = "Operation successful")
         {
             try
             {
                 var data = await task;
-                return new ResponseDTO<T>() { Success = true, Data = data };
+                return new ResponseDTO<T>() { Success = true, Data = data, Message = successMessage };
             }
             catch (ApplicationException ex)
             {

@@ -18,18 +18,27 @@
 
         public static class AuthenMessage
         {
+            //Error
             public const string EXIST_EMAIL = "E-AUTHEN-001"; //Your email already exists.
             public const string EXIST_USERNAME = "E-AUTHEN-002"; //Your username already exists.
-            public const string INVALID_EMAIL = "E-AUTHEN-003"; //The email you just entered is not in the correct format.
+            public const string INVALID_EMAIL = "E-AUTHEN-003"; //The email you just entered is not in the correct forgitmat.
             public const string INVALID_USERNAME = "E-AUTHEN-004"; //Your username cannot contain spaces.
             public const string INVALID_PASSWORD = "E-AUTHEN-005"; //Your password is invalid.
             public const string INVALID_CURRENT_PASSWORD = "E-AUTHEN-006"; //Your current password is not correct!
             public const string INVALID_CONFIRM_PASSWORD = "E-AUTHEN-007"; //Your new password and confirm password is not match!
             public const string INVALID_CREDENTIALS = "E-AUTHEN-008"; //Your account not registered or wrong information.
-            public const string ACCOUNT_NOT_VERIFIED = "AUTHEN_009"; //Your account not verified!
+            public const string ACCOUNT_NOT_VERIFIED = "E-AUTHEN-009"; //Your account not verified!
             public const string INVALID_OTP = "E-AUTHEN-010"; //Your OTP is incorrect, double check it in your email.
             public const string INVALID_TOKEN = "E-AUTHEN-011"; //Token outdate or revoked.
             public const string OTP_REQUIRED = "E-AUTHEN-012"; //This action require OTP.
+
+            //Success
+            public const string SIGNUP_SUCCESS = "S-AUTHEN-001"; //Account registration successful, please check your email to receive the OTP code used to verify your account.
+            public const string VERIFY_OTP_SUCCESS = "S-AUTHEN-002"; //Successfully verified OTP code.
+            public const string FORGET_PASSWORD_SUCCESS = "S-AUTHEN-003"; //Password reset request successful, please check your email to receive OTP code.
+            public const string CHANGE_PASSWORD_SUCCESS = "S-AUTHEN-004"; //Password changed successfully!
+            public const string SIGN_IN_SUCCESS = "S-AUTHEN-005"; //Log in successfully.
+            public const string REFRESH_TOKEN_SUCCESS = "S-AUTHEN-006"; //Refresh token successfully.
         }
     }
 }

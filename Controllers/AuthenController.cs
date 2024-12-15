@@ -23,7 +23,7 @@ namespace Sep490_Backend.Controllers
         [HttpPost("sign-up")]
         public async Task<ResponseDTO<bool>> SignUp([FromBody] SignUpDTO model)
         {
-            return await HandleException(_authenService.SignUp(model));
+            return await HandleException(_authenService.SignUp(model), Message.AuthenMessage.SIGNUP_SUCCESS);
         }
 
         [AllowAnonymous]
@@ -34,14 +34,14 @@ namespace Sep490_Backend.Controllers
             {
                 model.UserId = UserId;
             }
-            return await HandleException(_authenService.VerifyOTP(model));
+            return await HandleException(_authenService.VerifyOTP(model), Message.AuthenMessage.VERIFY_OTP_SUCCESS);
         }
 
         [AllowAnonymous]
         [HttpPost("reset-password")]
         public async Task<ResponseDTO<int>> ForgetPassword ([FromBody] string email)
         {
-            return await HandleException(_authenService.ForgetPassword(email));
+            return await HandleException(_authenService.ForgetPassword(email), Message.AuthenMessage.FORGET_PASSWORD_SUCCESS);
         }
 
         [AllowAnonymous]
@@ -52,20 +52,20 @@ namespace Sep490_Backend.Controllers
             {
                 model.UserId = UserId;
             }
-            return await HandleException(_authenService.ChangePassword(model));
+            return await HandleException(_authenService.ChangePassword(model), Message.AuthenMessage.CHANGE_PASSWORD_SUCCESS);
         }
 
         [AllowAnonymous]
         [HttpPost("sign-in")]
         public async Task<ResponseDTO<ReturnSignInDTO>> SignIn([FromBody] SignInDTO model)
         {
-            return await HandleException(_authenService.SignIn(model));
+            return await HandleException(_authenService.SignIn(model), Message.AuthenMessage.SIGN_IN_SUCCESS);
         }
 
         [HttpPost("refresh")]
         public async Task<ResponseDTO<string>> Refresh([FromBody] string refreshToken)
         {
-            return await HandleException(_authenService.Refresh(refreshToken));
+            return await HandleException(_authenService.Refresh(refreshToken), Message.AuthenMessage.REFRESH_TOKEN_SUCCESS);
         }
     }
 }
