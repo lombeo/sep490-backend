@@ -1,4 +1,5 @@
 ﻿using Sep490_Backend.Infra.Constants;
+using Sep490_Backend.Services.AuthenService;
 using System.ComponentModel.Design;
 
 namespace Sep490_Backend.Services.Hosted
@@ -29,6 +30,7 @@ namespace Sep490_Backend.Services.Hosted
                     try
                     {
                         StaticVariable.IsInitializedUser = false;
+                        scope.ServiceProvider.GetService<IAuthenService>()?.InitUserMemory();
 
                         StaticVariable.TimeToday = timeToday;
                     }

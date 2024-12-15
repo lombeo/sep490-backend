@@ -23,14 +23,16 @@ namespace Sep490_Backend
 
             using (var scope = app.Services.GetService<IServiceScopeFactory>().CreateScope())
             {
-                // Initialize services within the scope
                 scope.ServiceProvider.GetService<IPubSubService>()?.SubscribeInternal();
+                scope.ServiceProvider.GetService<IAuthenService>()?.InitUserMemory();
             }
 
             // Setting the static variable
             var utcNow = DateTime.UtcNow;
             int timeToday = utcNow.Year + utcNow.Month + utcNow.Day;
             StaticVariable.TimeToday = timeToday;
+
+            
 
             app.Run();
         }

@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Sep490_Backend.Infra.Enums;
 
 namespace Sep490_Backend.Infra.Entities
 {
@@ -6,6 +7,7 @@ namespace Sep490_Backend.Infra.Entities
     {
         public int Id { get; set; }
         public int UserId { get; set; }
+        public ReasonOTP Reason { get; set; }
         public string Code { get; set; }
         public DateTime ExpiryTime { get; set; }
     }
@@ -24,13 +26,17 @@ namespace Sep490_Backend.Infra.Entities
                     .HasColumnName("id")
                     .IsRequired();
 
+                entity.Property(e => e.Reason)
+                    .HasColumnName("reason")
+                    .IsRequired();
+
                 entity.Property(e => e.UserId)
                     .HasColumnName("user_id")
                     .IsRequired();
 
                 entity.Property(e => e.Code)
                     .HasColumnName("code")
-                    .HasMaxLength(6)
+                    .HasMaxLength(12)
                     .IsRequired();
 
                 entity.Property(e => e.ExpiryTime)

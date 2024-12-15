@@ -28,8 +28,9 @@
             public const string INVALID_CONFIRM_PASSWORD = "Your new password and confirm password is not match!";
             public const string INVALID_CREDENTIALS = "Your account not registered or wrong information";
             public const string ACCOUNT_NOT_VERIFIED = "Your account not verified!";
+            public const string INVALID_OTP = "Your OTP is incorrect, double check it in your email";
             public const string INVALID_TOKEN = "Token outdate or revoked";
-
+            public const string OTP_REQUIRED = "This action require OTP";
         }
     }
 }

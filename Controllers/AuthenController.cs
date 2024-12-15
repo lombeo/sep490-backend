@@ -26,22 +26,32 @@ namespace Sep490_Backend.Controllers
             return await HandleException(_authenService.SignUp(model));
         }
 
+        [AllowAnonymous]
         [HttpPost("verify-otp")]
-        public async Task<ResponseDTO<bool>> VerifyOTP([FromQuery] string otpCode)
+        public async Task<ResponseDTO<bool>> VerifyOTP([FromQuery] VerifyOtpDTO model)
         {
-            return await HandleException(_authenService.VerifyOTP(UserId, otpCode));
+            if(UserId != 0)
+            {
+                model.UserId = UserId;
+            }
+            return await HandleException(_authenService.VerifyOTP(model));
         }
 
         [AllowAnonymous]
         [HttpPost("reset-password")]
-        public async Task<ResponseDTO<bool>> ForgetPassword ([FromQuery] string email)
+        public async Task<ResponseDTO<int>> ForgetPassword ([FromQuery] string email)
         {
             return await HandleException(_authenService.ForgetPassword(email));
         }
 
+        [AllowAnonymous]
         [HttpPost("change-password")]
         public async Task<ResponseDTO<bool>> ChangePassword([FromQuery] ChangePasswordDTO model)
         {
+            if(UserId != 0)
+            {
+                model.UserId = UserId;
+            }
             return await HandleException(_authenService.ChangePassword(model));
         }
 
