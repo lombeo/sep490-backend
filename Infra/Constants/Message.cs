@@ -23,10 +23,13 @@
             public const string INVALID_EMAIL = "The email you just entered is not in the correct format."; //The email you just entered is not in the correct format.
             public const string INVALID_USERNAME = "Your username cannot contain spaces."; //Your username cannot contain spaces.
             public const string INVALID_PASSWORD = "Your password must contain at least 6 characters, one lowercase letter, one uppercase letter, 1 special character and one number"; //Your password must contain at least 6 characters, one lowercase letter, one uppercase letter, 1 special character and one number
-            public const string INVALID_LOGIN = "Invalid username or password."; //Invalid username or password.
             public const string INVALID_USER = "You need to update your profile!";
             public const string INVALID_CURRENT_PASSWORD = "Your current password is not correct!";
             public const string INVALID_CONFIRM_PASSWORD = "Your new password and confirm password is not match!";
+            public const string INVALID_CREDENTIALS = "Your account not registered or wrong information";
+            public const string ACCOUNT_NOT_VERIFIED = "Your account not verified!";
+            public const string INVALID_TOKEN = "Token outdate or revoked";
+
         }
     }
 }

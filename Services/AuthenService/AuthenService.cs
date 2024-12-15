@@ -7,6 +7,10 @@ using Sep490_Backend.Infra.Entities;
 using System.Security.Cryptography;
 using Sep490_Backend.Services.EmailService;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Security.Cryptography.X509Certificates;
 
 namespace Sep490_Backend.Services.AuthenService
 {
@@ -16,6 +20,9 @@ namespace Sep490_Backend.Services.AuthenService
         Task<bool> VerifyOTP(int userId, string otpCode);
         Task<bool> ChangePassword(ChangePasswordDTO model);
         Task<bool> ForgetPassword(string email);
+        Task<ReturnSignInDTO> SignIn(SignInDTO model);
+        Task<string> Refresh(string refreshToken);
+        Task<bool> SignInWithGoogle(string idToken);
     }
 
     public class AuthenService : IAuthenService
@@ -324,6 +331,116 @@ namespace Sep490_Backend.Services.AuthenService
         {
             var randomByte = RandomNumberGenerator.GetInt32(charArray.Length);
             return charArray[randomByte];
+        }
+
+        public async Task<ReturnSignInDTO> SignIn(SignInDTO model)
+        {
+            //Validate
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == model.Username || u.Email == model.Username);
+
+            //Check username + password
+            if (user == null || (HashPassword(model.Password) != user.PasswordHash))
+            {
+                throw new ApplicationException(Message.AuthenMessage.INVALID_CREDENTIALS);
+            } 
+            //Check vertify
+            if (!user.IsVerify)
+            {
+                throw new ApplicationException(Message.AuthenMessage.ACCOUNT_NOT_VERIFIED);
+            }
+
+            //Tạo accesstoken + refresh token lưu trong db
+            var accessToken = GenerateAccessToken(user);
+            var refreshToken = GenerateRefreshToken();
+
+            var existingToken = await _context.RefreshTokens.FirstOrDefaultAsync(rt => rt.UserId == user.Id);
+            var expiryDate = DateTime.UtcNow.Add(StaticVariable.RefreshTokenExpiryDuration);
+            if (existingToken !=null)
+            {
+                existingToken.Token = refreshToken;
+                existingToken.ExpiryDate = expiryDate;
+            }
+            else
+            {
+                var newToken = new RefreshToken
+                {
+                    UserId = user.Id,
+                    Token = refreshToken,
+                    ExpiryDate = expiryDate,
+                    IsRevoked = false
+                };
+                await _context.RefreshTokens.AddAsync(newToken);
+            }
+            await _context.SaveChangesAsync();
+
+            return new ReturnSignInDTO
+            {
+                AccessToken = accessToken,
+                RefreshToken = refreshToken,
+                Email = user.Email,
+                Role = user.Role,
+                Username = user.Username
+            };
+        }
+
+        private static string GenerateAccessToken(User user)
+        {
+            try
+            {
+                var claims = new[]
+                {
+                    new Claim(JwtRegisteredClaimNames.Sub,  user.Username),
+                    new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+                };
+                X509Certificate2 cert = new X509Certificate2(StaticVariable.JwtValidation.CertificatePath, StaticVariable.JwtValidation.CertificatePassword);
+                var key = new X509SecurityKey(cert);
+                var creds = new SigningCredentials(key, SecurityAlgorithms.RsaSha256);
+
+                var token = new JwtSecurityToken(
+                    issuer: StaticVariable.JwtValidation.ValidIssuer,
+                    audience: StaticVariable.JwtValidation.ValidAudience,
+                    claims: claims,
+                    expires: DateTime.UtcNow.AddMinutes(30),
+                    signingCredentials: creds
+                );
+
+                var tokenHandler = new JwtSecurityTokenHandler();
+                var jwtToken = tokenHandler.WriteToken(token);
+                return jwtToken;
+            }
+            catch (Exception ex)
+            {
+                return ex.Message;
+            }
+        }
+
+        private static string GenerateRefreshToken()
+        {
+            byte[] randomNumber = new byte[32];
+            using var rng = RandomNumberGenerator.Create();
+            rng.GetBytes(randomNumber);
+            return Convert.ToBase64String(randomNumber);
+        }
+
+        public async Task<string> Refresh(string refreshToken)
+        {
+            var existingRefreshToken = await _context.RefreshTokens.FirstOrDefaultAsync(rt => rt.Token == refreshToken && rt.ExpiryDate > DateTime.UtcNow && !rt.IsRevoked);
+            if (existingRefreshToken == null)
+            {
+                throw new ApplicationException(Message.AuthenMessage.INVALID_TOKEN);
+            }
+            var userId = existingRefreshToken.UserId;
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
+            if (user == null)
+            {
+                throw new ApplicationException(Message.AuthenMessage.INVALID_USER);
+            }
+            return GenerateAccessToken(user);
+        }
+
+        public Task<bool> SignInWithGoogle(string idToken)
+        {
+            throw new NotImplementedException();
         }
     }
 }
