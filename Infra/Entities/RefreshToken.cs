@@ -34,7 +34,7 @@ namespace Sep490_Backend.Infra.Entities
 
                 entity.Property(e => e.ExpiryDate)
                     .HasColumnName("expiry_date")
-                    .HasColumnType("timestamp with time zone")
+                    .HasColumnType("timestamp without time zone")
                     .IsRequired();
 
                 entity.Property(e => e.IsRevoked)

@@ -164,9 +164,9 @@ namespace Sep490_Backend.Services.AuthenService
             return true;
         }
 
-        private void ValidateSignUp(SignUpDTO model)
+        private async void ValidateSignUp(SignUpDTO model)
         {
-            var data = StaticVariable.UserMemory.ToList();
+            var data = await _context.Users.Where(t => t.Deleted == false).ToListAsync();
 
             if (data.Any(t => t.Email.ToLower().Equals(model.Email.ToLower())))
             {
