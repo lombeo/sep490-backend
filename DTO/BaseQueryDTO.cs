@@ -11,6 +11,5 @@
 	public class BaseRequest
 	{
 		public int ActionBy { get; set; }
-		public string Language { get; set; }
 	}
 }

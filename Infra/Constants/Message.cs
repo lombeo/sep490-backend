@@ -40,5 +40,13 @@
             public const string SIGN_IN_SUCCESS = "S-AUTHEN-005"; //Log in successfully.
             public const string REFRESH_TOKEN_SUCCESS = "S-AUTHEN-006"; //Refresh token successfully.
         }
+
+        public static class AdminMessage
+        {
+            //Success
+            public const string SEARCH_SUCCESS = "S-ADMIN-001"; //Search list user successfully!
+
+            //Error
+        }
     }
 }

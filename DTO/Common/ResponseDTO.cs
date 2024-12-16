@@ -52,8 +52,8 @@ namespace Sep490_Backend.DTO.Common
         public int Total { get; set; }
         [JsonProperty("totalPage")]
         public int TotalPage => PageSize == 0 ? 0 : (Total % PageSize == 0 ? Total / PageSize : (Total / PageSize + 1));
-        [JsonProperty("page")]
-        public int Page { get; set; }
+        [JsonProperty("index")]
+        public int Index { get; set; }
         [JsonProperty("pageSize")]
         public int PageSize { get; set; }
     }

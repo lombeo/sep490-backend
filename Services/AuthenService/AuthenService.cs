@@ -29,6 +29,8 @@ namespace Sep490_Backend.Services.AuthenService
         Task<ReturnSignInDTO> SignIn(SignInDTO model);
         Task<string> Refresh(string refreshToken);
         Task<bool> SignInWithGoogle(string idToken);
+        void TriggerUpdateUserProfileMemory(int userProfileId);
+        void UpdateUserProfileMemory(int userProfileId);
     }
 
     public class AuthenService : IAuthenService
@@ -50,14 +52,18 @@ namespace Sep490_Backend.Services.AuthenService
         {
             if (!StaticVariable.IsInitializedUser)
             {
-                _logger.LogError($"InitUserMemory Started: {DateTime.UtcNow}");
+                _logger.LogError($"InitUserMemory and InitUserProfileMemory Started: {DateTime.UtcNow}");
 
                 var data = _context.Users.AsNoTracking().Where(t => !t.Deleted)
                                             .OrderByDescending(t => t.UpdatedAt).ToList();
+                var profileData = _context.UserProfiles.AsNoTracking().Where(t => !t.Deleted)
+                                            .OrderByDescending(t => t.UpdatedAt).ToList();
                 StaticVariable.UserMemory = data;
+                StaticVariable.UserProfileMemory = profileData;
                 StaticVariable.IsInitializedUser = true;
+                StaticVariable.IsInitializedUserProfile = true;
 
-                _logger.LogError($"InitUserMemory Finished: {DateTime.UtcNow}");
+                _logger.LogError($"InitUserMemory and InitUserProfileMemory Finished: {DateTime.UtcNow}");
             }
         }
 
@@ -90,6 +96,35 @@ namespace Sep490_Backend.Services.AuthenService
             });
         }
 
+        public void UpdateUserProfileMemory(int userProfileId)
+        {
+            var list = StaticVariable.UserProfileMemory.ToList();
+            list = list ?? new List<UserProfile>();
+            if (list.Any(t => t.Id == userProfileId))
+            {
+                list = list.Where(t => t.Id != userProfileId).OrderByDescending(t => t.UpdatedAt).ToList();
+            }
+
+            var user = _context.UserProfiles.AsNoTracking().FirstOrDefault(t => !t.Deleted && t.Id == userProfileId);
+            if (user != null)
+            {
+                list.Add(user);
+            }
+
+            StaticVariable.UserProfileMemory = list;
+        }
+
+        public void TriggerUpdateUserProfileMemory(int userProfileId)
+        {
+            UpdateUserProfileMemory(userProfileId);
+
+            _pubSubService.PublishSystem(new PubSubMessage
+            {
+                PubSubEnum = PubSubEnum.UpdateUserProfileMemory,
+                Data = userProfileId.ToString()
+            });
+        }
+
         public async Task<bool> SignUp(SignUpDTO model)
         {
             ValidateSignUp(model);
@@ -103,11 +138,23 @@ namespace Sep490_Backend.Services.AuthenService
                 PasswordHash = password,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow,
-                Role = "User",
-                IsVerify = false
+                Role = RoleConstValue.USER,
+                IsVerify = false,
             };
 
             await _context.AddAsync(account);
+            await _context.SaveChangesAsync();
+
+            var userProfile = new UserProfile
+            {
+                UserId = account.Id,
+                Phone = model.Phone,
+                Gender = model.Gender,
+                FullName = model.FullName,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            await _context.AddAsync(userProfile);
             await _context.SaveChangesAsync();
 
             var otpCode = GenerateOTP();
