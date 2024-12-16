@@ -1,4 +1,5 @@
-﻿using Sep490_Backend.DTO;
+﻿using Microsoft.EntityFrameworkCore;
+using Sep490_Backend.DTO;
 using Sep490_Backend.DTO.AdminDTO;
 using Sep490_Backend.Infra;
 using Sep490_Backend.Infra.Constants;
@@ -9,6 +10,7 @@ namespace Sep490_Backend.Services.AdminService
     public interface IAdminService
     {
         Task<List<UserDTO>> ListUser(AdminSearchUserDTO model);
+        Task<bool> DeleteUser(int userId, int actionBy);
     }
 
     public class AdminService : IAdminService
@@ -22,12 +24,41 @@ namespace Sep490_Backend.Services.AdminService
             _authenService = authenService;
         }
 
+        public async Task<bool> DeleteUser(int userId, int actionBy)
+        {
+            bool check = IsAdmin(actionBy);
+            if (!check)
+            {
+                throw new ApplicationException(Message.CommonMessage.NOT_ALLOWED);
+            }
+            var user = await _context.Users.FirstOrDefaultAsync(t => t.Id == userId && !t.Deleted);
+            var userProfile = await _context.UserProfiles.FirstOrDefaultAsync(t => t.UserId == userId && !t.Deleted);
+
+            if (userProfile != null && user != null)
+            {
+                user.Deleted = true;
+                userProfile.Deleted = true;
+                _context.Update(user);
+                _context.Update(userProfile);
+                await _context.SaveChangesAsync();
+            }
+            else
+            {
+                throw new ApplicationException(Message.CommonMessage.NOT_FOUND);
+            }
+
+            _authenService.TriggerUpdateUserMemory(userId);
+            _authenService.TriggerUpdateUserProfileMemory(userId);
+
+            return check;
+        }
+
         public async Task<List<UserDTO>> ListUser(AdminSearchUserDTO model)
         {
             var data = new List<UserDTO>();
             var user = StaticVariable.UserMemory.ToList();
-            var checkAdmin = user.FirstOrDefault(t => t.Id == model.ActionBy);
-            if (checkAdmin == null || checkAdmin.Role != RoleConstValue.ADMIN)
+            bool check = IsAdmin(model.ActionBy);
+            if (!check)
             {
                 throw new ApplicationException(Message.CommonMessage.NOT_ALLOWED);
             }
@@ -73,6 +104,19 @@ namespace Sep490_Backend.Services.AdminService
             }
 
             return data;
+        }
+
+
+
+        private bool IsAdmin(int userId)
+        {
+            var user = StaticVariable.UserMemory.ToList();
+            var checkAdmin = user.FirstOrDefault(t => t.Id == userId);
+            if (checkAdmin == null || checkAdmin.Role != RoleConstValue.ADMIN)
+            {
+                return false;
+            }
+            return true;
         }
     }
 }

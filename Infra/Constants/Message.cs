@@ -45,6 +45,7 @@
         {
             //Success
             public const string SEARCH_SUCCESS = "S-ADMIN-001"; //Search list user successfully!
+            public const string DELETE_USER_SUCCESS = "S-ADMIN-002"; //Delete user successfully!
 
             //Error
         }

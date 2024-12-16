@@ -23,13 +23,19 @@ namespace Sep490_Backend.Controllers
             _adminService = adminService;
         }
 
-        [HttpPost("list-user")]
+        [HttpGet("list-user")]
         public async Task<ResponseDTO<List<UserDTO>>> ListUser([FromQuery] AdminSearchUserDTO model)
         {
             model.ActionBy = UserId;
             var result = await HandleException(_adminService.ListUser(model), Message.AdminMessage.SEARCH_SUCCESS);
             result.Meta = new ResponseMeta() { Total = model.Total, Index = model.PageIndex, PageSize = model.PageSize };
             return result;
+        }
+
+        [HttpDelete("delete-user")]
+        public async Task<ResponseDTO<bool>> DeleteUser([FromQuery] int userId)
+        {
+            return await HandleException(_adminService.DeleteUser(userId, UserId), Message.AdminMessage.DELETE_USER_SUCCESS);
         }
     }
 }
