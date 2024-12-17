@@ -1,4 +1,8 @@
-﻿namespace Sep490_Backend.Infra.Constants
+﻿using DocumentFormat.OpenXml.Drawing.Charts;
+using Humanizer;
+using NuGet.Configuration;
+
+namespace Sep490_Backend.Infra.Constants
 {
     public class Message
     {
@@ -48,6 +52,7 @@
             public const string DELETE_USER_SUCCESS = "S-ADMIN-002"; //Delete user successfully!
 
             //Error
+            public const string DELETE_USER_ERROR = "E-ADMIN-001"; //An error occurred while deleting a user, you cannot delete your own account, or the person you want to delete has equal or higher authority than you.
         }
     }
 }

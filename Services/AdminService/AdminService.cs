@@ -26,10 +26,13 @@ namespace Sep490_Backend.Services.AdminService
 
         public async Task<bool> DeleteUser(int userId, int actionBy)
         {
-            bool check = IsAdmin(actionBy);
-            if (!check)
+            if (!IsAdmin(actionBy))
             {
                 throw new ApplicationException(Message.CommonMessage.NOT_ALLOWED);
+            }
+            if(userId == actionBy || IsAdmin(userId))
+            {
+                throw new ApplicationException(Message.AdminMessage.DELETE_USER_ERROR);
             }
             var user = await _context.Users.FirstOrDefaultAsync(t => t.Id == userId && !t.Deleted);
             var userProfile = await _context.UserProfiles.FirstOrDefaultAsync(t => t.UserId == userId && !t.Deleted);
@@ -50,7 +53,7 @@ namespace Sep490_Backend.Services.AdminService
             _authenService.TriggerUpdateUserMemory(userId);
             _authenService.TriggerUpdateUserProfileMemory(userId);
 
-            return check;
+            return true;
         }
 
         public async Task<List<UserDTO>> ListUser(AdminSearchUserDTO model)
