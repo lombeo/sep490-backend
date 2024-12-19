@@ -17,7 +17,6 @@ namespace Sep490_Backend.Infra
         }
 
         public virtual DbSet<User> Users { get; set; }
-        public virtual DbSet<OTP> OTPs { get; set; }
         public virtual DbSet<RefreshToken> RefreshTokens { get; set; }
         public virtual DbSet<UserProfile> UserProfiles { get; set; }
 
@@ -25,7 +24,6 @@ namespace Sep490_Backend.Infra
         {
             modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
             UserAuthenConfiguration.Config(modelBuilder);
-            OtpConfiguration.Config(modelBuilder);
             RefreshTokenConfiguration.Config(modelBuilder);
             UserProfileConfiguration.Config(modelBuilder);
             //OnModelCreatingPartial(modelBuilder);
