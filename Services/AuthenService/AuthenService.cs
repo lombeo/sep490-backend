@@ -14,6 +14,7 @@ using System.Security.Cryptography.X509Certificates;
 using Sep490_Backend.DTO;
 using Sep490_Backend.Infra.Enums;
 using Sep490_Backend.Services.CacheService;
+using Sep490_Backend.Services.OTPService;
 
 namespace Sep490_Backend.Services.AuthenService
 {
@@ -39,13 +40,22 @@ namespace Sep490_Backend.Services.AuthenService
         private readonly IEmailService _email;
         private readonly IPubSubService _pubSubService;
         private readonly ILogger<AuthenService> _logger;
+        private readonly IOTPService _otpService;
+        private readonly ICacheService _cacheService;
 
-        public AuthenService(BackendContext context, IEmailService email, IPubSubService pubSubService, ILogger<AuthenService> logger)
+        private static readonly char[] UpperCaseLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".ToCharArray();
+        private static readonly char[] LowerCaseLetters = "abcdefghijklmnopqrstuvwxyz".ToCharArray();
+        private static readonly char[] Numbers = "0123456789".ToCharArray();
+        private static readonly char[] SpecialChars = "!@#$%^&*()-_=+[]{}|;:'\",.<>?/".ToCharArray();
+
+        public AuthenService(BackendContext context, IEmailService email, IPubSubService pubSubService, ILogger<AuthenService> logger, IOTPService otpService, ICacheService cacheService)
         {
             _context = context;
             _email = email;
             _pubSubService = pubSubService;
             _logger = logger;
+            _otpService = otpService;
+            _cacheService = cacheService;
         }
 
         public void InitUserMemory()
@@ -157,24 +167,8 @@ namespace Sep490_Backend.Services.AuthenService
             await _context.AddAsync(userProfile);
             await _context.SaveChangesAsync();
 
-            var otpCode = GenerateOTP();
+            var otpCode = await _otpService.GenerateOTP(6, ReasonOTP.SignUp, account.Id, TimeSpan.FromMinutes(10));
 
-            var otp = new OTP
-            {
-                UserId = account.Id,
-                Reason = ReasonOTP.SignUp,
-                Code = otpCode,
-                ExpiryTime = DateTime.UtcNow.AddMinutes(10)
-            };
-            if((_context.OTPs.FirstOrDefault(t => t.UserId == account.Id && t.Reason == ReasonOTP.SignUp)) != null)
-            {
-                _context.Update(otp);
-            }
-            else
-            {
-                await _context.AddAsync(otp);
-            }
-            await _context.SaveChangesAsync();
             TriggerUpdateUserMemory(account.Id);
 
             var emailBody = $@"
@@ -217,33 +211,11 @@ namespace Sep490_Backend.Services.AuthenService
             return true;
         }
 
-        private string GenerateOTP(int length = 6)
-        {
-            byte[] randomNumber = new byte[length];
-
-            using (var rng = RandomNumberGenerator.Create())
-            {
-                rng.GetBytes(randomNumber);
-            }
-
-            var otpCode = string.Join("", randomNumber.Select(b => (b % 10).ToString()));
-
-            return otpCode.Substring(0, length);
-        }
-
         public async Task<bool> VerifyOTP(VerifyOtpDTO model)
         {
-            var otp = await _context.OTPs
-                .Where(o => o.UserId == model.UserId && o.Code == model.OtpCode && o.Reason == model.Reason)
-                .OrderByDescending(o => o.ExpiryTime)
-                .FirstOrDefaultAsync();
+            var otp = await _otpService.GetStoredOTP(model.UserId, model.Reason);
 
-            if (otp == null)
-            {
-                return false;
-            }
-
-            if (otp.ExpiryTime < DateTime.UtcNow)
+            if (otp.Code != model.OtpCode)
             {
                 return false;
             }
@@ -255,7 +227,7 @@ namespace Sep490_Backend.Services.AuthenService
                 _context.Users.Update(user);
             }
 
-            _context.OTPs.Remove(otp);
+            _ = _cacheService.DeleteAsync(string.Format(RedisCacheKey.OTP_CACHE_KEY, model.UserId, model.Reason));
             await _context.SaveChangesAsync();
 
             return true;
@@ -356,23 +328,7 @@ namespace Sep490_Backend.Services.AuthenService
             {
                 throw new ApplicationException(Message.CommonMessage.NOT_FOUND);
             }
-            var otpCode = GenerateOTP(8);
-            var otp = new OTP
-            {
-                UserId = user.Id,
-                Reason = ReasonOTP.ForgetPassword,
-                Code = otpCode,
-                ExpiryTime = DateTime.UtcNow.AddMinutes(10)
-            };
-            if ((_context.OTPs.FirstOrDefault(t => t.UserId == user.Id && t.Reason == ReasonOTP.ForgetPassword)) != null)
-            {
-                _context.Update(otp);
-            }
-            else
-            {
-                await _context.AddAsync(otp);
-            }
-            await _context.SaveChangesAsync();
+            var otpCode = await _otpService.GenerateOTP(8, ReasonOTP.ForgetPassword, user.Id, TimeSpan.FromMinutes(10));
 
             var emailBody = $@"<!DOCTYPE html>
                                 <html lang=""en"">
@@ -385,7 +341,7 @@ namespace Sep490_Backend.Services.AuthenService
                                     <table border=""0"" cellpadding=""0"" cellspacing=""0"" width=""100%"" style=""max-width: 600px; margin: 0 auto; background-color: #ffffff;"">
                                         <tr>
                                             <td style=""padding: 40px 30px; background-color: #4CAF50; text-align: center;"">
-                                                <h1 style=""color: #ffffff; font-size: 28px; margin: 0;"">Mật khẩu mới của bạn</h1>
+                                                <h1 style=""color: #ffffff; font-size: 28px; margin: 0;"">Reset your password</h1>
                                             </td>
                                         </tr>
                                         <tr>
@@ -410,6 +366,47 @@ namespace Sep490_Backend.Services.AuthenService
             await _email.SendEmailAsync(email, "Reset password request", emailBody);
 
             return user.Id;
+        }
+
+        public static string GenerateStrongPassword(int length = 12)
+        {
+            if (length < 12) throw new ArgumentException("Password length should be at least 12 characters for security reasons.");
+            var passwordBuilder = new StringBuilder(length);
+            passwordBuilder.Append(GenerateRandomChar(UpperCaseLetters));
+            passwordBuilder.Append(GenerateRandomChar(LowerCaseLetters));
+            passwordBuilder.Append(GenerateRandomChar(Numbers));
+            passwordBuilder.Append(GenerateRandomChar(SpecialChars));
+            var allChars = new char[UpperCaseLetters.Length + LowerCaseLetters.Length + Numbers.Length + SpecialChars.Length];
+            UpperCaseLetters.CopyTo(allChars, 0);
+            LowerCaseLetters.CopyTo(allChars, UpperCaseLetters.Length);
+            Numbers.CopyTo(allChars, UpperCaseLetters.Length + LowerCaseLetters.Length);
+            SpecialChars.CopyTo(allChars, UpperCaseLetters.Length + LowerCaseLetters.Length + Numbers.Length);
+            using (var rng = RandomNumberGenerator.Create())
+            {
+                while (passwordBuilder.Length < length)
+                {
+                    var randomIndex = RandomNumberGenerator.GetInt32(allChars.Length);
+                    passwordBuilder.Append(allChars[randomIndex]);
+                }
+            }
+            var passwordArray = passwordBuilder.ToString().ToCharArray();
+            using (var rng = RandomNumberGenerator.Create())
+            {
+                for (int i = passwordArray.Length - 1; i > 0; i--)
+                {
+                    var j = RandomNumberGenerator.GetInt32(i + 1);
+                    var temp = passwordArray[i];
+                    passwordArray[i] = passwordArray[j];
+                    passwordArray[j] = temp;
+                }
+            }
+            return new string(passwordArray);
+        }
+
+        private static char GenerateRandomChar(char[] charArray)
+        {
+            var randomByte = RandomNumberGenerator.GetInt32(charArray.Length);
+            return charArray[randomByte];
         }
 
         public async Task<ReturnSignInDTO> SignIn(SignInDTO model)
