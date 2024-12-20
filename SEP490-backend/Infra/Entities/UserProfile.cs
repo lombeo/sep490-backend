@@ -49,7 +49,7 @@ namespace Sep490_Backend.Infra.Entities
 
                 entity.Property(e => e.UpdatedAt)
                     .HasColumnName("updated_at")
-                    .HasColumnType("timestamp with time zone")
+                    .HasColumnType("timestamp without time zone")
                     .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                 entity.Property(e => e.Deleted)
