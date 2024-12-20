@@ -9,7 +9,7 @@
         public bool IsVerify { get; set; }
         public string FullName { get; set; }
         public string Phone { get; set; }
-        public bool Gender { get; set; }
+        public bool? Gender { get; set; }
         public DateTime? UpdatedAt { get; set; }
         public DateTime? CreatedAt { get; set; }
     }

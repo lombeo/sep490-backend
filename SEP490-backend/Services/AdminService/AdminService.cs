@@ -76,11 +76,11 @@ namespace Sep490_Backend.Services.AdminService
                     Email = user[i].Email,
                     Role = user[i].Role,
                     IsVerify = user[i].IsVerify,
-                    FullName = userProfile[i].FullName,
-                    Phone = userProfile[i].Phone,
-                    Gender = userProfile[i].Gender,
+                    FullName = userProfile.FirstOrDefault(t => t.UserId == user[i].Id)?.FullName ?? "",
+                    Phone = userProfile.FirstOrDefault(t => t.UserId == user[i].Id)?.Phone ?? "",
+                    Gender = userProfile.FirstOrDefault(t => t.UserId == user[i].Id)?.Gender,
                     CreatedAt = user[i].CreatedAt,
-                    UpdatedAt = userProfile[i].UpdatedAt
+                    UpdatedAt = userProfile.FirstOrDefault(t => t.UserId == user[i].Id)?.UpdatedAt
                 });
             }
 
