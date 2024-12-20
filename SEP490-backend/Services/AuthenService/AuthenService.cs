@@ -237,6 +237,15 @@ namespace Sep490_Backend.Services.AuthenService
         {
             var data = StaticVariable.UserMemory.ToList();
 
+            if(string.IsNullOrWhiteSpace(model.Username) ||
+                string.IsNullOrWhiteSpace(model.Password) ||
+                string.IsNullOrWhiteSpace(model.Email) ||
+                string.IsNullOrWhiteSpace(model.FullName) ||
+                string.IsNullOrWhiteSpace(model.Phone))
+            {
+                throw new ApplicationException(Message.CommonMessage.MISSING_PARAM);
+            }
+
             if (data.Any(t => t.Email.ToLower().Equals(model.Email.ToLower())))
             {
                 throw new ApplicationException(Message.AuthenMessage.EXIST_EMAIL);
