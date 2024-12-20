@@ -46,6 +46,7 @@ jobs:
           slot-name: 'Production'
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_D5D97BA4E12B4E2BB0A9A57A41B5944D }}
           package: ./publish
+          startup-command: 'dotnet SEP490-backend.dll'
 
       # Clean up .env file
       - name: Clean up .env file
