@@ -19,6 +19,7 @@ namespace Sep490_Backend.Infra
         public virtual DbSet<User> Users { get; set; }
         public virtual DbSet<RefreshToken> RefreshTokens { get; set; }
         public virtual DbSet<UserProfile> UserProfiles { get; set; }
+        public virtual DbSet<EmailTemplate> EmailTemplates { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -26,6 +27,7 @@ namespace Sep490_Backend.Infra
             UserAuthenConfiguration.Config(modelBuilder);
             RefreshTokenConfiguration.Config(modelBuilder);
             UserProfileConfiguration.Config(modelBuilder);
+            EmailTemplateConfiguration.Config(modelBuilder);
             //OnModelCreatingPartial(modelBuilder);
         }
 
