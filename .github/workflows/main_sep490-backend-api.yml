@@ -20,7 +20,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.sln') }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('SEP490-backend/**/*.csproj', 'SEP490-backend/**/*.sln') }}
           restore-keys: |
             ${{ runner.os }}-nuget-
 
@@ -32,7 +32,7 @@ jobs:
 
       # Build and publish the application
       - name: Build and publish application
-        run: dotnet publish -c Release -o ./publish
+        run: dotnet publish SEP490-backend/SEP490-backend.csproj -c Release -o ./publish
 
       # Create .env file
       - name: Create .env file from GitHub Secrets
