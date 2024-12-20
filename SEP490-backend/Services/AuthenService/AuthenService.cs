@@ -25,7 +25,7 @@ namespace Sep490_Backend.Services.AuthenService
         void TriggerUpdateUserMemory(int userId);
         Task<bool> SignUp(SignUpDTO model);
         Task<bool> VerifyOTP(VerifyOtpDTO model);
-        Task<bool> ChangePassword(ChangePasswordDTO model);
+        Task<bool> ChangePassword(ChangePasswordDTO model, int userId);
         Task<int> ForgetPassword(string email);
         Task<ReturnSignInDTO> SignIn(SignInDTO model);
         Task<string> Refresh(string refreshToken);
@@ -46,7 +46,7 @@ namespace Sep490_Backend.Services.AuthenService
         private static readonly char[] UpperCaseLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".ToCharArray();
         private static readonly char[] LowerCaseLetters = "abcdefghijklmnopqrstuvwxyz".ToCharArray();
         private static readonly char[] Numbers = "0123456789".ToCharArray();
-        private static readonly char[] SpecialChars = "!@#$%^&*()-_=+[]{}|;:'\",.<>?/".ToCharArray();
+        private static readonly char[] SpecialChars = "!@#$%^&*()-_=+[]{}|;:',.<>?".ToCharArray();
 
         public AuthenService(BackendContext context, IEmailService email, IPubSubService pubSubService, ILogger<AuthenService> logger, IOTPService otpService, ICacheService cacheService)
         {
@@ -171,42 +171,15 @@ namespace Sep490_Backend.Services.AuthenService
 
             TriggerUpdateUserMemory(account.Id);
 
-            var emailBody = $@"
-                            <!DOCTYPE html>
-                            <html lang='en'>
-                            <head>
-                                <meta charset='UTF-8'>
-                                <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-                                <title>Your OTP Code</title>
-                            </head>
-                            <body style='margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;'>
-                                <table border='0' cellpadding='0' cellspacing='0' width='100%' style='max-width: 600px; margin: 0 auto; background-color: #ffffff;'>
-                                    <tr>
-                                        <td style='padding: 40px 30px; background-color: #3498db; text-align: center;'>
-                                            <h1 style='color: #ffffff; font-size: 28px; margin: 0;'>Your OTP Code</h1>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td style='padding: 40px 30px;'>
-                                            <p style='color: #333333; font-size: 16px; line-height: 24px; margin: 0 0 20px;'>Dear {account.Username},</p>
-                                            <p style='color: #333333; font-size: 16px; line-height: 24px; margin: 0 0 20px;'>Your One-Time Password (OTP) for account verification is:</p>
-                                            <p style='color: #333333; font-size: 36px; font-weight: bold; text-align: center; margin: 0 0 20px; padding: 20px; background-color: #f8f8f8; border-radius: 5px;'>{otpCode}</p>
-                                            <p style='color: #333333; font-size: 16px; line-height: 24px; margin: 0 0 20px;'>This code will expire in 10 minutes. Please do not share this code with anyone.</p>
-                                            <p style='color: #333333; font-size: 16px; line-height: 24px; margin: 0 0 20px;'>If you didn't request this code, please ignore this email or contact our support team if you have any concerns.</p>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td style='padding: 30px; background-color: #f8f8f8; text-align: center;'>
-                                            <p style='color: #888888; font-size: 14px; margin: 0 0 10px;'>This is an automated message, please do not reply.</p>
-                                            <p style='color: #888888; font-size: 14px; margin: 0;'>© 2023 Your Company Name. All rights reserved.</p>
-                                        </td>
-                                    </tr>
-                                </table>
-                            </body>
-                            </html>";
+            var emailTemp = await _context.EmailTemplates.FirstOrDefaultAsync(t => t.Title == "Verify your account");
 
+            if(emailTemp == null)
+            {
+                throw new ApplicationException(Message.CommonMessage.ERROR_HAPPENED);
+            }
+            string formattedHtml = emailTemp.Body.Replace("{0:s}", account.Username).Replace("{1:s}", otpCode);
             // Gửi email
-            await _email.SendEmailAsync(account.Email, "Verify your account", emailBody);
+            await _email.SendEmailAsync(account.Email, emailTemp.Title, formattedHtml);
 
             return true;
         }
@@ -221,7 +194,28 @@ namespace Sep490_Backend.Services.AuthenService
             }
 
             var user = await _context.Users.FindAsync(model.UserId);
-            if (user != null)
+            if (user == null)
+            {
+                throw new ApplicationException(Message.CommonMessage.NOT_FOUND);
+            }
+
+            if(model.Reason == ReasonOTP.ForgetPassword)
+            {
+                var password = GenerateStrongPassword();
+                user.PasswordHash = HashPassword(password);
+
+                var emailTemp = await _context.EmailTemplates.FirstOrDefaultAsync(t => t.Title == "Your new password");
+
+                if (emailTemp == null)
+                {
+                    throw new ApplicationException(Message.CommonMessage.ERROR_HAPPENED);
+                }
+                string formattedHtml = emailTemp.Body.Replace("{0}", user.Username).Replace("{1}", password);
+                // Gửi email
+                await _email.SendEmailAsync(user.Email, emailTemp.Title, formattedHtml);
+            }
+
+            if(model.Reason == ReasonOTP.SignUp)
             {
                 user.IsVerify = true;
                 _context.Users.Update(user);
@@ -287,37 +281,22 @@ namespace Sep490_Backend.Services.AuthenService
             }
         }
 
-        public async Task<bool> ChangePassword(ChangePasswordDTO model)
+        public async Task<bool> ChangePassword(ChangePasswordDTO model, int userId)
         {
-            if(string.IsNullOrWhiteSpace(model.OtpCode) && model.UserId == 0)
+            var user = await _context.Users.FirstOrDefaultAsync(t => t.Id == userId);
+
+            if(string.IsNullOrWhiteSpace(model.CurrentPassword) || string.IsNullOrWhiteSpace(model.ConfirmPassword) || string.IsNullOrWhiteSpace(model.NewPassword))
             {
-                throw new ApplicationException(Message.AuthenMessage.OTP_REQUIRED);
+                throw new ApplicationException(Message.CommonMessage.MISSING_PARAM);
             }
 
-            if(!string.IsNullOrWhiteSpace(model.OtpCode))
-            {
-                var check = await VerifyOTP(new VerifyOtpDTO
-                {
-                    OtpCode = model.OtpCode,
-                    Reason = ReasonOTP.ForgetPassword,
-                    UserId = model.UserId
-                });
-                if(check == false)
-                {
-                    throw new ApplicationException(Message.AuthenMessage.INVALID_OTP);
-                }
-            }
-            var user = await _context.Users.FirstOrDefaultAsync(t => t.Id == model.UserId);
             if (user == null)
             {
                 throw new ApplicationException(Message.CommonMessage.NOT_FOUND);
             }
-            if(model.CurrentPassword != null)
+            if (string.Compare(HashPassword(model.CurrentPassword), user.PasswordHash) != 0)
             {
-                if (string.Compare(HashPassword(model.CurrentPassword), user.PasswordHash) != 0 && string.IsNullOrWhiteSpace(model.OtpCode))
-                {
-                    throw new ApplicationException(Message.AuthenMessage.INVALID_CURRENT_PASSWORD);
-                }
+                throw new ApplicationException(Message.AuthenMessage.INVALID_CURRENT_PASSWORD);
             }
             if(string.Compare(model.NewPassword, model.ConfirmPassword) != 0)
             {
@@ -339,40 +318,16 @@ namespace Sep490_Backend.Services.AuthenService
             }
             var otpCode = await _otpService.GenerateOTP(8, ReasonOTP.ForgetPassword, user.Id, TimeSpan.FromMinutes(10));
 
-            var emailBody = $@"<!DOCTYPE html>
-                                <html lang=""en"">
-                                <head>
-                                    <meta charset=""UTF-8"">
-                                    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
-                                    <title>OTP Code for Password Reset Request</title>
-                                </head>
-                                <body style=""margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;"">
-                                    <table border=""0"" cellpadding=""0"" cellspacing=""0"" width=""100%"" style=""max-width: 600px; margin: 0 auto; background-color: #ffffff;"">
-                                        <tr>
-                                            <td style=""padding: 40px 30px; background-color: #4CAF50; text-align: center;"">
-                                                <h1 style=""color: #ffffff; font-size: 28px; margin: 0;"">Reset your password</h1>
-                                            </td>
-                                        </tr>
-                                        <tr>
-                                            <td style=""padding: 40px 30px;"">
-                                                <p style=""color: #333333; font-size: 16px; line-height: 24px; margin: 0 0 20px;"">Dear Customer,</p>
-                                                <p style=""color: #333333; font-size: 16px; line-height: 24px; margin: 0 0 20px;"">We have received a request to reset your account password. Your OTP code is: </p>
-                                                <p style=""color: #333333; font-size: 24px; font-weight: bold; text-align: center; margin: 0 0 20px; padding: 20px; background-color: #f8f8f8; border-radius: 5px; letter-spacing: 2px;"">{otpCode}</p>
-                                                <p style=""color: #333333; font-size: 16px; line-height: 24px; margin: 0 0 20px;"">If you did not request to reset your password, please contact our support team immediately.</p>
-                                                <a href=""#"" style=""display: inline-block; padding: 12px 24px; background-color: #4CAF50; color: #ffffff; text-decoration: none; font-weight: bold; border-radius: 5px;"">Login now</a>
-                                            </td>
-                                        </tr>
-                                        <tr>
-                                            <td style=""padding: 30px; background-color: #f8f8f8; text-align: center;"">
-                                                <p style=""color: #888888; font-size: 14px; margin: 0 0 10px;"">This is an automated email, please do not reply.</p>
-                                                <p style=""color: #888888; font-size: 14px; margin: 0;"">© 2023 SEP490. All rights reserved.</p>
-                                            </td>
-                                        </tr>
-                                    </table>
-                                </body>
-                                </html>";
+            var emailTemp = await _context.EmailTemplates.FirstOrDefaultAsync(t => t.Title == "Reset password request");
 
-            await _email.SendEmailAsync(email, "Reset password request", emailBody);
+            if(emailTemp == null)
+            {
+                throw new ApplicationException(Message.CommonMessage.ERROR_HAPPENED);
+            }
+
+            string formattedHtml = emailTemp.Body.Replace("{0}", user.Username).Replace("{1}", otpCode);
+
+            await _email.SendEmailAsync(email, emailTemp.Title, formattedHtml);
 
             return user.Id;
         }

@@ -39,20 +39,15 @@ namespace Sep490_Backend.Controllers
 
         [AllowAnonymous]
         [HttpPost("reset-password")]
-        public async Task<ResponseDTO<int>> ForgetPassword ([FromBody] string email)
+        public async Task<ResponseDTO<int>> ForgetPassword ([FromQuery] string email)
         {
             return await HandleException(_authenService.ForgetPassword(email), Message.AuthenMessage.FORGET_PASSWORD_SUCCESS);
         }
 
-        [AllowAnonymous]
         [HttpPost("change-password")]
         public async Task<ResponseDTO<bool>> ChangePassword([FromBody] ChangePasswordDTO model)
         {
-            if(UserId != 0)
-            {
-                model.UserId = UserId;
-            }
-            return await HandleException(_authenService.ChangePassword(model), Message.AuthenMessage.CHANGE_PASSWORD_SUCCESS);
+            return await HandleException(_authenService.ChangePassword(model, UserId), Message.AuthenMessage.CHANGE_PASSWORD_SUCCESS);
         }
 
         [AllowAnonymous]
