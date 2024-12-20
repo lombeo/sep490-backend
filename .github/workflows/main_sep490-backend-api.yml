@@ -32,7 +32,7 @@ jobs:
 
       # Build and publish the application
       - name: Build and publish application
-        run: dotnet publish SEP490-backend/SEP490-backend.sln -c Release -o ./publish
+        run: dotnet publish SEP490-backend/SEP490-backend.csproj -c Release -o ./publish
 
       # Create .env file
       - name: Create .env file from GitHub Secrets
@@ -46,6 +46,7 @@ jobs:
           slot-name: 'Production'
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_D5D97BA4E12B4E2BB0A9A57A41B5944D }}
           package: ./publish
+          startup-command: 'dotnet SEP490-backend.dll'
 
       # Clean up .env file
       - name: Clean up .env file
