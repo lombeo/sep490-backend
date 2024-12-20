@@ -5,6 +5,8 @@ VisualStudioVersion = 17.9.34723.18
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SEP490-backend", "SEP490-backend.csproj", "{B319AB52-8BD2-473D-BBC7-92CF95F7DB6C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnitTest-SEP490", "..\UnitTest-SEP490\UnitTest-SEP490.csproj", "{0080EBF4-4581-4DE0-B084-F183EDB5941E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{B319AB52-8BD2-473D-BBC7-92CF95F7DB6C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B319AB52-8BD2-473D-BBC7-92CF95F7DB6C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B319AB52-8BD2-473D-BBC7-92CF95F7DB6C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0080EBF4-4581-4DE0-B084-F183EDB5941E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0080EBF4-4581-4DE0-B084-F183EDB5941E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0080EBF4-4581-4DE0-B084-F183EDB5941E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0080EBF4-4581-4DE0-B084-F183EDB5941E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
