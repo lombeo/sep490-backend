@@ -15,6 +15,8 @@ using Microsoft.OpenApi.Models;
 using Sep490_Backend.Services.EmailService;
 using Sep490_Backend.Services.AdminService;
 using Sep490_Backend.Services.OTPService;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.Google;
 
 namespace Sep490_Backend
 {
@@ -105,13 +107,12 @@ namespace Sep490_Backend
             StaticVariable.JwtValidation.CertificatePath = certPath;
 
             // Adding Authentication
-            builder.Services.AddAuthentication(options =>
+            _ = builder.Services.AddAuthentication(options =>
             {
                 options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
                 options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
                 options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
             })
-
             // Adding Jwt Bearer
             .AddJwtBearer(options =>
             {
@@ -129,6 +130,12 @@ namespace Sep490_Backend
                     IssuerSigningKey = key,
                     ValidateLifetime = false,
                 };
+            })
+            // Adding Google
+            .AddGoogle(googleOptions =>
+            {
+                googleOptions.ClientId = Environment.GetEnvironmentVariable("GOOGLE_CLIENT_ID");
+                googleOptions.ClientSecret = Environment.GetEnvironmentVariable("GOOGLE_CLIENT_SECRET");
             });
 
             var connectionString = Environment.GetEnvironmentVariable("DATABASE_CONNECTION_STRING")

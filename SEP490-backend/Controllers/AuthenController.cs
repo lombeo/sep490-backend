@@ -4,6 +4,12 @@ using Sep490_Backend.DTO.AuthenDTO;
 using Sep490_Backend.DTO.Common;
 using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Services.AuthenService;
+using System.Web;
+using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.Google;
+using Microsoft.AspNetCore.Authentication;
+using System.Security.Claims;
 
 namespace Sep490_Backend.Controllers
 {
@@ -30,7 +36,7 @@ namespace Sep490_Backend.Controllers
         [HttpPost("verify-otp")]
         public async Task<ResponseDTO<bool>> VerifyOTP([FromBody] VerifyOtpDTO model)
         {
-            if(UserId != 0)
+            if (UserId != 0)
             {
                 model.UserId = UserId;
             }
@@ -39,7 +45,7 @@ namespace Sep490_Backend.Controllers
 
         [AllowAnonymous]
         [HttpPost("reset-password")]
-        public async Task<ResponseDTO<int>> ForgetPassword ([FromQuery] string email)
+        public async Task<ResponseDTO<int>> ForgetPassword([FromQuery] string email)
         {
             return await HandleException(_authenService.ForgetPassword(email), Message.AuthenMessage.FORGET_PASSWORD_SUCCESS);
         }
@@ -57,10 +63,67 @@ namespace Sep490_Backend.Controllers
             return await HandleException(_authenService.SignIn(model), Message.AuthenMessage.SIGN_IN_SUCCESS);
         }
 
+
         [HttpPost("refresh")]
         public async Task<ResponseDTO<string>> Refresh([FromBody] string refreshToken)
         {
             return await HandleException(_authenService.Refresh(refreshToken), Message.AuthenMessage.REFRESH_TOKEN_SUCCESS);
+        }
+
+
+        [AllowAnonymous]
+        [HttpPost("login-with-google")]
+        public async Task<ResponseDTO<string>> LoginWithGoogle()
+        {
+            string clientId = Environment.GetEnvironmentVariable("GOOGLE_CLIENT_ID");
+            string redirectUri = HttpUtility.UrlEncode("https://localhost:7233/sep490/authen/get-access-token");
+
+            var url = $@"https://accounts.google.com/o/oauth2/v2/auth?access_type=online&client_id={clientId}&redirect_uri={redirectUri}&response_type=code&scope=email&prompt=consent";
+
+            return await HandleException(Task.FromResult(url), Message.AuthenMessage.REFRESH_TOKEN_SUCCESS);
+        }
+
+        [AllowAnonymous]
+        [HttpPost("get-access-token")]
+        public async Task<ResponseDTO<string>> GetAccessToken([FromQuery] string authorizationCode)
+        {
+            string redirectUri = HttpUtility.UrlEncode("https://localhost:7233/sep490/authen/get-access-token");
+
+            string url = "https://oauth2.googleapis.com/tokeninfo?id_token=";
+            var dicData = new Dictionary<string, string>();
+            dicData["client_id"] = Environment.GetEnvironmentVariable("GOOGLE_CLIENT_ID");
+            dicData["client_secret"] = Environment.GetEnvironmentVariable("GOOGLE_CLIENT_SECRET");
+            dicData["code"] = authorizationCode;
+            dicData["grant_type"] = "authorization_code";
+            dicData["redirect_uri"] = redirectUri;
+            dicData["access_type"] = "online";
+            try
+            {
+                using (var client = new HttpClient())
+                using (var content = new FormUrlEncodedContent(dicData))
+                {
+                    HttpResponseMessage response = await client.PostAsync(url, content);
+                    string json = await response.Content.ReadAsStringAsync();
+                    if(response.IsSuccessStatusCode)
+                    {
+                        return await HandleException(Task.FromResult(json), Message.AuthenMessage.REFRESH_TOKEN_SUCCESS);
+                    }
+                    else
+                    {
+                        Serilog.Log.Error("Google API error: {ErrorContent}", json);
+                        return new ResponseDTO<string>
+                        {
+                            Data = null,
+                            Message = $"Google API error: {json}"
+                        };
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Error(ex, ex.Message);
+            }
+            return await HandleException(Task.FromResult(""), Message.AuthenMessage.REFRESH_TOKEN_SUCCESS);
         }
     }
 }
