@@ -1,5 +1,6 @@
 ﻿using DocumentFormat.OpenXml.Drawing.Charts;
 using Humanizer;
+using NPOI.SS.Util;
 using NuGet.Configuration;
 
 namespace Sep490_Backend.Infra.Constants
@@ -50,9 +51,12 @@ namespace Sep490_Backend.Infra.Constants
             //Success
             public const string SEARCH_SUCCESS = "S-ADMIN-001"; //Search list user successfully!
             public const string DELETE_USER_SUCCESS = "S-ADMIN-002"; //Delete user successfully!
+            public const string CREATE_USER_SUCCESS = "S-ADMIN-003"; //Create user successfully!
+            public const string UPDATE_USER_SUCCESS = "S-ADMIN-004"; //Update user successfully!
 
             //Error
             public const string DELETE_USER_ERROR = "E-ADMIN-001"; //An error occurred while deleting a user, you cannot delete your own account, or the person you want to delete has equal or higher authority than you.
+            public const string CREATE_USER_ERROR = "E-ADMIN-001"; //User already exist, username and email already exist
         }
     }
 }
