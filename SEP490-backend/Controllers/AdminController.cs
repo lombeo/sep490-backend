@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using MimeKit.Tnef;
 using Sep490_Backend.DTO;
 using Sep490_Backend.DTO.AdminDTO;
 using Sep490_Backend.DTO.AuthenDTO;
@@ -36,6 +37,19 @@ namespace Sep490_Backend.Controllers
         public async Task<ResponseDTO<bool>> DeleteUser([FromQuery] int userId)
         {
             return await HandleException(_adminService.DeleteUser(userId, UserId), Message.AdminMessage.DELETE_USER_SUCCESS);
+        }
+
+
+        [HttpPost("create-user")]
+        public async Task<ResponseDTO<bool>> CreateUser([FromBody] AdminCreateUserDTO model)
+        {
+            return await HandleException(_adminService.CreateUser(model, UserId), Message.AdminMessage.CREATE_USER_SUCCESS);
+        }
+
+        [HttpPut("update-user")]
+        public async Task<ResponseDTO<bool>> UpdateUser([FromBody] AdminUpdateUserDTO model)
+        {
+            return await HandleException(_adminService.UpdateUser(model, UserId), Message.AdminMessage.UPDATE_USER_SUCCESS);
         }
     }
 }
