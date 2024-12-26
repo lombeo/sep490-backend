@@ -15,6 +15,7 @@ using Microsoft.OpenApi.Models;
 using Sep490_Backend.Services.EmailService;
 using Sep490_Backend.Services.AdminService;
 using Sep490_Backend.Services.OTPService;
+using Sep490_Backend.Services.HelperService;
 
 namespace Sep490_Backend
 {
@@ -50,6 +51,7 @@ namespace Sep490_Backend
             builder.Services.AddScoped<IAdminService, AdminService>();
             builder.Services.AddScoped<IEmailService, EmailService>();
             builder.Services.AddScoped<IOTPService, OTPService>();
+            builder.Services.AddScoped<IHelperService, HelperService>();
             builder.Services.AddScoped<RedisConnManager>();
             builder.Services.AddHostedService<DefaultBackgroundService>();
 

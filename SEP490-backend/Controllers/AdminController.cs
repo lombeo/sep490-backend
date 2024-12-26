@@ -46,7 +46,7 @@ namespace Sep490_Backend.Controllers
             return await HandleException(_adminService.CreateUser(model, UserId), Message.AdminMessage.CREATE_USER_SUCCESS);
         }
 
-        [HttpPost("update-user")]
+        [HttpPut("update-user")]
         public async Task<ResponseDTO<bool>> UpdateUser([FromBody] AdminUpdateUserDTO model)
         {
             return await HandleException(_adminService.UpdateUser(model, UserId), Message.AdminMessage.UPDATE_USER_SUCCESS);

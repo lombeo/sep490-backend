@@ -6,8 +6,10 @@ using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Services.AuthenService;
 using Sep490_Backend.Services.EmailService;
+using Sep490_Backend.Services.HelperService;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Sep490_Backend.Services.AdminService
 {
@@ -23,12 +25,15 @@ namespace Sep490_Backend.Services.AdminService
     {
         private readonly BackendContext _context;
         private readonly IAuthenService _authenService;
-        private readonly IEmailService _email;
+        private readonly IEmailService _emailService;
+        private readonly IHelperService _helperService;
 
-        public AdminService(BackendContext context, IAuthenService authenService)
+        public AdminService(IHelperService helperService, BackendContext context, IAuthenService authenService, IEmailService emailService)
         {
             _context = context;
             _authenService = authenService;
+            _helperService = helperService;
+            _emailService = emailService;
         }
 
         public async Task<bool> DeleteUser(int userId, int actionBy)
@@ -37,7 +42,7 @@ namespace Sep490_Backend.Services.AdminService
             {
                 throw new ApplicationException(Message.CommonMessage.NOT_ALLOWED);
             }
-            if(userId == actionBy || IsAdmin(userId))
+            if (userId == actionBy || IsAdmin(userId))
             {
                 throw new ApplicationException(Message.AdminMessage.DELETE_USER_ERROR);
             }
@@ -101,7 +106,7 @@ namespace Sep490_Backend.Services.AdminService
             {
                 data = data.Where(t => t.Role == model.Role).ToList();
             }
-            if(model.Gender != null)
+            if (model.Gender != null)
             {
                 data = data.Where(t => t.Gender == model.Gender).ToList();
             }
@@ -126,6 +131,15 @@ namespace Sep490_Backend.Services.AdminService
             {
                 throw new ApplicationException(Message.CommonMessage.INVALID_FORMAT);
             }
+            if (model.UserName.Contains(" "))
+            {
+                throw new ApplicationException(Message.AuthenMessage.INVALID_USERNAME);
+            }
+
+            if (!Regex.IsMatch(model.Email, PatternConst.EMAIL_PATTERN))
+            {
+                throw new ApplicationException(Message.AuthenMessage.INVALID_EMAIL);
+            }
 
             //Lấy user
             var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Id == model.Id && !u.Deleted);
@@ -141,9 +155,9 @@ namespace Sep490_Backend.Services.AdminService
             }
 
             //Cap nhat
-            existingUser.Username = model.UserName ?? existingUser.Username; 
-            existingUser.Email = model.Email ?? existingUser.Email;         
-            existingUser.Role = model.Role ?? existingUser.Role;            
+            existingUser.Username = model.UserName ?? existingUser.Username;
+            existingUser.Email = model.Email ?? existingUser.Email;
+            existingUser.Role = model.Role ?? existingUser.Role;
             existingUser.IsVerify = model.IsVerify ? model.IsVerify : existingUser.IsVerify;
             existingUser.UpdatedAt = DateTime.UtcNow;
 
@@ -166,6 +180,15 @@ namespace Sep490_Backend.Services.AdminService
             {
                 throw new ApplicationException(Message.CommonMessage.INVALID_FORMAT);
             }
+            if (model.UserName.Contains(" "))
+            {
+                throw new ApplicationException(Message.AuthenMessage.INVALID_USERNAME);
+            }
+
+            if (!Regex.IsMatch(model.Email, PatternConst.EMAIL_PATTERN))
+            {
+                throw new ApplicationException(Message.AuthenMessage.INVALID_EMAIL);
+            }
             //check exist
             var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == model.Email || u.Username == model.UserName);
             if (existingUser != null)
@@ -174,8 +197,8 @@ namespace Sep490_Backend.Services.AdminService
             }
 
             //Tao moi 
-            var password = GenerateRandomPassword();
-            var passwordHash = HashPassword(password);
+            var password = _helperService.GenerateStrongPassword();
+            var passwordHash = _helperService.HashPassword(password);
             var newUser = new User
             {
                 Username = model.UserName,
@@ -187,69 +210,30 @@ namespace Sep490_Backend.Services.AdminService
                 IsVerify = true,
             };
             await _context.AddAsync(newUser);
-            await _context.SaveChangesAsync();
+
             var userProfile = new UserProfile
             {
                 UserId = newUser.Id,
+                FullName = "Created " + model.Role + " User",
+                Phone = "000000000",
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
             await _context.AddAsync(userProfile);
+
+            var emailTemp = await _context.EmailTemplates.FirstOrDefaultAsync(t => t.Title == "Your new password");
+            if (emailTemp == null)
+            {
+                throw new ApplicationException(Message.CommonMessage.NOT_FOUND);
+            }
+            string formattedHtml = emailTemp.Body.Replace("{0}", newUser.Username).Replace("{1}", password);
+            await _emailService.SendEmailAsync(newUser.Email, emailTemp.Title, formattedHtml);
+
             await _context.SaveChangesAsync();
 
-            //Gui password qua mail
-            try
-            {
-                var emailTemp = await _context.EmailTemplates.FirstOrDefaultAsync(t => t.Title == "Your new password");
-                if (emailTemp == null)
-                {
-                    throw new ApplicationException(Message.CommonMessage.ERROR_HAPPENED);
-                }
-                string formattedHtml = emailTemp.Body.Replace("{0}", newUser.Username).Replace("{1}", password);
-                await _email.SendEmailAsync(newUser.Email, emailTemp.Title, formattedHtml);
-            }
-            catch (Exception ex)
-            {
-
-            }
-            
+            _authenService.TriggerUpdateUserMemory(newUser.Id);
 
             return true;
-        }
-
-        public string HashPassword(string password)
-        {
-            using (SHA256 sha256Hash = SHA256.Create())
-            {
-                byte[] bytes = sha256Hash.ComputeHash(Encoding.UTF8.GetBytes(password));
-
-                StringBuilder builder = new StringBuilder();
-                for (int i = 0; i < bytes.Length; i++)
-                {
-                    builder.Append(bytes[i].ToString("x2"));
-                }
-                return builder.ToString();
-            }
-        }
-
-        private string GenerateRandomPassword(int length = 12)
-        {
-            const string upperCase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-            const string lowerCase = "abcdefghijklmnopqrstuvwxyz";
-            const string digits = "0123456789";
-            const string specialChars = "!@#$%^&*";
-            const string allChars = upperCase + lowerCase + digits + specialChars;
-
-            var random = new Random();
-            var password = new List<char>
-            {
-                upperCase[random.Next(upperCase.Length)], 
-                digits[random.Next(digits.Length)],       
-                specialChars[random.Next(specialChars.Length)] 
-            };
-
-            password.AddRange(Enumerable.Repeat(allChars, length - 3).Select(s => s[random.Next(s.Length)]));
-            return new string(password.OrderBy(_ => random.Next()).ToArray());
         }
 
         private bool IsAdmin(int userId)
