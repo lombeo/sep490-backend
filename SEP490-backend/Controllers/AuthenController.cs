@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Authentication;
 using System.Security.Claims;
+using System.Text.Json;
 
 namespace Sep490_Backend.Controllers
 {
@@ -76,7 +77,7 @@ namespace Sep490_Backend.Controllers
         public async Task<ResponseDTO<string>> LoginWithGoogle()
         {
             string clientId = Environment.GetEnvironmentVariable("GOOGLE_CLIENT_ID");
-            string redirectUri = HttpUtility.UrlEncode("https://localhost:7233/sep490/authen/get-access-token");
+            string redirectUri = "https://localhost:7233/sep490/authen/google-callback";
 
             var url = $@"https://accounts.google.com/o/oauth2/v2/auth?access_type=online&client_id={clientId}&redirect_uri={redirectUri}&response_type=code&scope=email&prompt=consent";
 
@@ -84,46 +85,10 @@ namespace Sep490_Backend.Controllers
         }
 
         [AllowAnonymous]
-        [HttpPost("get-access-token")]
-        public async Task<ResponseDTO<string>> GetAccessToken([FromQuery] string authorizationCode)
+        [HttpPost("google-callback")]
+        public async Task<ResponseDTO<ReturnSignInDTO>> GoogleCallBack([FromQuery] string authorizationCode)
         {
-            string redirectUri = HttpUtility.UrlEncode("https://localhost:7233/sep490/authen/get-access-token");
-
-            string url = "https://oauth2.googleapis.com/tokeninfo?id_token=";
-            var dicData = new Dictionary<string, string>();
-            dicData["client_id"] = Environment.GetEnvironmentVariable("GOOGLE_CLIENT_ID");
-            dicData["client_secret"] = Environment.GetEnvironmentVariable("GOOGLE_CLIENT_SECRET");
-            dicData["code"] = authorizationCode;
-            dicData["grant_type"] = "authorization_code";
-            dicData["redirect_uri"] = redirectUri;
-            dicData["access_type"] = "online";
-            try
-            {
-                using (var client = new HttpClient())
-                using (var content = new FormUrlEncodedContent(dicData))
-                {
-                    HttpResponseMessage response = await client.PostAsync(url, content);
-                    string json = await response.Content.ReadAsStringAsync();
-                    if(response.IsSuccessStatusCode)
-                    {
-                        return await HandleException(Task.FromResult(json), Message.AuthenMessage.REFRESH_TOKEN_SUCCESS);
-                    }
-                    else
-                    {
-                        Serilog.Log.Error("Google API error: {ErrorContent}", json);
-                        return new ResponseDTO<string>
-                        {
-                            Data = null,
-                            Message = $"Google API error: {json}"
-                        };
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Serilog.Log.Error(ex, ex.Message);
-            }
-            return await HandleException(Task.FromResult(""), Message.AuthenMessage.REFRESH_TOKEN_SUCCESS);
+            return await HandleException(_authenService.GoogleCallback(authorizationCode), "An unexpected error occurred.");
         }
     }
 }

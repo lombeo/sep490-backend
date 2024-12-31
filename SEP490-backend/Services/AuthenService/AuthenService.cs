@@ -15,6 +15,9 @@ using Sep490_Backend.DTO;
 using Sep490_Backend.Infra.Enums;
 using Sep490_Backend.Services.CacheService;
 using Sep490_Backend.Services.OTPService;
+using System.Web;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Sep490_Backend.Services.AuthenService
 {
@@ -29,7 +32,7 @@ namespace Sep490_Backend.Services.AuthenService
         Task<int> ForgetPassword(string email);
         Task<ReturnSignInDTO> SignIn(SignInDTO model);
         Task<string> Refresh(string refreshToken);
-        Task<bool> SignInWithGoogle(string idToken);
+        Task<ReturnSignInDTO> GoogleCallback(string authorizationToken);
         void TriggerUpdateUserProfileMemory(int userProfileId);
         void UpdateUserProfileMemory(int userProfileId);
     }
@@ -476,9 +479,118 @@ namespace Sep490_Backend.Services.AuthenService
             return GenerateAccessToken(user);
         }
 
-        public Task<bool> SignInWithGoogle(string idToken)
+        public async Task<ReturnSignInDTO> GoogleCallback(string authorizationToken)
         {
-            throw new NotImplementedException();
+            string redirectUri = "https://localhost:7233/sep490/authen/google-callback";
+            string tokenUrl = "https://oauth2.googleapis.com/token";
+            string userInfoUrl = "https://www.googleapis.com/oauth2/v2/userinfo?fields=email&access_token=";
+
+            var dicData = new Dictionary<string, string>
+            {
+                ["client_id"] = Environment.GetEnvironmentVariable("GOOGLE_CLIENT_ID"),
+                ["client_secret"] = Environment.GetEnvironmentVariable("GOOGLE_CLIENT_SECRET"),
+                ["code"] = HttpUtility.UrlDecode(authorizationToken),
+                ["grant_type"] = "authorization_code",
+                ["redirect_uri"] = redirectUri
+            };
+
+            try
+            {
+                using (var client = new HttpClient())
+                {
+                    // Lấy access token
+                    using (var content = new FormUrlEncodedContent(dicData))
+                    {
+                        HttpResponseMessage tokenResponse = await client.PostAsync(tokenUrl, content);
+                        string tokenJson = await tokenResponse.Content.ReadAsStringAsync();
+
+                        if (!tokenResponse.IsSuccessStatusCode)
+                        {
+                            throw new ApplicationException(Message.AuthenMessage.IVALID_ACCESS_TOKEN);
+                        }
+                        var tokenData = JsonSerializer.Deserialize<GoogleTokenResponseDTO>(tokenJson);
+
+                        // Lấy thông tin người dùng từ Google
+                        HttpResponseMessage userInfoResponse = await client.GetAsync(userInfoUrl + tokenData.AccessToken);
+                        string userInfoJson = await userInfoResponse.Content.ReadAsStringAsync();
+                        var jsonNode = JsonNode.Parse(userInfoJson);
+                        var email = jsonNode?["email"]?.ToString();
+
+                        // Check Email
+                        var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+                        if (user == null)
+                        {
+                            var account = new User
+                            {
+                                Username = "",
+                                Email = email,
+                                PasswordHash = "",
+                                CreatedAt = DateTime.UtcNow,
+                                UpdatedAt = DateTime.UtcNow,
+                                Role = RoleConstValue.USER,
+                                IsVerify = true,
+                            };
+                            await _context.AddAsync(account);
+                            await _context.SaveChangesAsync();
+                            var userProfile = new UserProfile
+                            {
+                                UserId = account.Id,
+                                Phone = null,
+                                Gender = true,
+                                FullName = "",
+                                CreatedAt = DateTime.UtcNow,
+                                UpdatedAt = DateTime.UtcNow
+                            };
+
+                            await _context.AddAsync(userProfile);
+                            await _context.SaveChangesAsync();
+                            TriggerUpdateUserMemory(account.Id);
+                        }
+                        TriggerUpdateUserMemory(user.Id);
+
+                        // Tạo AccessToken và RefreshToken cho người dùng
+                        var accessToken = GenerateAccessToken(user);
+                        var refreshToken = GenerateRefreshToken();
+
+                        var existingToken = await _context.RefreshTokens.FirstOrDefaultAsync(rt => rt.UserId == user.Id);
+                        var expiryDate = DateTime.UtcNow.Add(StaticVariable.RefreshTokenExpiryDuration);
+                        if (existingToken != null)
+                        {
+                            existingToken.Token = refreshToken;
+                            existingToken.ExpiryDate = expiryDate;
+                        }
+                        else
+                        {
+                            var newToken = new RefreshToken
+                            {
+                                UserId = user.Id,
+                                Token = refreshToken,
+                                ExpiryDate = expiryDate,
+                                IsRevoked = false
+                            };
+                            await _context.RefreshTokens.AddAsync(newToken);
+                        }
+                        await _context.SaveChangesAsync();
+
+                        return new ReturnSignInDTO
+                        {
+                            AccessToken = accessToken,
+                            RefreshToken = refreshToken,
+                            Email = user.Email,
+                            Role = user.Role,
+                            Username = user.Username,
+                            IsVerify = user.IsVerify
+                        };
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Error(ex, "Unexpected error ");
+                throw;
+            }
         }
+
+
     }
 }

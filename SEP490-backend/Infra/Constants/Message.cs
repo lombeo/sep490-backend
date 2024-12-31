@@ -35,6 +35,8 @@ namespace Sep490_Backend.Infra.Constants
             public const string INVALID_OTP = "E-AUTHEN-010"; //Your OTP is incorrect, double check it in your email.
             public const string INVALID_TOKEN = "E-AUTHEN-011"; //Token outdate or revoked.
             public const string OTP_REQUIRED = "E-AUTHEN-012"; //This action require OTP.
+            public const string IVALID_ACCESS_TOKEN = "E-AUTHEN-012"; //Can not get access token from google
+
 
             //Success
             public const string SIGNUP_SUCCESS = "S-AUTHEN-001"; //Account registration successful, please check your email to receive the OTP code used to verify your account.
@@ -43,6 +45,7 @@ namespace Sep490_Backend.Infra.Constants
             public const string CHANGE_PASSWORD_SUCCESS = "S-AUTHEN-004"; //Password changed successfully!
             public const string SIGN_IN_SUCCESS = "S-AUTHEN-005"; //Log in successfully.
             public const string REFRESH_TOKEN_SUCCESS = "S-AUTHEN-006"; //Refresh token successfully.
+
         }
 
         public static class AdminMessage
