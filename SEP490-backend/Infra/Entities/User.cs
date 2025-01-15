@@ -26,8 +26,8 @@ namespace Sep490_Backend.Infra.Entities
                     .HasColumnType("timestamp without time zone");
                 entity.Property(e => e.CreatedAt)
                     .HasColumnType("timestamp without time zone");
-                entity.HasIndex(e => e.Username).IsUnique();
-                entity.HasIndex(e => e.Email).IsUnique();
+                entity.HasIndex(e => e.Username);
+                entity.HasIndex(e => e.Email);
             });
         }
     }
