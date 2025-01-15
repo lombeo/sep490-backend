@@ -190,7 +190,7 @@ namespace Sep490_Backend.Services.AdminService
                 throw new ApplicationException(Message.AuthenMessage.INVALID_EMAIL);
             }
             //check exist
-            var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == model.Email || u.Username == model.UserName);
+            var existingUser = StaticVariable.UserMemory.FirstOrDefault(u => u.Email == model.Email || u.Username == model.UserName);
             if (existingUser != null)
             {
                 throw new ApplicationException(Message.AdminMessage.CREATE_USER_ERROR);
