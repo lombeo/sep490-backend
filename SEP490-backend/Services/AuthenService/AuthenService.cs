@@ -225,44 +225,44 @@ namespace Sep490_Backend.Services.AuthenService
             return true;
         }
 
-        private void ValidateSignUp(SignUpDTO model)
-        {
-            var data = StaticVariable.UserMemory.ToList();
+        //private void ValidateSignUp(SignUpDTO model)
+        //{
+        //    var data = StaticVariable.UserMemory.ToList();
 
-            if(string.IsNullOrWhiteSpace(model.Username) ||
-                string.IsNullOrWhiteSpace(model.Password) ||
-                string.IsNullOrWhiteSpace(model.Email) ||
-                string.IsNullOrWhiteSpace(model.FullName) ||
-                string.IsNullOrWhiteSpace(model.Phone))
-            {
-                throw new ApplicationException(Message.CommonMessage.MISSING_PARAM);
-            }
+        //    if(string.IsNullOrWhiteSpace(model.Username) ||
+        //        string.IsNullOrWhiteSpace(model.Password) ||
+        //        string.IsNullOrWhiteSpace(model.Email) ||
+        //        string.IsNullOrWhiteSpace(model.FullName) ||
+        //        string.IsNullOrWhiteSpace(model.Phone))
+        //    {
+        //        throw new ApplicationException(Message.CommonMessage.MISSING_PARAM);
+        //    }
 
-            if (data.Any(t => t.Email.ToLower().Equals(model.Email.ToLower())))
-            {
-                throw new ApplicationException(Message.AuthenMessage.EXIST_EMAIL);
-            }
+        //    if (data.Any(t => t.Email.ToLower().Equals(model.Email.ToLower())))
+        //    {
+        //        throw new ApplicationException(Message.AuthenMessage.EXIST_EMAIL);
+        //    }
 
-            if (data.Any(t => t.Username.ToLower().Equals(model.Username.ToLower())))
-            {
-                throw new ApplicationException(Message.AuthenMessage.EXIST_USERNAME);
-            }
+        //    if (data.Any(t => t.Username.ToLower().Equals(model.Username.ToLower())))
+        //    {
+        //        throw new ApplicationException(Message.AuthenMessage.EXIST_USERNAME);
+        //    }
 
-            if (model.Username.Contains(" "))
-            {
-                throw new ApplicationException(Message.AuthenMessage.INVALID_USERNAME);
-            }
+        //    if (model.Username.Contains(" "))
+        //    {
+        //        throw new ApplicationException(Message.AuthenMessage.INVALID_USERNAME);
+        //    }
 
-            if (!Regex.IsMatch(model.Email, PatternConst.EMAIL_PATTERN))
-            {
-                throw new ApplicationException(Message.AuthenMessage.INVALID_EMAIL);
-            }
+        //    if (!Regex.IsMatch(model.Email, PatternConst.EMAIL_PATTERN))
+        //    {
+        //        throw new ApplicationException(Message.AuthenMessage.INVALID_EMAIL);
+        //    }
 
-            if (!Regex.IsMatch(model.Password, PatternConst.PASSWORD_PATTERN))
-            {
-                throw new ApplicationException(Message.AuthenMessage.INVALID_PASSWORD);
-            }
-        }
+        //    if (!Regex.IsMatch(model.Password, PatternConst.PASSWORD_PATTERN))
+        //    {
+        //        throw new ApplicationException(Message.AuthenMessage.INVALID_PASSWORD);
+        //    }
+        //}
 
         public async Task<bool> ChangePassword(ChangePasswordDTO model, int userId)
         {
