@@ -24,7 +24,7 @@ namespace Sep490_Backend.Services.AuthenService
         void InitUserMemory();
         void UpdateUserMemory(int userId);
         void TriggerUpdateUserMemory(int userId);
-        Task<bool> SignUp(SignUpDTO model);
+        //Task<bool> SignUp(SignUpDTO model);
         Task<bool> VerifyOTP(VerifyOtpDTO model);
         Task<bool> ChangePassword(ChangePasswordDTO model, int userId);
         Task<int> ForgetPassword(string email);
