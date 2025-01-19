@@ -136,9 +136,25 @@ namespace Sep490_Backend.Services.AdminService
                 throw new ApplicationException(Message.AuthenMessage.INVALID_USERNAME);
             }
 
+            if(StaticVariable.UserMemory.FirstOrDefault(t => t.Username == model.UserName) != null)
+            {
+                throw new ApplicationException(Message.AuthenMessage.EXIST_USERNAME);
+            }
+
+            if (StaticVariable.UserMemory.FirstOrDefault(t => t.Email == model.Email) != null)
+            {
+                throw new ApplicationException(Message.AuthenMessage.EXIST_EMAIL);
+            }
+
             if (!Regex.IsMatch(model.Email, PatternConst.EMAIL_PATTERN))
             {
                 throw new ApplicationException(Message.AuthenMessage.INVALID_EMAIL);
+            }
+
+            // Kiểm tra Role có hợp lệ không
+            if (!RoleConstValue.ValidRoles.Contains(model.Role))
+            {
+                throw new ApplicationException(Message.AdminMessage.INVALID_ROLE);
             }
 
             //Lấy user
@@ -190,7 +206,7 @@ namespace Sep490_Backend.Services.AdminService
                 throw new ApplicationException(Message.AuthenMessage.INVALID_EMAIL);
             }
             //check exist
-            var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == model.Email || u.Username == model.UserName);
+            var existingUser = StaticVariable.UserMemory.FirstOrDefault(u => u.Email == model.Email || u.Username == model.UserName);
             if (existingUser != null)
             {
                 throw new ApplicationException(Message.AdminMessage.CREATE_USER_ERROR);

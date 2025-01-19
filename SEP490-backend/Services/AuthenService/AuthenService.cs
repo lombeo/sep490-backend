@@ -24,7 +24,7 @@ namespace Sep490_Backend.Services.AuthenService
         void InitUserMemory();
         void UpdateUserMemory(int userId);
         void TriggerUpdateUserMemory(int userId);
-        Task<bool> SignUp(SignUpDTO model);
+        //Task<bool> SignUp(SignUpDTO model);
         Task<bool> VerifyOTP(VerifyOtpDTO model);
         Task<bool> ChangePassword(ChangePasswordDTO model, int userId);
         Task<int> ForgetPassword(string email);
@@ -133,54 +133,54 @@ namespace Sep490_Backend.Services.AuthenService
             });
         }
 
-        public async Task<bool> SignUp(SignUpDTO model)
-        {
-            ValidateSignUp(model);
+        //public async Task<bool> SignUp(SignUpDTO model)
+        //{
+        //    ValidateSignUp(model);
 
-            var password = _helperService.HashPassword(model.Password);
+        //    var password = _helperService.HashPassword(model.Password);
 
-            var account = new User
-            {
-                Username = model.Username,
-                Email = model.Email,
-                PasswordHash = password,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow,
-                Role = RoleConstValue.USER,
-                IsVerify = false,
-            };
+        //    var account = new User
+        //    {
+        //        Username = model.Username,
+        //        Email = model.Email,
+        //        PasswordHash = password,
+        //        CreatedAt = DateTime.UtcNow,
+        //        UpdatedAt = DateTime.UtcNow,
+        //        Role = RoleConstValue.USER,
+        //        IsVerify = false,
+        //    };
 
-            await _context.AddAsync(account);
-            await _context.SaveChangesAsync();
+        //    await _context.AddAsync(account);
+        //    await _context.SaveChangesAsync();
 
-            var userProfile = new UserProfile
-            {
-                UserId = account.Id,
-                Phone = model.Phone,
-                Gender = model.Gender,
-                FullName = model.FullName,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-            await _context.AddAsync(userProfile);
-            await _context.SaveChangesAsync();
+        //    var userProfile = new UserProfile
+        //    {
+        //        UserId = account.Id,
+        //        Phone = model.Phone,
+        //        Gender = model.Gender,
+        //        FullName = model.FullName,
+        //        CreatedAt = DateTime.UtcNow,
+        //        UpdatedAt = DateTime.UtcNow
+        //    };
+        //    await _context.AddAsync(userProfile);
+        //    await _context.SaveChangesAsync();
 
-            var otpCode = await _otpService.GenerateOTP(6, ReasonOTP.SignUp, account.Id, TimeSpan.FromMinutes(10));
+        //    var otpCode = await _otpService.GenerateOTP(6, ReasonOTP.SignUp, account.Id, TimeSpan.FromMinutes(10));
 
-            TriggerUpdateUserMemory(account.Id);
+        //    TriggerUpdateUserMemory(account.Id);
 
-            var emailTemp = await _context.EmailTemplates.FirstOrDefaultAsync(t => t.Title == "Verify your account");
+        //    var emailTemp = await _context.EmailTemplates.FirstOrDefaultAsync(t => t.Title == "Verify your account");
 
-            if(emailTemp == null)
-            {
-                throw new ApplicationException(Message.CommonMessage.ERROR_HAPPENED);
-            }
-            string formattedHtml = emailTemp.Body.Replace("{0:s}", account.Username).Replace("{1:s}", otpCode);
-            // Gửi email
-            await _email.SendEmailAsync(account.Email, emailTemp.Title, formattedHtml);
+        //    if(emailTemp == null)
+        //    {
+        //        throw new ApplicationException(Message.CommonMessage.ERROR_HAPPENED);
+        //    }
+        //    string formattedHtml = emailTemp.Body.Replace("{0:s}", account.Username).Replace("{1:s}", otpCode);
+        //    // Gửi email
+        //    await _email.SendEmailAsync(account.Email, emailTemp.Title, formattedHtml);
 
-            return true;
-        }
+        //    return true;
+        //}
 
         public async Task<bool> VerifyOTP(VerifyOtpDTO model)
         {
@@ -225,44 +225,44 @@ namespace Sep490_Backend.Services.AuthenService
             return true;
         }
 
-        private void ValidateSignUp(SignUpDTO model)
-        {
-            var data = StaticVariable.UserMemory.ToList();
+        //private void ValidateSignUp(SignUpDTO model)
+        //{
+        //    var data = StaticVariable.UserMemory.ToList();
 
-            if(string.IsNullOrWhiteSpace(model.Username) ||
-                string.IsNullOrWhiteSpace(model.Password) ||
-                string.IsNullOrWhiteSpace(model.Email) ||
-                string.IsNullOrWhiteSpace(model.FullName) ||
-                string.IsNullOrWhiteSpace(model.Phone))
-            {
-                throw new ApplicationException(Message.CommonMessage.MISSING_PARAM);
-            }
+        //    if(string.IsNullOrWhiteSpace(model.Username) ||
+        //        string.IsNullOrWhiteSpace(model.Password) ||
+        //        string.IsNullOrWhiteSpace(model.Email) ||
+        //        string.IsNullOrWhiteSpace(model.FullName) ||
+        //        string.IsNullOrWhiteSpace(model.Phone))
+        //    {
+        //        throw new ApplicationException(Message.CommonMessage.MISSING_PARAM);
+        //    }
 
-            if (data.Any(t => t.Email.ToLower().Equals(model.Email.ToLower())))
-            {
-                throw new ApplicationException(Message.AuthenMessage.EXIST_EMAIL);
-            }
+        //    if (data.Any(t => t.Email.ToLower().Equals(model.Email.ToLower())))
+        //    {
+        //        throw new ApplicationException(Message.AuthenMessage.EXIST_EMAIL);
+        //    }
 
-            if (data.Any(t => t.Username.ToLower().Equals(model.Username.ToLower())))
-            {
-                throw new ApplicationException(Message.AuthenMessage.EXIST_USERNAME);
-            }
+        //    if (data.Any(t => t.Username.ToLower().Equals(model.Username.ToLower())))
+        //    {
+        //        throw new ApplicationException(Message.AuthenMessage.EXIST_USERNAME);
+        //    }
 
-            if (model.Username.Contains(" "))
-            {
-                throw new ApplicationException(Message.AuthenMessage.INVALID_USERNAME);
-            }
+        //    if (model.Username.Contains(" "))
+        //    {
+        //        throw new ApplicationException(Message.AuthenMessage.INVALID_USERNAME);
+        //    }
 
-            if (!Regex.IsMatch(model.Email, PatternConst.EMAIL_PATTERN))
-            {
-                throw new ApplicationException(Message.AuthenMessage.INVALID_EMAIL);
-            }
+        //    if (!Regex.IsMatch(model.Email, PatternConst.EMAIL_PATTERN))
+        //    {
+        //        throw new ApplicationException(Message.AuthenMessage.INVALID_EMAIL);
+        //    }
 
-            if (!Regex.IsMatch(model.Password, PatternConst.PASSWORD_PATTERN))
-            {
-                throw new ApplicationException(Message.AuthenMessage.INVALID_PASSWORD);
-            }
-        }
+        //    if (!Regex.IsMatch(model.Password, PatternConst.PASSWORD_PATTERN))
+        //    {
+        //        throw new ApplicationException(Message.AuthenMessage.INVALID_PASSWORD);
+        //    }
+        //}
 
         public async Task<bool> ChangePassword(ChangePasswordDTO model, int userId)
         {
@@ -276,6 +276,10 @@ namespace Sep490_Backend.Services.AuthenService
             if (user == null)
             {
                 throw new ApplicationException(Message.CommonMessage.NOT_FOUND);
+            }
+            if (!Regex.IsMatch(model.CurrentPassword, PatternConst.PASSWORD_PATTERN) || !Regex.IsMatch(model.NewPassword, PatternConst.PASSWORD_PATTERN))
+            {
+                throw new ApplicationException(Message.AuthenMessage.INVALID_PASSWORD);
             }
             if (string.Compare(_helperService.HashPassword(model.CurrentPassword), user.PasswordHash) != 0)
             {

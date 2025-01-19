@@ -19,12 +19,12 @@ namespace Sep490_Backend.Controllers
             _authenService = authenService;
         }
 
-        [AllowAnonymous]
-        [HttpPost("sign-up")]
-        public async Task<ResponseDTO<bool>> SignUp([FromBody] SignUpDTO model)
-        {
-            return await HandleException(_authenService.SignUp(model), Message.AuthenMessage.SIGNUP_SUCCESS);
-        }
+        //[AllowAnonymous]
+        //[HttpPost("sign-up")]
+        //public async Task<ResponseDTO<bool>> SignUp([FromBody] SignUpDTO model)
+        //{
+        //    return await HandleException(_authenService.SignUp(model), Message.AuthenMessage.SIGNUP_SUCCESS);
+        //}
 
         [AllowAnonymous]
         [HttpPost("verify-otp")]

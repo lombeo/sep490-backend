@@ -57,6 +57,7 @@ namespace Sep490_Backend.Infra.Constants
             //Error
             public const string DELETE_USER_ERROR = "E-ADMIN-001"; //An error occurred while deleting a user, you cannot delete your own account, or the person you want to delete has equal or higher authority than you.
             public const string CREATE_USER_ERROR = "E-ADMIN-002"; //User already exist, username and email already exist
+            public const string INVALID_ROLE = "E-ADMIN-003"; //The role does not exist or you do not have permission to set this permission.
         }
     }
 }
