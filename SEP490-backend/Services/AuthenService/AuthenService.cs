@@ -277,6 +277,10 @@ namespace Sep490_Backend.Services.AuthenService
             {
                 throw new ApplicationException(Message.CommonMessage.NOT_FOUND);
             }
+            if (!Regex.IsMatch(model.CurrentPassword, PatternConst.PASSWORD_PATTERN) || !Regex.IsMatch(model.NewPassword, PatternConst.PASSWORD_PATTERN))
+            {
+                throw new ApplicationException(Message.AuthenMessage.INVALID_PASSWORD);
+            }
             if (string.Compare(_helperService.HashPassword(model.CurrentPassword), user.PasswordHash) != 0)
             {
                 throw new ApplicationException(Message.AuthenMessage.INVALID_CURRENT_PASSWORD);

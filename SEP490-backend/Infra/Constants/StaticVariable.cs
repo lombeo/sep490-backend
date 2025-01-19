@@ -6,6 +6,7 @@ namespace Sep490_Backend.Infra.Constants
 {
     public static class StaticVariable
     {
+        public static List<string> ValidRoles = AppSettings.Get<List<string>>("ValidRoles");
         public static int TimeToday = 0;
         public static RedisConfigDTO RedisConfig = AppSettings.Get<RedisConfigDTO>("RedisConfiguration");
         public static JwtValidationDTO JwtValidation = new JwtValidationDTO
