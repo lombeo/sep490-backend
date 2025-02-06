@@ -226,16 +226,19 @@ namespace Sep490_Backend.Services.AdminService
                 IsVerify = true,
             };
             await _context.AddAsync(newUser);
+            await _context.SaveChangesAsync();
 
             var userProfile = new UserProfile
             {
                 UserId = newUser.Id,
-                FullName = "Created " + model.Role + " User",
+                FullName = "Created " + "New " + model.Role,
                 Phone = "000000000",
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
+
             await _context.AddAsync(userProfile);
+            await _context.SaveChangesAsync();
 
             var emailTemp = await _context.EmailTemplates.FirstOrDefaultAsync(t => t.Title == "Your new password");
             if (emailTemp == null)
@@ -245,9 +248,10 @@ namespace Sep490_Backend.Services.AdminService
             string formattedHtml = emailTemp.Body.Replace("{0}", newUser.Username).Replace("{1}", password);
             await _emailService.SendEmailAsync(newUser.Email, emailTemp.Title, formattedHtml);
 
-            await _context.SaveChangesAsync();
+            
 
             _authenService.TriggerUpdateUserMemory(newUser.Id);
+            _authenService.TriggerUpdateUserProfileMemory(newUser.Id);
 
             return true;
         }
