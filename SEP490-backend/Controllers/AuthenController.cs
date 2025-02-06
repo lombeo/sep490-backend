@@ -1,8 +1,10 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Sep490_Backend.DTO;
 using Sep490_Backend.DTO.AuthenDTO;
 using Sep490_Backend.DTO.Common;
 using Sep490_Backend.Infra.Constants;
+using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Services.AuthenService;
 
 namespace Sep490_Backend.Controllers
@@ -61,6 +63,18 @@ namespace Sep490_Backend.Controllers
         public async Task<ResponseDTO<string>> Refresh([FromBody] string refreshToken)
         {
             return await HandleException(_authenService.Refresh(refreshToken), Message.AuthenMessage.REFRESH_TOKEN_SUCCESS);
+        }
+
+        [HttpGet("user-profile-detail")]
+        public async Task<ResponseDTO<UserDTO>> UserProfileDetail([FromQuery] int userId)
+        {
+            return await HandleException(_authenService.UserProfileDetail(userId), Message.AuthenMessage.GET_USER_DETAIL_SUCCESS);
+        }
+
+        [HttpPost("update-profile")]
+        public async Task<ResponseDTO<UserDTO>> UpdateProfile([FromBody] UserUpdateProfileDTO model)
+        {
+            return await HandleException(_authenService.UpdateProfile(UserId, model), Message.AuthenMessage.UPDATE_PROFILE_SUCCESS);
         }
     }
 }
