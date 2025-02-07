@@ -83,9 +83,6 @@ namespace Sep490_Backend.Services.CacheService
                 case PubSubEnum.UpdateUserMemory:
                     _authenService.UpdateUserMemory(int.Parse(msg.Data.ToString()));
                     break;
-                case PubSubEnum.UpdateUserProfileMemory:
-                    _authenService.UpdateUserProfileMemory(int.Parse(msg.Data.ToString()));
-                    break;
                     //case PubSubEnum.UpdateHelpMemory:
                     //    _helpService.UpdateHelpMemory(int.Parse(msg.Data.ToString()));
                     //    break;

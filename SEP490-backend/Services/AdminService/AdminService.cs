@@ -1,5 +1,4 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using Sep490_Backend.DTO;
 using Sep490_Backend.DTO.AdminDTO;
 using Sep490_Backend.Infra;
 using Sep490_Backend.Infra.Constants;
@@ -7,15 +6,13 @@ using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Services.AuthenService;
 using Sep490_Backend.Services.EmailService;
 using Sep490_Backend.Services.HelperService;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.RegularExpressions;
 
 namespace Sep490_Backend.Services.AdminService
 {
     public interface IAdminService
     {
-        Task<List<UserDTO>> ListUser(AdminSearchUserDTO model);
+        Task<List<User>> ListUser(AdminSearchUserDTO model);
         Task<bool> DeleteUser(int userId, int actionBy);
         Task<bool> CreateUser(AdminCreateUserDTO model, int actionBy);
         Task<bool> UpdateUser(AdminUpdateUserDTO model, int actionBy);
@@ -47,14 +44,11 @@ namespace Sep490_Backend.Services.AdminService
                 throw new ApplicationException(Message.AdminMessage.DELETE_USER_ERROR);
             }
             var user = await _context.Users.FirstOrDefaultAsync(t => t.Id == userId && !t.Deleted);
-            var userProfile = await _context.UserProfiles.FirstOrDefaultAsync(t => t.UserId == userId && !t.Deleted);
 
-            if (userProfile != null && user != null)
+            if (user != null)
             {
                 user.Deleted = true;
-                userProfile.Deleted = true;
                 _context.Update(user);
-                _context.Update(userProfile);
                 await _context.SaveChangesAsync();
             }
             else
@@ -63,37 +57,17 @@ namespace Sep490_Backend.Services.AdminService
             }
 
             _authenService.TriggerUpdateUserMemory(userId);
-            _authenService.TriggerUpdateUserProfileMemory(userId);
 
             return true;
         }
 
-        public async Task<List<UserDTO>> ListUser(AdminSearchUserDTO model)
+        public async Task<List<User>> ListUser(AdminSearchUserDTO model)
         {
-            var data = new List<UserDTO>();
-            var user = StaticVariable.UserMemory.ToList();
+            var data = StaticVariable.UserMemory.ToList();
             bool check = IsAdmin(model.ActionBy);
             if (!check)
             {
                 throw new ApplicationException(Message.CommonMessage.NOT_ALLOWED);
-            }
-            var userProfile = StaticVariable.UserProfileMemory.ToList();
-
-            for (int i = 0; i < user.Count(); i++)
-            {
-                data.Add(new UserDTO
-                {
-                    UserId = user[i].Id,
-                    Username = user[i].Username,
-                    Email = user[i].Email,
-                    Role = user[i].Role,
-                    IsVerify = user[i].IsVerify,
-                    FullName = userProfile.FirstOrDefault(t => t.UserId == user[i].Id)?.FullName ?? "",
-                    Phone = userProfile.FirstOrDefault(t => t.UserId == user[i].Id)?.Phone ?? "",
-                    Gender = userProfile.FirstOrDefault(t => t.UserId == user[i].Id)?.Gender,
-                    CreatedAt = user[i].CreatedAt,
-                    UpdatedAt = userProfile.FirstOrDefault(t => t.UserId == user[i].Id)?.UpdatedAt
-                });
             }
 
             data = data.OrderByDescending(t => t.CreatedAt).ToList();
@@ -109,6 +83,10 @@ namespace Sep490_Backend.Services.AdminService
             if (model.Gender != null)
             {
                 data = data.Where(t => t.Gender == model.Gender).ToList();
+            }
+            if (model.Dob != null)
+            {
+                data = data.Where(t => t.Dob == model.Dob).ToList();
             }
 
             model.Total = data.Count();
@@ -167,7 +145,7 @@ namespace Sep490_Backend.Services.AdminService
             //Admin khoong the sua admin khac
             if (existingUser.Id == actionBy || IsAdmin(existingUser.Id))
             {
-                throw new ApplicationException(Message.CommonMessage.NOT_ALLOWED);
+                throw new ApplicationException(Message.AdminMessage.INVALID_ROLE);
             }
 
             //Cap nhat
@@ -175,7 +153,11 @@ namespace Sep490_Backend.Services.AdminService
             existingUser.Email = model.Email ?? existingUser.Email;
             existingUser.Role = model.Role ?? existingUser.Role;
             existingUser.IsVerify = model.IsVerify ? model.IsVerify : existingUser.IsVerify;
+            existingUser.FullName = model.FullName ?? existingUser.FullName;
+            existingUser.Phone = model.Phone ?? existingUser.Phone;
+            existingUser.Gender = model.Gender ?? existingUser.Gender;
             existingUser.UpdatedAt = DateTime.UtcNow;
+            existingUser.Updater = actionBy;
 
             _context.Update(existingUser);
             _context.SaveChanges();
@@ -223,21 +205,13 @@ namespace Sep490_Backend.Services.AdminService
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow,
                 Role = model.Role,
+                FullName = model.FullName,
+                Phone = model.Phone,
+                Gender = model.Gender,
+                Dob = model.Dob,
                 IsVerify = true,
             };
             await _context.AddAsync(newUser);
-            await _context.SaveChangesAsync();
-
-            var userProfile = new UserProfile
-            {
-                UserId = newUser.Id,
-                FullName = "Created " + "New " + model.Role,
-                Phone = "000000000",
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-
-            await _context.AddAsync(userProfile);
             await _context.SaveChangesAsync();
 
             var emailTemp = await _context.EmailTemplates.FirstOrDefaultAsync(t => t.Title == "Your new password");
@@ -248,10 +222,7 @@ namespace Sep490_Backend.Services.AdminService
             string formattedHtml = emailTemp.Body.Replace("{0}", newUser.Username).Replace("{1}", password);
             await _emailService.SendEmailAsync(newUser.Email, emailTemp.Title, formattedHtml);
 
-            
-
             _authenService.TriggerUpdateUserMemory(newUser.Id);
-            _authenService.TriggerUpdateUserProfileMemory(newUser.Id);
 
             return true;
         }

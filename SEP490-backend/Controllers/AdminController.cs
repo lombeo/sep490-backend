@@ -1,14 +1,10 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using MimeKit.Tnef;
-using Sep490_Backend.DTO;
 using Sep490_Backend.DTO.AdminDTO;
-using Sep490_Backend.DTO.AuthenDTO;
 using Sep490_Backend.DTO.Common;
 using Sep490_Backend.Infra.Constants;
+using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Services.AdminService;
-using Sep490_Backend.Services.AuthenService;
-using Sprache;
 
 namespace Sep490_Backend.Controllers
 {
@@ -25,7 +21,7 @@ namespace Sep490_Backend.Controllers
         }
 
         [HttpGet("list-user")]
-        public async Task<ResponseDTO<List<UserDTO>>> ListUser([FromQuery] AdminSearchUserDTO model)
+        public async Task<ResponseDTO<List<User>>> ListUser([FromQuery] AdminSearchUserDTO model)
         {
             model.ActionBy = UserId;
             var result = await HandleException(_adminService.ListUser(model), Message.AdminMessage.SEARCH_SUCCESS);

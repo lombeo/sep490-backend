@@ -30,7 +30,6 @@ namespace Sep490_Backend.Services.Hosted
                     try
                     {
                         StaticVariable.IsInitializedUser = false;
-                        StaticVariable.IsInitializedUserProfile = false;
 
                         scope.ServiceProvider.GetService<IAuthenService>()?.InitUserMemory();
 

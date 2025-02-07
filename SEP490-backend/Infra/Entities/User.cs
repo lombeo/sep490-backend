@@ -9,6 +9,10 @@ namespace Sep490_Backend.Infra.Entities
         public string Email { get; set; }
         public string PasswordHash { get; set; }
         public string Role { get; set; }
+        public string FullName { get; set; }
+        public string Phone { get; set; }
+        public bool Gender { get; set; }
+        public DateTime Dob { get; set; }
         public bool IsVerify { get; set; }
     }
 
@@ -28,6 +32,13 @@ namespace Sep490_Backend.Infra.Entities
                     .HasColumnType("timestamp without time zone");
                 entity.HasIndex(e => e.Username);
                 entity.HasIndex(e => e.Email);
+                entity.HasIndex(e => e.FullName);
+                entity.HasIndex(e => e.Phone);
+                entity.HasIndex(e => e.Gender);
+                entity.Property(e => e.Dob)
+                      .HasColumnType("timestamp without time zone");
+                entity.Property(e => e.Creator);
+                entity.Property(e => e.Updater);
             });
         }
     }
