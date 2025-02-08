@@ -3,6 +3,5 @@
     public enum PubSubEnum : int
     {
         UpdateUserMemory = 1001,
-        UpdateUserProfileMemory = 1002
     }
 }

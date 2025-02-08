@@ -44,6 +44,8 @@ namespace Sep490_Backend.Infra.Constants
             public const string CHANGE_PASSWORD_SUCCESS = "S-AUTHEN-004"; //Password changed successfully!
             public const string SIGN_IN_SUCCESS = "S-AUTHEN-005"; //Log in successfully.
             public const string REFRESH_TOKEN_SUCCESS = "S-AUTHEN-006"; //Refresh token successfully.
+            public const string GET_USER_DETAIL_SUCCESS = "S-AUTHEN-007"; //Get user detail successfully.
+            public const string UPDATE_PROFILE_SUCCESS = "S-AUTHEN-008"; //Update profile successfully.
         }
 
         public static class AdminMessage

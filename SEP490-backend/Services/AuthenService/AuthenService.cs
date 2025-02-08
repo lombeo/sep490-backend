@@ -30,9 +30,8 @@ namespace Sep490_Backend.Services.AuthenService
         Task<int> ForgetPassword(string email);
         Task<ReturnSignInDTO> SignIn(SignInDTO model);
         Task<string> Refresh(string refreshToken);
-        Task<bool> SignInWithGoogle(string idToken);
-        void TriggerUpdateUserProfileMemory(int userProfileId);
-        void UpdateUserProfileMemory(int userProfileId);
+        Task<UserDTO> UserProfileDetail(int actionBy);
+        Task<UserDTO> UpdateProfile(int actionBy, UserUpdateProfileDTO model);
     }
 
     public class AuthenService : IAuthenService
@@ -60,18 +59,14 @@ namespace Sep490_Backend.Services.AuthenService
         {
             if (!StaticVariable.IsInitializedUser)
             {
-                _logger.LogError($"InitUserMemory and InitUserProfileMemory Started: {DateTime.UtcNow}");
+                _logger.LogError($"InitUserMemory Started: {DateTime.UtcNow}");
 
                 var data = _context.Users.AsNoTracking().Where(t => !t.Deleted)
                                             .OrderByDescending(t => t.UpdatedAt).ToList();
-                var profileData = _context.UserProfiles.AsNoTracking().Where(t => !t.Deleted)
-                                            .OrderByDescending(t => t.UpdatedAt).ToList();
                 StaticVariable.UserMemory = data;
-                StaticVariable.UserProfileMemory = profileData;
                 StaticVariable.IsInitializedUser = true;
-                StaticVariable.IsInitializedUserProfile = true;
 
-                _logger.LogError($"InitUserMemory and InitUserProfileMemory Finished: {DateTime.UtcNow}");
+                _logger.LogError($"InitUserMemory Finished: {DateTime.UtcNow}");
             }
         }
 
@@ -101,35 +96,6 @@ namespace Sep490_Backend.Services.AuthenService
             {
                 PubSubEnum = PubSubEnum.UpdateUserMemory,
                 Data = userId.ToString()
-            });
-        }
-
-        public void UpdateUserProfileMemory(int userProfileId)
-        {
-            var list = StaticVariable.UserProfileMemory.ToList();
-            list = list ?? new List<UserProfile>();
-            if (list.Any(t => t.Id == userProfileId))
-            {
-                list = list.Where(t => t.Id != userProfileId).OrderByDescending(t => t.UpdatedAt).ToList();
-            }
-
-            var user = _context.UserProfiles.AsNoTracking().FirstOrDefault(t => !t.Deleted && t.Id == userProfileId);
-            if (user != null)
-            {
-                list.Add(user);
-            }
-
-            StaticVariable.UserProfileMemory = list;
-        }
-
-        public void TriggerUpdateUserProfileMemory(int userProfileId)
-        {
-            UpdateUserProfileMemory(userProfileId);
-
-            _pubSubService.PublishSystem(new PubSubMessage
-            {
-                PubSubEnum = PubSubEnum.UpdateUserProfileMemory,
-                Data = userProfileId.ToString()
             });
         }
 
@@ -422,9 +388,70 @@ namespace Sep490_Backend.Services.AuthenService
             return GenerateAccessToken(user);
         }
 
-        public Task<bool> SignInWithGoogle(string idToken)
+        public async Task<UserDTO> UserProfileDetail(int userId)
         {
-            throw new NotImplementedException();
+            var data = StaticVariable.UserMemory.FirstOrDefault(t => t.Id == userId);
+            if(data == null)
+            {
+                throw new ApplicationException(Message.CommonMessage.NOT_FOUND);
+            }
+            return new UserDTO
+            {
+                UserId = data.Id,
+                Username = data.Username,
+                Email = data.Email,
+                Role = data.Role,
+                IsVerify = data.IsVerify,
+                FullName = data.FullName,
+                Phone = data.Phone,
+                Gender = data.Gender,
+                UpdatedAt = data.UpdatedAt,
+                CreatedAt = data.CreatedAt,
+                Creator = data.Creator,
+                Updater = data.Updater
+            };
+        }
+
+        public async Task<UserDTO> UpdateProfile(int actionBy, UserUpdateProfileDTO model)
+        {
+            var data = StaticVariable.UserMemory.FirstOrDefault(t => t.Id == actionBy);
+            if (data == null)
+            {
+                throw new ApplicationException(Message.CommonMessage.NOT_FOUND);
+            }
+
+            if (model.Username.Contains(" "))
+            {
+                throw new ApplicationException(Message.AuthenMessage.INVALID_USERNAME);
+            }
+
+            if (StaticVariable.UserMemory.FirstOrDefault(t => t.Username == model.Username) != null)
+            {
+                throw new ApplicationException(Message.AuthenMessage.EXIST_USERNAME);
+            }
+
+            data.Username = model.Username ?? data.Username;
+            data.FullName = model.FullName ?? data.FullName;
+            data.Phone = model.Phone ?? data.Phone;
+            data.Gender = model.Gender ?? data.Gender;
+            data.UpdatedAt = DateTime.UtcNow;
+            data.Updater = actionBy;
+
+            return new UserDTO
+            {
+                UserId = data.Id,
+                Username = data.Username,
+                Email = data.Email,
+                Role = data.Role,
+                IsVerify = data.IsVerify,
+                FullName = data.FullName,
+                Phone = data.Phone,
+                Gender = data.Gender,
+                UpdatedAt = data.UpdatedAt,
+                CreatedAt = data.CreatedAt,
+                Creator = data.Creator,
+                Updater = data.Updater
+            };
         }
     }
 }
