@@ -71,7 +71,7 @@ namespace Sep490_Backend.Controllers
             return await HandleException(_authenService.UserProfileDetail(userId), Message.AuthenMessage.GET_USER_DETAIL_SUCCESS);
         }
 
-        [HttpPost("update-profile")]
+        [HttpPut("update-profile")]
         public async Task<ResponseDTO<UserDTO>> UpdateProfile([FromBody] UserUpdateProfileDTO model)
         {
             return await HandleException(_authenService.UpdateProfile(UserId, model), Message.AuthenMessage.UPDATE_PROFILE_SUCCESS);
