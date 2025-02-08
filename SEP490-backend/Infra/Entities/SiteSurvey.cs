@@ -32,17 +32,10 @@ namespace Sep490_Backend.Infra.Entities
         {
             modelBuilder.Entity<SiteSurvey>(entity =>
             {
-                // Đặt tên bảng
                 entity.ToTable("SiteSurveys");
 
                 // Khóa chính
                 entity.HasKey(e => e.Id);
-
-                // Nếu cần, định nghĩa mối quan hệ với bảng Project (khóa ngoại)
-                entity.HasOne<Project>()
-                      .WithMany()
-                      .HasForeignKey(e => e.ProjectId)
-                      .OnDelete(DeleteBehavior.Cascade);
 
                 // Cấu hình các thuộc tính kiểu DateTime sang "timestamp without time zone"
                 entity.Property(e => e.SurveyDate)
