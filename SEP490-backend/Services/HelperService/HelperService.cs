@@ -1,4 +1,5 @@
-﻿using System.Security.Cryptography;
+﻿using Sep490_Backend.Infra.Constants;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace Sep490_Backend.Services.HelperService
@@ -7,6 +8,8 @@ namespace Sep490_Backend.Services.HelperService
     {
         string HashPassword(string password);
         string GenerateStrongPassword(int length = 12);
+        bool IsInRole(int userId, string role);
+        bool IsInRole(int userId, List<string> role);
     }
 
     public class HelperService : IHelperService
@@ -70,6 +73,39 @@ namespace Sep490_Backend.Services.HelperService
         {
             var randomByte = RandomNumberGenerator.GetInt32(charArray.Length);
             return charArray[randomByte];
+        }
+
+        public bool IsInRole(int userId, string role)
+        {
+            var data = StaticVariable.UserMemory.ToList();
+            var user = data.FirstOrDefault(t => t.Id == userId);
+            if(user == null)
+            {
+                throw new ApplicationException(Message.CommonMessage.NOT_FOUND);
+            }
+            if(user.Role.CompareTo(role) == 0)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        public bool IsInRole(int userId, List<string> role)
+        {
+            var data = StaticVariable.UserMemory.ToList();
+            var user = data.FirstOrDefault(t => t.Id == userId);
+            if (user == null)
+            {
+                throw new ApplicationException(Message.CommonMessage.NOT_FOUND);
+            }
+            foreach(var item in role)
+            {
+                if (user.Role.CompareTo(item) == 0)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 }
