@@ -1,0 +1,60 @@
+﻿using Microsoft.EntityFrameworkCore;
+
+namespace Sep490_Backend.Infra.Entities
+{
+    public class Contract : CommonEntity
+    {
+        public int Id { get; set; }
+        public string ContractCode { get; set; }
+        public int ProjectId { get; set; }
+        public int CustomerId { get; set; }
+        public DateTime StartDate { get; set; }
+        public DateTime EndDate { get; set; }
+        public int EstimatedDays { get; set; }
+        public int Status { get; set; }
+        public decimal Tax { get; set; }
+        public DateTime SignDate { get; set; }
+        public string? Attachment { get; set; }
+    }
+
+    public static class ContractConfiguration
+    {
+        public static void Config(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<Contract>(entity =>
+            {
+                entity.ToTable("Contracts");
+
+                entity.HasKey(e => e.Id);
+
+                entity.Property(e => e.ContractCode)
+                      .IsRequired(); // Bắt buộc
+
+                entity.Property(e => e.StartDate)
+                      .IsRequired()
+                      .HasColumnType("timestamp without time zone");
+
+                entity.Property(e => e.EndDate)
+                      .IsRequired()
+                      .HasColumnType("timestamp without time zone");
+
+                entity.Property(e => e.SignDate)
+                      .IsRequired()
+                      .HasColumnType("timestamp without time zone");
+
+                entity.Property(e => e.CreatedAt)
+                      .HasColumnType("timestamp without time zone");
+
+                entity.Property(e => e.UpdatedAt)
+                      .HasColumnType("timestamp without time zone");
+
+                entity.Property(e => e.Tax)
+                      .HasColumnType("numeric(18,2)");
+
+                entity.Property(e => e.Attachment)
+                      .HasColumnType("text");
+
+            });
+        }
+    }
+}
