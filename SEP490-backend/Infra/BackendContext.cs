@@ -19,6 +19,11 @@ namespace Sep490_Backend.Infra
         public virtual DbSet<User> Users { get; set; }
         public virtual DbSet<RefreshToken> RefreshTokens { get; set; }
         public virtual DbSet<EmailTemplate> EmailTemplates { get; set; }
+        public virtual DbSet<Project> Projects { get; set; }
+        public virtual DbSet<SiteSurvey> SiteSurveys { get; set; }
+        public virtual DbSet<Contract> Contracts { get; set; }
+        public virtual DbSet<ContractDetail> ContractDetails { get; set; }
+        public virtual DbSet<Vehicle> Vehicles { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -26,6 +31,11 @@ namespace Sep490_Backend.Infra
             UserAuthenConfiguration.Config(modelBuilder);
             RefreshTokenConfiguration.Config(modelBuilder);
             EmailTemplateConfiguration.Config(modelBuilder);
+            ProjectConfiguration.Config(modelBuilder);
+            SiteSurveyConfiguration.Config(modelBuilder);
+            ContractConfiguration.Config(modelBuilder);
+            ContractDetailConfiguration.Config(modelBuilder);
+            VehicleConfiguration.Config(modelBuilder);
             //OnModelCreatingPartial(modelBuilder);
         }
 
