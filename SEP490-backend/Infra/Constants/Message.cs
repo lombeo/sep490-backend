@@ -73,5 +73,15 @@ namespace Sep490_Backend.Infra.Constants
             //Error
             public const string PROJECT_NOT_FOUND = "E-SURVEY-001";
         }
+
+        public static class CustomerMessage
+        {
+            //Success
+            public const string SEARCH_SUCCESS = "S-CUSTOMER-001"; //Search list customer successfully!
+            public const string DELETE_CUSTOMER_SUCCESS = "S-CUSTOMER-002"; //Delete customer successfully!
+            public const string CREATE_CUSTOMER_SUCCESS = "S-CUSTOMER-003"; //Create customer successfully!
+            public const string UPDATE_CUSTOMER_SUCCESS = "S-CUSTOMER-004"; //Update customer successfully!
+            //Error
+        }
     }
 }
