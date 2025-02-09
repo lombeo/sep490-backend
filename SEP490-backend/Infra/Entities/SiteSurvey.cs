@@ -6,6 +6,7 @@ namespace Sep490_Backend.Infra.Entities
     {
         public int Id { get; set; }
         public int ProjectId { get; set; }
+        public string SiteSurveyName { get; set; }
         public string? ConstructionRequirements { get; set; }
         public string? EquipmentRequirements { get; set; }
         public string? HumanResourceCapacity { get; set; }
@@ -34,21 +35,17 @@ namespace Sep490_Backend.Infra.Entities
             {
                 entity.ToTable("SiteSurveys");
 
-                // Khóa chính
                 entity.HasKey(e => e.Id);
 
-                // Cấu hình các thuộc tính kiểu DateTime sang "timestamp without time zone"
                 entity.Property(e => e.SurveyDate)
                       .IsRequired()
                       .HasColumnType("timestamp without time zone");
 
-                // Các trường thuộc lớp CommonEntity
                 entity.Property(e => e.CreatedAt)
                       .HasColumnType("timestamp without time zone");
                 entity.Property(e => e.UpdatedAt)
                       .HasColumnType("timestamp without time zone");
 
-                // Cấu hình cho các thuộc tính kiểu decimal (sử dụng numeric(18,2) trong PostgreSQL)
                 entity.Property(e => e.EstimatedExpenses)
                       .HasColumnType("numeric(18,2)");
                 entity.Property(e => e.EstimatedProfits)
@@ -62,13 +59,11 @@ namespace Sep490_Backend.Infra.Entities
                 entity.Property(e => e.FinalProfit)
                       .HasColumnType("numeric(18,2)");
 
-                // Cấu hình cho các thuộc tính kiểu double
                 entity.Property(e => e.BidWinProb)
                       .HasColumnType("double precision");
                 entity.Property(e => e.DiscountRate)
                       .HasColumnType("double precision");
 
-                // Cấu hình cho các thuộc tính kiểu string (sử dụng "text" cho trường dài)
                 entity.Property(e => e.ConstructionRequirements)
                       .HasColumnType("text");
                 entity.Property(e => e.EquipmentRequirements)
@@ -83,8 +78,10 @@ namespace Sep490_Backend.Infra.Entities
                       .HasColumnType("text");
                 entity.Property(e => e.Attachments)
                       .HasColumnType("text");
+                entity.Property(e => e.SiteSurveyName)
+                      .HasMaxLength(200)
+                      .IsRequired();
 
-                // Các thuộc tính kiểu int (như BiddingDecision, Status, v.v.) không cần cấu hình thêm
             });
         }
     }
