@@ -62,6 +62,18 @@ namespace Sep490_Backend.Infra.Constants
             public const string INVALID_ROLE = "E-ADMIN-003"; //The role does not exist or you do not have permission to set this permission.
         }
 
+        public static class SiteSurveyMessage
+        {
+            //Success
+            public const string SEARCH_SUCCESS = "S-SURVEY-001";
+            public const string DELETE_SUCCESS = "S-SURVEY-002";
+            public const string SAVE_SUCCESS = "S-SURVEY-003";
+            public const string GET_DETAIL_SUCCESS = "S-SURVEY-004";
+
+            //Error
+            public const string PROJECT_NOT_FOUND = "E-SURVEY-001";
+        }
+
         public static class CustomerMessage
         {
             //Success
