@@ -61,5 +61,15 @@ namespace Sep490_Backend.Infra.Constants
             public const string CREATE_USER_ERROR = "E-ADMIN-002"; //User already exist, username and email already exist
             public const string INVALID_ROLE = "E-ADMIN-003"; //The role does not exist or you do not have permission to set this permission.
         }
+
+        public static class CustomerMessage
+        {
+            //Success
+            public const string SEARCH_SUCCESS = "S-CUSTOMER-001"; //Search list customer successfully!
+            public const string DELETE_CUSTOMER_SUCCESS = "S-CUSTOMER-002"; //Delete customer successfully!
+            public const string CREATE_CUSTOMER_SUCCESS = "S-CUSTOMER-003"; //Create customer successfully!
+            public const string UPDATE_CUSTOMER_SUCCESS = "S-CUSTOMER-004"; //Update customer successfully!
+            //Error
+        }
     }
 }
