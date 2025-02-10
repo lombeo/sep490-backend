@@ -142,7 +142,7 @@ namespace Sep490_Backend
             builder.Services.AddScoped<BackendContext>();
         }
 
-        public static WebApplication ConfigurePipeline(this WebApplication app)
+        public static WebApplication Configure(this WebApplication app)
         {
             app.UseSerilogRequestLogging();
             InitializeDatabase(app);
