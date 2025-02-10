@@ -52,7 +52,7 @@ namespace Sep490_Backend.Services.OTPService
 
             if (otp == null || otp.ExpiryTime < DateTime.UtcNow)
             {
-                throw new ApplicationException(Message.CommonMessage.NOT_FOUND);
+                throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
 
             return otp;

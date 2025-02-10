@@ -34,12 +34,12 @@ namespace Sep490_Backend.Services.SiteSurveyService
         {
             if (!_helpService.IsInRole(actionBy, RoleConstValue.TECHNICAL_MANAGER))
             {
-                throw new ApplicationException(Message.CommonMessage.NOT_ALLOWED);
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
             var data = await _context.SiteSurveys.FirstOrDefaultAsync(t => t.Id == id && !t.Deleted);
             if (data == null)
             {
-                throw new ApplicationException(Message.CommonMessage.NOT_FOUND);
+                throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
 
             data.Deleted = true;
@@ -55,7 +55,7 @@ namespace Sep490_Backend.Services.SiteSurveyService
         {
             if (!_helpService.IsInRole(actionBy, new List<string> { RoleConstValue.TECHNICAL_MANAGER, RoleConstValue.EXECUTIVE_BOARD }))
             {
-                throw new ApplicationException(Message.CommonMessage.NOT_ALLOWED);
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
             var data = await Search(new SearchSiteSurveyDTO());
             return data.FirstOrDefault(t => t.Id == id);
@@ -65,12 +65,12 @@ namespace Sep490_Backend.Services.SiteSurveyService
         {
             if (!_helpService.IsInRole(actionBy, RoleConstValue.TECHNICAL_MANAGER))
             {
-                throw new ApplicationException(Message.CommonMessage.NOT_ALLOWED);
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
             var project = await _context.Projects.FirstOrDefaultAsync(t => t.Id == model.ProjectId);
             if (project == null)
             {
-                throw new ApplicationException(Message.SiteSurveyMessage.PROJECT_NOT_FOUND);
+                throw new KeyNotFoundException(Message.SiteSurveyMessage.PROJECT_NOT_FOUND);
             }
             var survey = new SiteSurvey
             {
@@ -104,7 +104,7 @@ namespace Sep490_Backend.Services.SiteSurveyService
                 var exist = await GetSiteSurveyDetail(model.Id, actionBy);
                 if (exist == null)
                 {
-                    throw new ApplicationException(Message.CommonMessage.NOT_FOUND);
+                    throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
                 }
                 else
                 {
@@ -131,7 +131,7 @@ namespace Sep490_Backend.Services.SiteSurveyService
         {
             if (!_helpService.IsInRole(model.ActionBy, new List<string> { RoleConstValue.TECHNICAL_MANAGER, RoleConstValue.EXECUTIVE_BOARD }))
             {
-                throw new ApplicationException(Message.CommonMessage.NOT_ALLOWED);
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
             string cacheKey = RedisCacheKey.SITE_SURVEY_CACHE_KEY;
             var data = await _cacheService.GetAsync<List<SiteSurvey>>(cacheKey);

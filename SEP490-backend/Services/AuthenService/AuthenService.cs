@@ -160,7 +160,7 @@ namespace Sep490_Backend.Services.AuthenService
             var user = await _context.Users.FindAsync(model.UserId);
             if (user == null)
             {
-                throw new ApplicationException(Message.CommonMessage.NOT_FOUND);
+                throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
 
             if(model.Reason == ReasonOTP.ForgetPassword)
@@ -172,7 +172,7 @@ namespace Sep490_Backend.Services.AuthenService
 
                 if (emailTemp == null)
                 {
-                    throw new ApplicationException(Message.CommonMessage.ERROR_HAPPENED);
+                    throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
                 }
                 string formattedHtml = emailTemp.Body.Replace("{0}", user.Username).Replace("{1}", password);
                 // Gửi email
@@ -236,24 +236,24 @@ namespace Sep490_Backend.Services.AuthenService
 
             if(string.IsNullOrWhiteSpace(model.CurrentPassword) || string.IsNullOrWhiteSpace(model.ConfirmPassword) || string.IsNullOrWhiteSpace(model.NewPassword))
             {
-                throw new ApplicationException(Message.CommonMessage.MISSING_PARAM);
+                throw new ArgumentNullException(Message.CommonMessage.MISSING_PARAM);
             }
 
             if (user == null)
             {
-                throw new ApplicationException(Message.CommonMessage.NOT_FOUND);
+                throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
             if (!Regex.IsMatch(model.CurrentPassword, PatternConst.PASSWORD_PATTERN) || !Regex.IsMatch(model.NewPassword, PatternConst.PASSWORD_PATTERN))
             {
-                throw new ApplicationException(Message.AuthenMessage.INVALID_PASSWORD);
+                throw new ArgumentException(Message.AuthenMessage.INVALID_PASSWORD);
             }
             if (string.Compare(_helperService.HashPassword(model.CurrentPassword), user.PasswordHash) != 0)
             {
-                throw new ApplicationException(Message.AuthenMessage.INVALID_CURRENT_PASSWORD);
+                throw new ArgumentException(Message.AuthenMessage.INVALID_CURRENT_PASSWORD);
             }
             if(string.Compare(model.NewPassword, model.ConfirmPassword) != 0)
             {
-                throw new ApplicationException(Message.AuthenMessage.INVALID_CONFIRM_PASSWORD);
+                throw new ArgumentException(Message.AuthenMessage.INVALID_CONFIRM_PASSWORD);
             }
             user.PasswordHash = _helperService.HashPassword(model.NewPassword);
             _context.Update(user);
@@ -267,7 +267,7 @@ namespace Sep490_Backend.Services.AuthenService
             var user = StaticVariable.UserMemory.FirstOrDefault(t => t.Email == email && t.IsVerify == true);
             if(user == null)
             {
-                throw new ApplicationException(Message.CommonMessage.NOT_FOUND);
+                throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
             var otpCode = await _otpService.GenerateOTP(8, ReasonOTP.ForgetPassword, user.Id, TimeSpan.FromMinutes(10));
 
@@ -275,7 +275,7 @@ namespace Sep490_Backend.Services.AuthenService
 
             if(emailTemp == null)
             {
-                throw new ApplicationException(Message.CommonMessage.ERROR_HAPPENED);
+                throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
 
             string formattedHtml = emailTemp.Body.Replace("{0}", user.Username).Replace("{1}", otpCode);
@@ -293,7 +293,7 @@ namespace Sep490_Backend.Services.AuthenService
             //Check username + password
             if (user == null || (_helperService.HashPassword(model.Password) != user.PasswordHash))
             {
-                throw new ApplicationException(Message.AuthenMessage.INVALID_CREDENTIALS);
+                throw new SecurityTokenException(Message.AuthenMessage.INVALID_CREDENTIALS);
             }
 
             //Tạo accesstoken + refresh token lưu trong db
@@ -377,13 +377,13 @@ namespace Sep490_Backend.Services.AuthenService
             var existingRefreshToken = await _context.RefreshTokens.FirstOrDefaultAsync(rt => rt.Token == refreshToken && rt.ExpiryDate > DateTime.UtcNow && !rt.IsRevoked);
             if (existingRefreshToken == null)
             {
-                throw new ApplicationException(Message.AuthenMessage.INVALID_TOKEN);
+                throw new ArgumentException(Message.AuthenMessage.INVALID_TOKEN);
             }
             var userId = existingRefreshToken.UserId;
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
             if (user == null)
             {
-                throw new ApplicationException(Message.CommonMessage.NOT_FOUND);
+                throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
             return GenerateAccessToken(user);
         }
@@ -393,7 +393,7 @@ namespace Sep490_Backend.Services.AuthenService
             var data = StaticVariable.UserMemory.FirstOrDefault(t => t.Id == userId);
             if(data == null)
             {
-                throw new ApplicationException(Message.CommonMessage.NOT_FOUND);
+                throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
             return new UserDTO
             {
@@ -417,12 +417,12 @@ namespace Sep490_Backend.Services.AuthenService
             var data = StaticVariable.UserMemory.FirstOrDefault(t => t.Id == actionBy);
             if (data == null)
             {
-                throw new ApplicationException(Message.CommonMessage.NOT_FOUND);
+                throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
 
             if (model.Username.Contains(" "))
             {
-                throw new ApplicationException(Message.AuthenMessage.INVALID_USERNAME);
+                throw new ArgumentException(Message.AuthenMessage.INVALID_USERNAME);
             }
 
             if (StaticVariable.UserMemory.FirstOrDefault(t => t.Username == model.Username) != null)

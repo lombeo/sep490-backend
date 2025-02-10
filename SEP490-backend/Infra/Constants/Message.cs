@@ -82,6 +82,8 @@ namespace Sep490_Backend.Infra.Constants
             public const string CREATE_CUSTOMER_SUCCESS = "S-CUSTOMER-003"; //Create customer successfully!
             public const string UPDATE_CUSTOMER_SUCCESS = "S-CUSTOMER-004"; //Update customer successfully!
             //Error
+            public const string CUSTOMER_NOT_FOUND = "E-CUSTOMER-001";
+
         }
     }
 }
