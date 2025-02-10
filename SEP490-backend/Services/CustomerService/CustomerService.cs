@@ -47,7 +47,7 @@ namespace Sep490_Backend.Services.CustomerService
         {
             if (!_helperService.IsInRole(model.ActionBy, new List<string> { RoleConstValue.BUSINESS_EMPLOYEE, RoleConstValue.EXECUTIVE_BOARD }))
             {
-                throw new ApplicationException(Message.CommonMessage.NOT_ALLOWED);
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
             string cacheKey = RedisCacheKey.CUSTOMER_CACHE_KEY;
             var customerCacheList = await _cacheService.GetAsync<List<Customer>>(cacheKey);
@@ -80,7 +80,7 @@ namespace Sep490_Backend.Services.CustomerService
         {
             if (!_helperService.IsInRole(actionBy, new List<string> { RoleConstValue.BUSINESS_EMPLOYEE, RoleConstValue.EXECUTIVE_BOARD }))
             {
-                throw new ApplicationException(Message.CommonMessage.NOT_ALLOWED);
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
             var customer = await _context.Customers
                 .Where(t => t.Id == customerId && !t.Deleted)
@@ -93,12 +93,12 @@ namespace Sep490_Backend.Services.CustomerService
         {
             if (!_helperService.IsInRole(actionBy, RoleConstValue.BUSINESS_EMPLOYEE))
             {
-                throw new ApplicationException(Message.CommonMessage.NOT_ALLOWED);
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
             var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == customerId && !c.Deleted);
             if (customer == null)
             {
-                throw new ApplicationException(Message.CustomerMessage.CUSTOMER_NOT_FOUND);
+                throw new KeyNotFoundException(Message.CustomerMessage.CUSTOMER_NOT_FOUND);
             }
             customer.Deleted = true;
             _context.Update(customer);
@@ -113,15 +113,15 @@ namespace Sep490_Backend.Services.CustomerService
         {
             if (!_helperService.IsInRole(actionBy, new List<string> { RoleConstValue.BUSINESS_EMPLOYEE }))
             {
-                throw new ApplicationException(Message.CommonMessage.NOT_ALLOWED);
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
             if (model == null || string.IsNullOrWhiteSpace(model.CustomerCode) || string.IsNullOrWhiteSpace(model.CustomerName))
             {
-                throw new ApplicationException(Message.CommonMessage.INVALID_FORMAT);
+                throw new ArgumentException(Message.CommonMessage.INVALID_FORMAT);
             }
             if (!Regex.IsMatch(model.Email, PatternConst.EMAIL_PATTERN))
             {
-                throw new ApplicationException(Message.AuthenMessage.INVALID_EMAIL);
+                throw new ArgumentException(Message.AuthenMessage.INVALID_EMAIL);
             }
             
             var customer = new Customer
@@ -151,12 +151,12 @@ namespace Sep490_Backend.Services.CustomerService
         {
             if (!_helperService.IsInRole(actionBy, RoleConstValue.BUSINESS_EMPLOYEE))
             {
-                throw new ApplicationException(Message.CommonMessage.NOT_ALLOWED);
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
             var existCustomer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == model.Id);
             if (existCustomer == null)
             {
-                throw new ApplicationException(Message.CustomerMessage.CUSTOMER_NOT_FOUND);
+                throw new KeyNotFoundException(Message.CustomerMessage.CUSTOMER_NOT_FOUND);
             }
             existCustomer.CustomerCode = model.CustomerCode ?? existCustomer.CustomerCode;
             existCustomer.CustomerName = model.CustomerName ?? existCustomer.CustomerName;
