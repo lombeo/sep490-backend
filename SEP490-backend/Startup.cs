@@ -20,7 +20,7 @@ using Sep490_Backend.Services.SiteSurveyService;
 
 namespace Sep490_Backend
 {
-    public static class HostingExtensions
+    public static class Startup
     {
         public static void ConfigureServices(this WebApplicationBuilder builder)
         {
