@@ -2,6 +2,7 @@
 using Sep490_Backend.Infra.Constants;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using Microsoft.IdentityModel.Tokens;
 
 namespace Sep490_Backend.Controllers
 {
@@ -20,31 +21,128 @@ namespace Sep490_Backend.Controllers
 			}
 		}
 
-		public async Task<ResponseDTO<T>> HandleException<T>(Task<T> task, string successMessage = "Operation successful")
+        public async Task<ResponseDTO<T>> HandleException<T>(Task<T> task, string successMessage = "Operation successful")
         {
             try
             {
                 var data = await task;
-                return new ResponseDTO<T>() { Success = true, Data = data, Message = successMessage };
+                return new ResponseDTO<T>
+                {
+                    Success = true,
+                    Data = data,
+                    Message = successMessage
+                };
             }
-            catch (ApplicationException ex)
+            catch (ArgumentNullException ex)
             {
-                //Serilog.Log.Debug(ex, ex.Message);
-                return new ResponseDTO<T>() { Success = false, Code = 200, Message = ex.Message };
+                Serilog.Log.Debug(ex, "ArgumentNullException: {Message}", ex.Message);
+                return new ResponseDTO<T>
+                {
+                    Success = false,
+                    Code = 400,
+                    Message = ex.Message
+                };
+            }
+            catch (ArgumentException ex)
+            {
+                Serilog.Log.Debug(ex, "ArgumentException: {Message}", ex.Message);
+                return new ResponseDTO<T>
+                {
+                    Success = false,
+                    Code = 400,
+                    Message = ex.Message
+                };
+            }
+            catch (InvalidOperationException ex)
+            {
+                Serilog.Log.Debug(ex, "InvalidOperationException: {Message}", ex.Message);
+                return new ResponseDTO<T>
+                {
+                    Success = false,
+                    Code = 400,
+                    Message = ex.Message
+                };
+            }
+            catch (FormatException ex)
+            {
+                Serilog.Log.Debug(ex, "FormatException: {Message}", ex.Message);
+                return new ResponseDTO<T>
+                {
+                    Success = false,
+                    Code = 400,
+                    Message = ex.Message
+                };
+            }
+            catch (SecurityTokenException ex)
+            {
+                Serilog.Log.Debug(ex, "SecurityTokenException: {Message}", ex.Message);
+                return new ResponseDTO<T>
+                {
+                    Success = false,
+                    Code = 401,
+                    Message = ex.Message
+                };
+            }
+            // --- Kết thúc phần xử lý lỗi xác thực ---
+            catch (TimeoutException ex)
+            {
+                Serilog.Log.Debug(ex, "TimeoutException: {Message}", ex.Message);
+                return new ResponseDTO<T>
+                {
+                    Success = false,
+                    Code = 408,
+                    Message = ex.Message
+                };
             }
             catch (KeyNotFoundException ex)
             {
-                //Serilog.Log.Debug(ex, ex.Message);
-                return new ResponseDTO<T>() { Success = false, Code = 404, Message = ex.Message };
+                Serilog.Log.Debug(ex, "KeyNotFoundException: {Message}", ex.Message);
+                return new ResponseDTO<T>
+                {
+                    Success = false,
+                    Code = 404,
+                    Message = ex.Message
+                };
             }
             catch (UnauthorizedAccessException ex)
             {
-                return new ResponseDTO<T>() { Success = false, Code = 403, Message = ex.Message };
+                Serilog.Log.Debug(ex, "UnauthorizedAccessException: {Message}", ex.Message);
+                return new ResponseDTO<T>
+                {
+                    Success = false,
+                    Code = 403,
+                    Message = ex.Message
+                };
+            }
+            catch (ApplicationException ex)
+            {
+                Serilog.Log.Debug(ex, "ApplicationException: {Message}", ex.Message);
+                return new ResponseDTO<T>
+                {
+                    Success = false,
+                    Code = 200, // Theo mẫu ban đầu; cân nhắc điều chỉnh nếu cần
+                    Message = ex.Message
+                };
+            }
+            catch (NullReferenceException ex)
+            {
+                Serilog.Log.Error(ex, "NullReferenceException: {Message}", ex.Message);
+                return new ResponseDTO<T>
+                {
+                    Success = false,
+                    Code = 500,
+                    Message = Message.CommonMessage.ERROR_HAPPENED
+                };
             }
             catch (Exception ex)
             {
-                Serilog.Log.Error(ex, ex.Message);
-                return new ResponseDTO<T>() { Success = false, Code = 500, Message = Message.CommonMessage.ERROR_HAPPENED };
+                Serilog.Log.Error(ex, "Unhandled exception: {Message}", ex.Message);
+                return new ResponseDTO<T>
+                {
+                    Success = false,
+                    Code = 500,
+                    Message = Message.CommonMessage.ERROR_HAPPENED
+                };
             }
         }
     }

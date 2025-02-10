@@ -55,18 +55,6 @@ jobs:
       - name: Publish application
         run: dotnet publish ${{ env.WORKING_DIRECTORY }} --configuration ${{ env.CONFIGURATION }} --no-build --output ${{ env.AZURE_WEBAPP_PACKAGE_PATH }} --verbosity minimal
 
-        # Create environment file for build
-      - name: Create environment file
-        run: |
-          printf "%b" "${{ secrets.DOTNET_ENV_FILE }}" > ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/.env
-
-      - name: Generate Swagger specification
-        run: |
-            dotnet tool install --global Swashbuckle.AspNetCore.Cli --version 6.5.0
-            export PATH="$PATH:/home/runner/.dotnet/tools"
-            export DOTNET_ROLL_FORWARD=LatestMajor
-            swagger tofile --output "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/swagger.json" "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/SEP490-backend.dll" "v1"
-
       # Upload build artifact
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -85,13 +73,10 @@ jobs:
           name: webapp
           path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
 
-      - name: Check .env file content
-        run: cat ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/.env
-
       # Create environment file for deploy
       - name: Create environment file
         run: |
-          printf "%b" "${{ secrets.DOTNET_ENV_FILE }}" > ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/.env
+          echo '${{ secrets.DOTNET_ENV_FILE }}' > ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/.env
 
       # Deploy to Azure WebApp
       - name: Deploy to Azure WebApp
@@ -106,25 +91,6 @@ jobs:
         uses: azure/login@v1
         with:
           creds: ${{ secrets.sep490_backend_api_SPN }}
-
-      # Import API into Azure API Management
-      - name: Import API into Azure API Management
-        run: |
-          # Kiểm tra file swagger.json tồn tại
-          if [ -f "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/swagger.json" ]; then
-            echo "swagger.json found, importing API..."
-            az apim api import \
-              --path "${{ env.AZURE_APIM_RESOURCE_PATH }}" \
-              --resource-group "${{ env.AZURE_APIM_RESOURCEGROUP }}" \
-              --service-name "${{ env.AZURE_APIM_SERVICENAME }}" \
-              --api-id "${{ env.AZURE_APIM_API_ID }}" \
-              --service-url "${{ env.AZURE_APIM_APPSERVICEURL }}" \
-              --specification-path "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/swagger.json" \
-              --specification-format OpenApi \
-              --subscription-required false
-          else
-            echo "swagger.json not found. Skipping API import."
-          fi
 
       # Logout from Azure
       - name: Logout from Azure
