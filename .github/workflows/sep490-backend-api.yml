@@ -58,7 +58,7 @@ jobs:
       # Generate Swagger specification
       - name: Generate Swagger specification
         run: |
-          dotnet tool install --global Swashbuckle.AspNetCore.Cli --version 5.6.3
+          dotnet tool install --global Swashbuckle.AspNetCore.Cli --version 6.0.0
           swagger tofile --output "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/swagger.json" "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/bin/Release/net8.0/SEP490-backend.dll" "v1"
 
       # Upload build artifact
