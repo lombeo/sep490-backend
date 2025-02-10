@@ -19,7 +19,7 @@ namespace Sep490_Backend
             // Add services to the container.
             builder.ConfigureServices();
 
-            var app = builder.Build().Configure();
+            var app = builder.Build().ConfigurePipeline();
 
             using (var scope = app.Services.GetService<IServiceScopeFactory>().CreateScope())
             {

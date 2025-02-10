@@ -20,7 +20,7 @@ using Sep490_Backend.Services.SiteSurveyService;
 
 namespace Sep490_Backend
 {
-    public static class Startup
+    public static class HostingExtensions
     {
         public static void ConfigureServices(this WebApplicationBuilder builder)
         {
@@ -142,7 +142,7 @@ namespace Sep490_Backend
             builder.Services.AddScoped<BackendContext>();
         }
 
-        public static WebApplication Configure(this WebApplication app)
+        public static WebApplication ConfigurePipeline(this WebApplication app)
         {
             app.UseSerilogRequestLogging();
             InitializeDatabase(app);
