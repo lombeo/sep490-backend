@@ -58,7 +58,7 @@ jobs:
         # Create environment file for build
       - name: Create environment file
         run: |
-          echo "${{ secrets.DOTNET_ENV_FILE }}" > ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/.env
+          printf "%b" "${{ secrets.DOTNET_ENV_FILE }}" > ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/.env
 
       - name: Generate Swagger specification
         run: |
@@ -88,7 +88,7 @@ jobs:
       # Create environment file for deploy
       - name: Create environment file
         run: |
-          echo "${{ secrets.DOTNET_ENV_FILE }}" > ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/.env
+          printf "%b" "${{ secrets.DOTNET_ENV_FILE }}" > ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/.env
 
       # Deploy to Azure WebApp
       - name: Deploy to Azure WebApp
