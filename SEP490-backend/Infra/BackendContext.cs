@@ -24,6 +24,7 @@ namespace Sep490_Backend.Infra
         public virtual DbSet<Contract> Contracts { get; set; }
         public virtual DbSet<ContractDetail> ContractDetails { get; set; }
         public virtual DbSet<Vehicle> Vehicles { get; set; }
+        public virtual DbSet<Customer> Customers { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
