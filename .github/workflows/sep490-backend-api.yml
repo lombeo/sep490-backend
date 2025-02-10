@@ -55,6 +55,9 @@ jobs:
       - name: Publish application
         run: dotnet publish ${{ env.WORKING_DIRECTORY }} --configuration ${{ env.CONFIGURATION }} --no-build --output ${{ env.AZURE_WEBAPP_PACKAGE_PATH }} --verbosity minimal
 
+      - name: Check .env file content
+        run: cat ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/.env
+
         # Create environment file for build
       - name: Create environment file
         run: |
@@ -84,9 +87,6 @@ jobs:
         with:
           name: webapp
           path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
-
-      - name: Check .env file content
-        run: cat ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/.env
 
       # Create environment file for deploy
       - name: Create environment file
