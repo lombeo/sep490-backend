@@ -83,7 +83,7 @@ jobs:
       # Create environment file
       - name: Create environment file
         run: |
-          echo '${{ secrets.DOTNET_ENV_FILE }}' > ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/.env
+          echo "${{ secrets.DOTNET_ENV_FILE }}" > ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/.env
 
       # Deploy to Azure WebApp
       - name: Deploy to Azure WebApp
