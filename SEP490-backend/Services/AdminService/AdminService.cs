@@ -37,7 +37,7 @@ namespace Sep490_Backend.Services.AdminService
         {
             if (!IsAdmin(actionBy))
             {
-                throw new ApplicationException(Message.CommonMessage.NOT_ALLOWED);
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
             if (userId == actionBy || IsAdmin(userId))
             {
@@ -53,7 +53,7 @@ namespace Sep490_Backend.Services.AdminService
             }
             else
             {
-                throw new ApplicationException(Message.CommonMessage.NOT_FOUND);
+                throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
 
             _authenService.TriggerUpdateUserMemory(userId);
@@ -67,7 +67,7 @@ namespace Sep490_Backend.Services.AdminService
             bool check = IsAdmin(model.ActionBy);
             if (!check)
             {
-                throw new ApplicationException(Message.CommonMessage.NOT_ALLOWED);
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
 
             data = data.OrderByDescending(t => t.CreatedAt).ToList();
@@ -103,15 +103,15 @@ namespace Sep490_Backend.Services.AdminService
         {
             if (!IsAdmin(actionBy))
             {
-                throw new ApplicationException(Message.CommonMessage.NOT_ALLOWED);
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
             if (model == null || model.Id <= 0)
             {
-                throw new ApplicationException(Message.CommonMessage.INVALID_FORMAT);
+                throw new ArgumentException(Message.CommonMessage.INVALID_FORMAT);
             }
             if (model.UserName.Contains(" "))
             {
-                throw new ApplicationException(Message.AuthenMessage.INVALID_USERNAME);
+                throw new ArgumentException(Message.AuthenMessage.INVALID_USERNAME);
             }
 
             if(StaticVariable.UserMemory.FirstOrDefault(t => t.Username == model.UserName) != null)
@@ -126,26 +126,26 @@ namespace Sep490_Backend.Services.AdminService
 
             if (!Regex.IsMatch(model.Email, PatternConst.EMAIL_PATTERN))
             {
-                throw new ApplicationException(Message.AuthenMessage.INVALID_EMAIL);
+                throw new ArgumentException(Message.AuthenMessage.INVALID_EMAIL);
             }
 
             // Kiểm tra Role có hợp lệ không
             if (!RoleConstValue.ValidRoles.Contains(model.Role))
             {
-                throw new ApplicationException(Message.AdminMessage.INVALID_ROLE);
+                throw new ArgumentException(Message.AdminMessage.INVALID_ROLE);
             }
 
             //Lấy user
             var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Id == model.Id && !u.Deleted);
             if (existingUser == null)
             {
-                throw new ApplicationException(Message.CommonMessage.NOT_FOUND);
+                throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
 
             //Admin khoong the sua admin khac
             if (existingUser.Id == actionBy || IsAdmin(existingUser.Id))
             {
-                throw new ApplicationException(Message.AdminMessage.INVALID_ROLE);
+                throw new UnauthorizedAccessException(Message.AdminMessage.INVALID_ROLE);
             }
 
             //Cap nhat
@@ -171,21 +171,21 @@ namespace Sep490_Backend.Services.AdminService
             //Check admin
             if (!IsAdmin(actionBy))
             {
-                throw new ApplicationException(Message.CommonMessage.NOT_ALLOWED);
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
             //check format
             if (model == null || string.IsNullOrWhiteSpace(model.UserName) || string.IsNullOrWhiteSpace(model.Email) || string.IsNullOrWhiteSpace(model.Role))
             {
-                throw new ApplicationException(Message.CommonMessage.INVALID_FORMAT);
+                throw new ArgumentException(Message.CommonMessage.INVALID_FORMAT);
             }
             if (model.UserName.Contains(" "))
             {
-                throw new ApplicationException(Message.AuthenMessage.INVALID_USERNAME);
+                throw new ArgumentException(Message.AuthenMessage.INVALID_USERNAME);
             }
 
             if (!Regex.IsMatch(model.Email, PatternConst.EMAIL_PATTERN))
             {
-                throw new ApplicationException(Message.AuthenMessage.INVALID_EMAIL);
+                throw new ArgumentException(Message.AuthenMessage.INVALID_EMAIL);
             }
             //check exist
             var existingUser = StaticVariable.UserMemory.FirstOrDefault(u => u.Email == model.Email || u.Username == model.UserName);
@@ -217,7 +217,7 @@ namespace Sep490_Backend.Services.AdminService
             var emailTemp = await _context.EmailTemplates.FirstOrDefaultAsync(t => t.Title == "Your new password");
             if (emailTemp == null)
             {
-                throw new ApplicationException(Message.CommonMessage.NOT_FOUND);
+                throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
             string formattedHtml = emailTemp.Body.Replace("{0}", newUser.Username).Replace("{1}", password);
             await _emailService.SendEmailAsync(newUser.Email, emailTemp.Title, formattedHtml);
