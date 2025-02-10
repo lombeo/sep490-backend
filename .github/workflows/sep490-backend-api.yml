@@ -13,11 +13,6 @@ env:
   AZURE_APIM_SERVICENAME: sep490-backend-api
   AZURE_APIM_API_ID: SEP490-backend
   AZURE_APIM_APPSERVICEURL: https://sep490-backend-api.azurewebsites.net
-  SWASHBUCLE_ASPNET_CORE_CLI_PACKAGE_VERSION: 5.6.3
-  SWASHBUCKLE_DOTNET_CORE_VERSION: 3.1.x
-  API_IMPORT_SPECIFICATION_PATH: ./publish/swagger.json
-  API_IMPORT_DLL: ./SEP490-backend/bin/Release/net8.0/SEP490-backend.dll
-  API_IMPORT_VERSION: v1
   CONFIGURATION: Release
   DOTNET_CORE_VERSION: 8.0.x
   WORKING_DIRECTORY: ./SEP490-backend
@@ -26,40 +21,42 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # Checkout code
       - uses: actions/checkout@v4
 
+      # Cache NuGet packages để tăng tốc độ restore
+      - name: Cache NuGet packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      # Setup .NET SDK
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v3
         with:
           dotnet-version: ${{ env.DOTNET_CORE_VERSION }}
 
-      - name: Setup SwashBuckle .NET Core SDK
-        uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: ${{ env.SWASHBUCKLE_DOTNET_CORE_VERSION }}
-
-      - name: Restore
+      # Restore dependencies (sử dụng cache)
+      - name: Restore dependencies
         run: dotnet restore ${{ env.WORKING_DIRECTORY }}
 
-      - name: Build
-        run: dotnet build ${{ env.WORKING_DIRECTORY }} --configuration ${{ env.CONFIGURATION }} --no-restore
+      # Build solution với tùy chọn không build lại các phần đã build trước đó
+      - name: Build solution
+        run: dotnet build ${{ env.WORKING_DIRECTORY }} --configuration ${{ env.CONFIGURATION }} --no-restore --no-incremental
 
-      - name: Test
-        run: dotnet test ${{ env.WORKING_DIRECTORY }} --no-build
+      # Chạy unit tests (đảm bảo đã qua bước build)
+      - name: Run tests
+        run: dotnet test ${{ env.WORKING_DIRECTORY }} --no-build --verbosity normal
 
-      - name: Publish
-        run: dotnet publish ${{ env.WORKING_DIRECTORY }} --configuration ${{ env.CONFIGURATION }} --no-build --output ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+      # Publish ứng dụng đến thư mục output
+      - name: Publish application
+        run: dotnet publish ${{ env.WORKING_DIRECTORY }} --configuration ${{ env.CONFIGURATION }} --no-build --output ${{ env.AZURE_WEBAPP_PACKAGE_PATH }} --verbosity minimal
 
-      - name: Install Swashbuckle CLI .NET Global Tool
-        run: dotnet tool install --global Swashbuckle.AspNetCore.Cli --version ${{ env.SWASHBUCLE_ASPNET_CORE_CLI_PACKAGE_VERSION }}
-        working-directory: ${{ env.WORKING_DIRECTORY }}
-
-      - name: Generate Open API Specification Document
-        env:
-          DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: true
-        run: swagger tofile --output "${{ env.API_IMPORT_SPECIFICATION_PATH }}" "${{ env.API_IMPORT_DLL }}" "${{ env.API_IMPORT_VERSION }}"
-
-      - name: Publish Artifacts
+      # Upload artifact (chỉ chứa các file cần thiết cho deploy)
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: webapp
@@ -69,16 +66,19 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - name: Download artifact from build job
+      # Tải artifact được tạo từ job build
+      - name: Download build artifact
         uses: actions/download-artifact@v3
         with:
           name: webapp
           path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
 
-      - name: Create environment file from secret
+      # Tạo file môi trường từ secret
+      - name: Create environment file
         run: |
           printf '%s' "${{ secrets.DOTNET_ENV_FILE }}" > ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/.env
 
+      # Deploy ứng dụng đến Azure WebApp
       - name: Deploy to Azure WebApp
         uses: azure/webapps-deploy@v2
         with:
@@ -86,13 +86,24 @@ jobs:
           package: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
           publish-profile: ${{ secrets.sep490_backend_api_3C11 }}
 
+      # Đăng nhập vào Azure (cho các thao tác tiếp theo)
       - name: Azure Login
         uses: azure/login@v1
         with:
           creds: ${{ secrets.sep490_backend_api_SPN }}
 
+      # Import API vào Azure API Management
       - name: Import API into Azure API Management
-        run: az apim api import --path "${{ env.AZURE_APIM_RESOURCE_PATH }}" --resource-group "${{ env.AZURE_APIM_RESOURCEGROUP }}" --service-name "${{ env.AZURE_APIM_SERVICENAME }}" --api-id "${{ env.AZURE_APIM_API_ID }}" --service-url "${{ env.AZURE_APIM_APPSERVICEURL }}" --specification-path "${{ env.API_IMPORT_SPECIFICATION_PATH }}" --specification-format OpenApi --subscription-required false
+        run: az apim api import \
+              --path "${{ env.AZURE_APIM_RESOURCE_PATH }}" \
+              --resource-group "${{ env.AZURE_APIM_RESOURCEGROUP }}" \
+              --service-name "${{ env.AZURE_APIM_SERVICENAME }}" \
+              --api-id "${{ env.AZURE_APIM_API_ID }}" \
+              --service-url "${{ env.AZURE_APIM_APPSERVICEURL }}" \
+              --specification-path "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/swagger.json" \
+              --specification-format OpenApi \
+              --subscription-required false
 
+      # Đăng xuất khỏi Azure để dọn dẹp phiên làm việc
       - name: Logout from Azure
         run: az logout
