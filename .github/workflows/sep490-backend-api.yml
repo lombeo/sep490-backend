@@ -39,23 +39,29 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_CORE_VERSION }}
 
-      # Restore dependencies (sử dụng cache)
+      # Restore dependencies
       - name: Restore dependencies
         run: dotnet restore ${{ env.WORKING_DIRECTORY }}
 
-      # Build solution với tùy chọn không build lại các phần đã build trước đó
+      # Build solution
       - name: Build solution
         run: dotnet build ${{ env.WORKING_DIRECTORY }} --configuration ${{ env.CONFIGURATION }} --no-restore --no-incremental
 
-      # Chạy unit tests (đảm bảo đã qua bước build)
+      # Run tests
       - name: Run tests
         run: dotnet test ${{ env.WORKING_DIRECTORY }} --no-build --verbosity normal
 
-      # Publish ứng dụng đến thư mục output
+      # Publish application
       - name: Publish application
         run: dotnet publish ${{ env.WORKING_DIRECTORY }} --configuration ${{ env.CONFIGURATION }} --no-build --output ${{ env.AZURE_WEBAPP_PACKAGE_PATH }} --verbosity minimal
 
-      # Upload artifact (chỉ chứa các file cần thiết cho deploy)
+      # Generate Swagger specification
+      - name: Generate Swagger specification
+        run: |
+          dotnet tool install --global Swashbuckle.AspNetCore.Cli --version 5.6.3
+          swagger tofile --output "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/swagger.json" "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/bin/Release/net8.0/SEP490-backend.dll" "v1"
+
+      # Upload build artifact
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
@@ -66,19 +72,19 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      # Tải artifact được tạo từ job build
+      # Download build artifact
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
           name: webapp
           path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
 
-      # Tạo file môi trường từ secret
+      # Create environment file
       - name: Create environment file
         run: |
           echo '${{ secrets.DOTNET_ENV_FILE }}' > ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/.env
 
-      # Deploy ứng dụng đến Azure WebApp
+      # Deploy to Azure WebApp
       - name: Deploy to Azure WebApp
         uses: azure/webapps-deploy@v2
         with:
@@ -86,15 +92,19 @@ jobs:
           package: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
           publish-profile: ${{ secrets.sep490_backend_api_3C11 }}
 
-      # Đăng nhập vào Azure (cho các thao tác tiếp theo)
+      # Azure Login
       - name: Azure Login
         uses: azure/login@v1
         with:
           creds: ${{ secrets.sep490_backend_api_SPN }}
 
-      # Import API vào Azure API Management
+      # Import API into Azure API Management
       - name: Import API into Azure API Management
-        run: az apim api import \
+        run: |
+          # Kiểm tra file swagger.json tồn tại
+          if [ -f "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/swagger.json" ]; then
+            echo "swagger.json found, importing API..."
+            az apim api import \
               --path "${{ env.AZURE_APIM_RESOURCE_PATH }}" \
               --resource-group "${{ env.AZURE_APIM_RESOURCEGROUP }}" \
               --service-name "${{ env.AZURE_APIM_SERVICENAME }}" \
@@ -103,7 +113,10 @@ jobs:
               --specification-path "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/swagger.json" \
               --specification-format OpenApi \
               --subscription-required false
+          else
+            echo "swagger.json not found. Skipping API import."
+          fi
 
-      # Đăng xuất khỏi Azure để dọn dẹp phiên làm việc
+      # Logout from Azure
       - name: Logout from Azure
         run: az logout
