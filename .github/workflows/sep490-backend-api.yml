@@ -76,7 +76,7 @@ jobs:
       # Tạo file môi trường từ secret
       - name: Create environment file
         run: |
-          printf '%s' "${{ secrets.DOTNET_ENV_FILE }}" > ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/.env
+          echo '${{ secrets.DOTNET_ENV_FILE }}' > ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/.env
 
       # Deploy ứng dụng đến Azure WebApp
       - name: Deploy to Azure WebApp
