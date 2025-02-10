@@ -59,6 +59,7 @@ jobs:
         run: |
             dotnet tool install --global Swashbuckle.AspNetCore.Cli --version 6.5.0
             export PATH="$PATH:/home/runner/.dotnet/tools"
+            export DOTNET_ROLL_FORWARD=LatestMajor
             swagger tofile --output "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/swagger.json" "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/SEP490-backend.dll" "v1"
 
       # Upload build artifact
