@@ -56,17 +56,11 @@ namespace Sep490_Backend.Services.CustomerService
                 customerCacheList = await _context.Customers.Where(c => !c.Deleted).ToListAsync();
                 _ = _cacheService.SetAsync(cacheKey, customerCacheList);
             }
-            if (!string.IsNullOrWhiteSpace(model.CustomerName))
+            if (!string.IsNullOrWhiteSpace(model.Search))
             {
-                customerCacheList = customerCacheList.Where(t => t.CustomerName.ToLower().Trim().Contains(model.CustomerName.ToLower().Trim())).ToList();
-            }
-            if (!string.IsNullOrWhiteSpace(model.CustomerCode))
-            {
-                customerCacheList = customerCacheList.Where(t => t.CustomerCode.ToLower().Trim().Contains(model.CustomerCode.ToLower().Trim())).ToList();
-            }
-            if (!string.IsNullOrWhiteSpace(model.Phone))
-            {
-                customerCacheList = customerCacheList.Where(t => t.Phone.ToLower().Trim().Contains(model.Phone.ToLower().Trim())).ToList();
+                customerCacheList = customerCacheList.Where(t => t.CustomerName.ToLower().Trim().Contains(model.Search.ToLower().Trim()) 
+                || t.CustomerCode.ToLower().Trim().Contains(model.Search.ToLower().Trim()) 
+                || t.Phone.ToLower().Trim().Contains(model.Search.ToLower().Trim())).ToList();
             }
             model.Total = customerCacheList.Count();
             if (model.PageSize > 0)
