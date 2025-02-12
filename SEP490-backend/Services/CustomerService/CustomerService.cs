@@ -23,8 +23,8 @@ namespace Sep490_Backend.Services.CustomerService
         Task<List<Customer>> GetListCustomer(CustomerSearchDTO model);
         Task<Customer> GetDetailCustomer(int customerId, int actionBy);
         Task<bool> DeleteCustomer(int customerId, int actionBy);
-        Task<bool> CreateCustomer(CustomerCreateDTO model, int actionBy);
-        Task<bool> UpdateCustomer(Customer model, int actionBy);
+        Task<Customer> CreateCustomer(CustomerCreateDTO model, int actionBy);
+        Task<Customer> UpdateCustomer(Customer model, int actionBy);
     }
 
     public class CustomerService : ICustomerService
@@ -103,7 +103,7 @@ namespace Sep490_Backend.Services.CustomerService
             return true;
         }
 
-        public async Task<bool> CreateCustomer(CustomerCreateDTO model, int actionBy)
+        public async Task<Customer> CreateCustomer(CustomerCreateDTO model, int actionBy)
         {
             if (!_helperService.IsInRole(actionBy, new List<string> { RoleConstValue.BUSINESS_EMPLOYEE }))
             {
@@ -138,10 +138,10 @@ namespace Sep490_Backend.Services.CustomerService
             await _context.SaveChangesAsync();
             _ = _cacheService.DeleteAsync(RedisCacheKey.CUSTOMER_CACHE_KEY);
 
-            return true;
+            return customer;
         }
 
-        public async Task<bool> UpdateCustomer(Customer model, int actionBy)
+        public async Task<Customer> UpdateCustomer(Customer model, int actionBy)
         {
             if (!_helperService.IsInRole(actionBy, RoleConstValue.BUSINESS_EMPLOYEE))
             {
@@ -168,7 +168,7 @@ namespace Sep490_Backend.Services.CustomerService
             _context.Update(existCustomer);
             _context.SaveChanges();
             _ = _cacheService.DeleteAsync(RedisCacheKey.CUSTOMER_CACHE_KEY);
-            return true;
+            return existCustomer;
         }
 
       
