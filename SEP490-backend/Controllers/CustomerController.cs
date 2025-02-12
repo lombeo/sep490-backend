@@ -37,13 +37,13 @@ namespace Sep490_Backend.Controllers
         }
 
         [HttpPost("create-customer")]
-        public async Task<ResponseDTO<bool>> CreateCustomer([FromBody] CustomerCreateDTO model)
+        public async Task<ResponseDTO<Customer>> CreateCustomer([FromBody] CustomerCreateDTO model)
         {
             return await HandleException(_customerSerivce.CreateCustomer(model, UserId), Message.CustomerMessage.CREATE_CUSTOMER_SUCCESS);
         }
 
         [HttpPut("update-customer")]
-        public async Task<ResponseDTO<bool>> UpdateCustomer([FromBody] Customer model)
+        public async Task<ResponseDTO<Customer>> UpdateCustomer([FromBody] Customer model)
         {
             return await HandleException(_customerSerivce.UpdateCustomer(model, UserId), Message.CustomerMessage.UPDATE_CUSTOMER_SUCCESS);
         }
