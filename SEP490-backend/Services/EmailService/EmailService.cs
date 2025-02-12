@@ -13,7 +13,7 @@ namespace Sep490_Backend.Services.EmailService
         private readonly string _smtpServer = "smtp.gmail.com";
         private readonly int _smtpPort = 587;
         private readonly string _emailFrom = "longrpk200313@gmail.com";
-        private readonly string _emailPassword = Environment.GetEnvironmentVariable("MAIL_PASSWORD");
+        private readonly string _emailPassword = Environment.GetEnvironmentVariable("MAIL_PASSWORD") ?? "";
 
         public async Task SendEmailAsync(string to, string subject, string body)
         {
