@@ -29,8 +29,8 @@ namespace Sep490_Backend.Controllers
             return result;
         }
 
-        [HttpDelete("delete")]
-        public async Task<ResponseDTO<int>> DeleteSiteSurvey([FromQuery] int id)
+        [HttpDelete("delete/{id}")]
+        public async Task<ResponseDTO<int>> DeleteSiteSurvey(int id)
         {
             var result = await HandleException(_siteSurveyService.DeleteSiteSurvey(id, UserId), Message.SiteSurveyMessage.DELETE_SUCCESS);
             return result;

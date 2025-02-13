@@ -1,11 +1,7 @@
-﻿using DocumentFormat.OpenXml.Drawing.Charts;
-using DocumentFormat.OpenXml.Office2010.Excel;
-using DocumentFormat.OpenXml.Office2013.Excel;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.EntityFrameworkCore;
-using Sep490_Backend.DTO.AdminDTO;
+﻿using Microsoft.EntityFrameworkCore;
+using Sep490_Backend.Controllers;
+using Sep490_Backend.DTO.Common;
 using Sep490_Backend.DTO.CustomerDTO;
-using Sep490_Backend.DTO.SiteSurveyDTO;
 using Sep490_Backend.Infra;
 using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Infra.Entities;
@@ -13,8 +9,8 @@ using Sep490_Backend.Services.AuthenService;
 using Sep490_Backend.Services.CacheService;
 using Sep490_Backend.Services.EmailService;
 using Sep490_Backend.Services.HelperService;
-using System.ComponentModel.Design;
 using System.Text.RegularExpressions;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace Sep490_Backend.Services.CustomerService
 {
@@ -51,15 +47,15 @@ namespace Sep490_Backend.Services.CustomerService
             }
             string cacheKey = RedisCacheKey.CUSTOMER_CACHE_KEY;
             var customerCacheList = await _cacheService.GetAsync<List<Customer>>(cacheKey);
-            if(customerCacheList == null)
+            if (customerCacheList == null)
             {
                 customerCacheList = await _context.Customers.Where(c => !c.Deleted).ToListAsync();
                 _ = _cacheService.SetAsync(cacheKey, customerCacheList);
             }
             if (!string.IsNullOrWhiteSpace(model.Search))
             {
-                customerCacheList = customerCacheList.Where(t => t.CustomerName.ToLower().Trim().Contains(model.Search.ToLower().Trim()) 
-                || t.CustomerCode.ToLower().Trim().Contains(model.Search.ToLower().Trim()) 
+                customerCacheList = customerCacheList.Where(t => t.CustomerName.ToLower().Trim().Contains(model.Search.ToLower().Trim())
+                || t.CustomerCode.ToLower().Trim().Contains(model.Search.ToLower().Trim())
                 || t.Phone.ToLower().Trim().Contains(model.Search.ToLower().Trim())).ToList();
             }
             model.Total = customerCacheList.Count();
@@ -105,19 +101,65 @@ namespace Sep490_Backend.Services.CustomerService
 
         public async Task<Customer> CreateCustomer(CustomerCreateDTO model, int actionBy)
         {
+            var errors = new List<ResponseError>();
+
+            // Authorization check
             if (!_helperService.IsInRole(actionBy, new List<string> { RoleConstValue.BUSINESS_EMPLOYEE }))
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
-            if (model == null || string.IsNullOrWhiteSpace(model.CustomerCode) || string.IsNullOrWhiteSpace(model.CustomerName))
+
+            // Model validation
+            if (model == null)
             {
-                throw new ArgumentException(Message.CommonMessage.INVALID_FORMAT);
+                throw new ArgumentNullException(nameof(model));
             }
-            if (!Regex.IsMatch(model.Email, PatternConst.EMAIL_PATTERN))
+            else
             {
-                throw new ArgumentException(Message.AuthenMessage.INVALID_EMAIL);
+                if (string.IsNullOrWhiteSpace(model.CustomerCode))
+                    errors.Add(new ResponseError
+                    {
+                        Message = Message.CommonMessage.MISSING_PARAM,
+                        Field = nameof(model.CustomerCode)
+                    });
+
+                if (string.IsNullOrWhiteSpace(model.CustomerName))
+                    errors.Add(new ResponseError
+                    {
+                        Message = Message.CommonMessage.MISSING_PARAM,
+                        Field = nameof(model.CustomerName)
+                    });
+
+                if (string.IsNullOrWhiteSpace(model.Email) || !Regex.IsMatch(model.Email, PatternConst.EMAIL_PATTERN))
+                    errors.Add(new ResponseError
+                    {
+                        Message = Message.AuthenMessage.INVALID_EMAIL,
+                        Field = nameof(model.Email)
+                    });
             }
-            
+
+            var data = await GetListCustomer(new CustomerSearchDTO());
+            if (data.FirstOrDefault(t => t.CustomerCode == model.CustomerCode) != null)
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CustomerMessage.CUSTOMER_CODE_DUPLICATE,
+                    Field = nameof(model.CustomerCode)
+                });
+            }
+            if (data.FirstOrDefault(t => t.Email == model.Email) != null)
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CustomerMessage.CUSTOMER_EMAIL_DUPLICATE,
+                    Field = nameof(model.Email)
+                });
+            }
+
+            // Throw aggregated errors
+            if (errors.Count > 0)
+                throw new ValidationException(errors);
+
             var customer = new Customer
             {
                 CustomerCode = model.CustomerCode,
@@ -143,6 +185,7 @@ namespace Sep490_Backend.Services.CustomerService
 
         public async Task<Customer> UpdateCustomer(Customer model, int actionBy)
         {
+            var errors = new List<ResponseError>();
             if (!_helperService.IsInRole(actionBy, RoleConstValue.BUSINESS_EMPLOYEE))
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
@@ -152,6 +195,50 @@ namespace Sep490_Backend.Services.CustomerService
             {
                 throw new KeyNotFoundException(Message.CustomerMessage.CUSTOMER_NOT_FOUND);
             }
+
+            if (string.IsNullOrWhiteSpace(model.CustomerCode))
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CommonMessage.MISSING_PARAM,
+                    Field = nameof(model.CustomerCode)
+                });
+
+            if (string.IsNullOrWhiteSpace(model.CustomerName))
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CommonMessage.MISSING_PARAM,
+                    Field = nameof(model.CustomerName)
+                });
+
+            if (string.IsNullOrWhiteSpace(model.Email) || !Regex.IsMatch(model.Email, PatternConst.EMAIL_PATTERN))
+                errors.Add(new ResponseError
+                {
+                    Message = Message.AuthenMessage.INVALID_EMAIL,
+                    Field = nameof(model.Email)
+                });
+
+            var data = await GetListCustomer(new CustomerSearchDTO());
+            if (data.FirstOrDefault(t => t.CustomerCode == model.CustomerCode) != null)
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CustomerMessage.CUSTOMER_CODE_DUPLICATE,
+                    Field = nameof(model.CustomerCode)
+                });
+            }
+            if (data.FirstOrDefault(t => t.Email == model.Email) != null)
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CustomerMessage.CUSTOMER_EMAIL_DUPLICATE,
+                    Field = nameof(model.Email)
+                });
+            }
+
+            // Throw aggregated errors
+            if (errors.Count > 0)
+                throw new ValidationException(errors);
+
             existCustomer.CustomerCode = model.CustomerCode ?? existCustomer.CustomerCode;
             existCustomer.CustomerName = model.CustomerName ?? existCustomer.CustomerName;
             existCustomer.Phone = model.Phone ?? existCustomer.Phone;
@@ -171,6 +258,6 @@ namespace Sep490_Backend.Services.CustomerService
             return existCustomer;
         }
 
-      
+
     }
 }
