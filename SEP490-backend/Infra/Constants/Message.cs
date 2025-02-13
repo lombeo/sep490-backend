@@ -65,7 +65,7 @@ namespace Sep490_Backend.Infra.Constants
         public static class SiteSurveyMessage
         {
             //Success
-            public const string SEARCH_SUCCESS = "S-SURVEY-001";
+            public const string SEARCH_SUCCESS = "S-SURVEY-001"; //Search list site survey successfully!
             public const string DELETE_SUCCESS = "S-SURVEY-002";
             public const string SAVE_SUCCESS = "S-SURVEY-003";
             public const string GET_DETAIL_SUCCESS = "S-SURVEY-004";
