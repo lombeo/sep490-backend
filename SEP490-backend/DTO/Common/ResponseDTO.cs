@@ -18,9 +18,9 @@ namespace Sep490_Backend.DTO.Common
         public T Data { get; set; }
         [JsonProperty("meta")]
         public ResponseMeta Meta { get; set; }
-        public void AddSingleError(string errorMsg, int code)
+        public void AddSingleError(string errorMsg)
         {
-            Errors.Add(new ResponseError { Message = errorMsg, Code = code });
+            Errors.Add(new ResponseError { Message = errorMsg });
         }
         public bool IsValid => (Errors?.Count ?? 0) == 0;
         public bool Success { get; set; } = false;
@@ -35,12 +35,17 @@ namespace Sep490_Backend.DTO.Common
             Message = message;
         }
 
+        public ResponseDTO(int code, string message, List<ResponseError> errors)
+        {
+            Code = code;
+            Message = message;
+            Errors = errors;
+        }
+
         public bool Deleted { get; internal set; }
     }
     public class ResponseError
     {
-        [JsonProperty("code")]
-        public int Code { get; set; }
         [JsonProperty("message")]
         public string Message { get; set; }
         [JsonProperty("field")]

@@ -48,8 +48,8 @@ namespace Sep490_Backend.Controllers
             return await HandleException(_customerSerivce.UpdateCustomer(model, UserId), Message.CustomerMessage.UPDATE_CUSTOMER_SUCCESS);
         }
 
-        [HttpDelete("delete-customer")]
-        public async Task<ResponseDTO<bool>> DeleteCustomer([FromQuery] int customerId)
+        [HttpDelete("delete-customer/{customerId}")]
+        public async Task<ResponseDTO<bool>> DeleteCustomer(int customerId)
         {
             return await HandleException(_customerSerivce.DeleteCustomer(customerId, UserId), Message.CustomerMessage.DELETE_CUSTOMER_SUCCESS);
         }
