@@ -1,4 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Sep490_Backend.Controllers;
+using Sep490_Backend.DTO.Common;
 using Sep490_Backend.DTO.SiteSurveyDTO;
 using Sep490_Backend.Infra;
 using Sep490_Backend.Infra.Constants;
@@ -63,6 +65,7 @@ namespace Sep490_Backend.Services.SiteSurveyService
 
         public async Task<SiteSurvey> SaveSiteSurvey(SiteSurvey model, int actionBy)
         {
+            var errors = new List<ResponseError>();
             if (!_helpService.IsInRole(actionBy, RoleConstValue.TECHNICAL_MANAGER))
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
@@ -72,6 +75,22 @@ namespace Sep490_Backend.Services.SiteSurveyService
             {
                 throw new KeyNotFoundException(Message.SiteSurveyMessage.PROJECT_NOT_FOUND);
             }
+            if (string.IsNullOrWhiteSpace(model.SiteSurveyName))
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CommonMessage.MISSING_PARAM,
+                    Field = nameof(model.SiteSurveyName)
+                });
+            if (model.SurveyDate == DateTime.MinValue)
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CommonMessage.MISSING_PARAM,
+                    Field = nameof(model.SurveyDate)
+                });
+
+            if (errors.Count > 0)
+                throw new ValidationException(errors);
+
             var survey = new SiteSurvey
             {
                 Id = model.Id,

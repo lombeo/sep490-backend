@@ -29,8 +29,8 @@ namespace Sep490_Backend.Controllers
             return result;
         }
 
-        [HttpDelete("delete-user")]
-        public async Task<ResponseDTO<bool>> DeleteUser([FromQuery] int userId)
+        [HttpDelete("delete-user/{userId}")]
+        public async Task<ResponseDTO<bool>> DeleteUser(int userId)
         {
             return await HandleException(_adminService.DeleteUser(userId, UserId), Message.AdminMessage.DELETE_USER_SUCCESS);
         }
