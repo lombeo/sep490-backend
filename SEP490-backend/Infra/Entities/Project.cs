@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Sep490_Backend.Infra.Enums;
 
 namespace Sep490_Backend.Infra.Entities
 {
@@ -11,13 +12,12 @@ namespace Sep490_Backend.Infra.Entities
         public int ConstructType { get; set; }
         public string? Location { get; set; }
         public string? Area { get; set; }
-        public DateTime Timeline { get; set; }
         public string? Purpose { get; set; }
         public string? TechnicalReqs { get; set; }
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
         public decimal Budget { get; set; }
-        public int Status { get; set; }
+        public ProjectStatusEnum Status { get; set; }
         public string? Attachment { get; set; }
         public string? Description { get; set; }
 
@@ -39,10 +39,6 @@ namespace Sep490_Backend.Infra.Entities
 
                 entity.Property(e => e.ProjectName)
                     .IsRequired();
-
-                entity.Property(e => e.Timeline)
-                    .IsRequired()
-                    .HasColumnType("timestamp without time zone");
 
                 entity.Property(e => e.StartDate)
                     .IsRequired()
