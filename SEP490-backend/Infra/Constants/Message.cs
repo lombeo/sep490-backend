@@ -87,5 +87,19 @@ namespace Sep490_Backend.Infra.Constants
             public const string CUSTOMER_CODE_DUPLICATE = "E-CUSTOMER-002"; //Customer code can't be duplicated
             public const string CUSTOMER_EMAIL_DUPLICATE = "E-CUSTOMER-003"; //Customer email can't be duplicated
         }
+
+        public static class ProjectMessage
+        {
+            //Success
+            public const string SEARCH_SUCCESS = "S-PROJECT-001"; //Search list project successfully!
+            public const string DELETE_SUCCESS = "S-PROJECT-002"; //Delete project successfully!
+            public const string SAVE_SUCCESS = "S-PROJECT-003"; //Save project successfully!
+            public const string GET_LIST_STATUS_SUCCESS = "S-PROJECT-004"; //Get list status successfully!
+            public const string GET_DETAIL_SUCCESS = "S-PROJECT-005";
+
+            //Error
+            public const string INVALID_DATE = "E-PROJECT-001"; //The end date cannot be before the start date.
+            public const string PROJECT_CODE_EXIST = "E-PROJECT-002"; //Project code has already exist!
+        }
     }
 }
