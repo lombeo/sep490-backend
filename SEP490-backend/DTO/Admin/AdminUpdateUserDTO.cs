@@ -1,4 +1,4 @@
-﻿namespace Sep490_Backend.DTO.AdminDTO
+﻿namespace Sep490_Backend.DTO.Admin
 {
     public class AdminUpdateUserDTO
     {

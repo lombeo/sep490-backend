@@ -1,12 +1,13 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Sep490_Backend.Controllers;
 using Sep490_Backend.DTO.Common;
-using Sep490_Backend.DTO.CustomerDTO;
+using Sep490_Backend.DTO.Customer;
 using Sep490_Backend.Infra;
 using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Services.AuthenService;
 using Sep490_Backend.Services.CacheService;
+using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.EmailService;
 using Sep490_Backend.Services.HelperService;
 using System.Text.RegularExpressions;
@@ -16,7 +17,6 @@ namespace Sep490_Backend.Services.CustomerService
 {
     public interface ICustomerService
     {
-        Task<List<Customer>> GetListCustomer(CustomerSearchDTO model);
         Task<Customer> GetDetailCustomer(int customerId, int actionBy);
         Task<bool> DeleteCustomer(int customerId, int actionBy);
         Task<Customer> CreateCustomer(CustomerCreateDTO model, int actionBy);
@@ -29,41 +29,16 @@ namespace Sep490_Backend.Services.CustomerService
         private readonly IAuthenService _authenService;
         private readonly IHelperService _helperService;
         private readonly ICacheService _cacheService;
+        private readonly IDataService _dataService;
 
 
-        public CustomerService(BackendContext context, IAuthenService authenService, IEmailService emailService, IHelperService helperService, ICacheService cacheService)
+        public CustomerService(BackendContext context, IAuthenService authenService, IEmailService emailService, IHelperService helperService, ICacheService cacheService, IDataService dataService)
         {
             _context = context;
             _authenService = authenService;
             _helperService = helperService;
             _cacheService = cacheService;
-        }
-
-        public async Task<List<Customer>> GetListCustomer(CustomerSearchDTO model)
-        {
-            if (!_helperService.IsInRole(model.ActionBy, new List<string> { RoleConstValue.BUSINESS_EMPLOYEE, RoleConstValue.EXECUTIVE_BOARD }))
-            {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
-            }
-            string cacheKey = RedisCacheKey.CUSTOMER_CACHE_KEY;
-            var customerCacheList = await _cacheService.GetAsync<List<Customer>>(cacheKey);
-            if (customerCacheList == null)
-            {
-                customerCacheList = await _context.Customers.Where(c => !c.Deleted).ToListAsync();
-                _ = _cacheService.SetAsync(cacheKey, customerCacheList);
-            }
-            if (!string.IsNullOrWhiteSpace(model.Search))
-            {
-                customerCacheList = customerCacheList.Where(t => t.CustomerName.ToLower().Trim().Contains(model.Search.ToLower().Trim())
-                || t.CustomerCode.ToLower().Trim().Contains(model.Search.ToLower().Trim())
-                || t.Phone.ToLower().Trim().Contains(model.Search.ToLower().Trim())).ToList();
-            }
-            model.Total = customerCacheList.Count();
-            if (model.PageSize > 0)
-            {
-                customerCacheList = customerCacheList.Skip(model.Skip).Take(model.PageSize).ToList();
-            }
-            return customerCacheList;
+            _dataService = dataService;
         }
 
         public async Task<Customer> GetDetailCustomer(int customerId, int actionBy)
@@ -138,7 +113,7 @@ namespace Sep490_Backend.Services.CustomerService
                     });
             }
 
-            var data = await GetListCustomer(new CustomerSearchDTO());
+            var data = await _dataService.ListCustomer(new CustomerSearchDTO());
             if (data.FirstOrDefault(t => t.CustomerCode == model.CustomerCode) != null)
             {
                 errors.Add(new ResponseError
@@ -217,7 +192,7 @@ namespace Sep490_Backend.Services.CustomerService
                     Field = nameof(model.Email)
                 });
 
-            var data = await GetListCustomer(new CustomerSearchDTO());
+            var data = await _dataService.ListCustomer(new CustomerSearchDTO());
             if (data.FirstOrDefault(t => t.CustomerCode == model.CustomerCode) != null)
             {
                 errors.Add(new ResponseError

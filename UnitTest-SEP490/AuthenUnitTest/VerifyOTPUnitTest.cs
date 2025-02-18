@@ -1,6 +1,6 @@
 ﻿using Moq;
 using Sep490_Backend.Controllers;
-using Sep490_Backend.DTO.AuthenDTO;
+using Sep490_Backend.DTO.Authen;
 using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Services.AuthenService;
 using System;

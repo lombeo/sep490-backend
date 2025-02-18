@@ -1,9 +1,10 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Sep490_Backend.DTO.Common;
-using Sep490_Backend.DTO.ProjectDTO;
+using Sep490_Backend.DTO.Project;
 using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Infra.Entities;
+using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.ProjectService;
 
 namespace Sep490_Backend.Controllers
@@ -14,17 +15,19 @@ namespace Sep490_Backend.Controllers
     public class ProjectController : BaseAPIController
     {
         private readonly IProjectService _projectService;
+        private readonly IDataService _dataService;
 
-        public ProjectController(IProjectService projectService)
+        public ProjectController(IProjectService projectService, IDataService dataService)
         {
             _projectService = projectService;
+            _dataService = dataService;
         }
 
         [HttpGet("list")]
         public async Task<ResponseDTO<List<ProjectDTO>>> List([FromQuery] SearchProjectDTO model)
         {
             model.ActionBy = UserId;
-            var result = await HandleException(_projectService.List(model), Message.ProjectMessage.SEARCH_SUCCESS);
+            var result = await HandleException(_dataService.ListProject(model), Message.ProjectMessage.SEARCH_SUCCESS);
             result.Meta = new ResponseMeta() { Total = model.Total, Index = model.PageIndex, PageSize = model.PageSize };
             return result;
         }

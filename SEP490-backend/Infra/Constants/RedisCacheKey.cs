@@ -6,5 +6,7 @@
         public const string SITE_SURVEY_CACHE_KEY = "SITE_SURVEY";
         public const string CUSTOMER_CACHE_KEY = "CUSTOMER";
         public const string PROJECT_CACHE_KEY = "PROJECT";
+        public const string CONTRACT_CACHE_KEY = "CONTRACT";
+        public const string CONTRACT_DETAIL_CACHE_KEY = "CONTRACT_DETAIL";
     }
 }

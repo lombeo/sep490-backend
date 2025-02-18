@@ -1,10 +1,11 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Sep490_Backend.DTO.AdminDTO;
+using Sep490_Backend.DTO.Admin;
 using Sep490_Backend.DTO.Common;
-using Sep490_Backend.DTO.SiteSurveyDTO;
+using Sep490_Backend.DTO.SiteSurvey;
 using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Infra.Entities;
+using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.SiteSurveyService;
 
 namespace Sep490_Backend.Controllers
@@ -15,16 +16,18 @@ namespace Sep490_Backend.Controllers
     public class SiteSurveyController : BaseAPIController
     {
         private readonly ISiteSurveyService _siteSurveyService;
-        public SiteSurveyController(ISiteSurveyService siteSurveyService)
+        private readonly IDataService _dataService;
+        public SiteSurveyController(ISiteSurveyService siteSurveyService, IDataService dataService)
         {
             _siteSurveyService = siteSurveyService;
+            _dataService = dataService;
         }
 
         [HttpGet("search")]
         public async Task<ResponseDTO<List<SiteSurvey>>> Search([FromQuery] SearchSiteSurveyDTO model)
         {
             model.ActionBy = UserId;
-            var result = await HandleException(_siteSurveyService.Search(model), Message.SiteSurveyMessage.SEARCH_SUCCESS);
+            var result = await HandleException(_dataService.ListSiteSurvey(model), Message.SiteSurveyMessage.SEARCH_SUCCESS);
             result.Meta = new ResponseMeta() { Total = model.Total, Index = model.PageIndex, PageSize = model.PageSize };
             return result;
         }

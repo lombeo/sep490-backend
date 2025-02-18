@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Sep490_Backend.Infra.Enums;
 
 namespace Sep490_Backend.Infra.Entities
 {
@@ -7,11 +8,10 @@ namespace Sep490_Backend.Infra.Entities
         public int Id { get; set; }
         public string ContractCode { get; set; }
         public int ProjectId { get; set; }
-        public int CustomerId { get; set; }
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
         public int EstimatedDays { get; set; }
-        public int Status { get; set; }
+        public ContractStatusEnum Status { get; set; }
         public decimal Tax { get; set; }
         public DateTime SignDate { get; set; }
         public string? Attachment { get; set; }
