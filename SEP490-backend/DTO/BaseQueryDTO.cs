@@ -1,6 +1,6 @@
 ﻿namespace Sep490_Backend.DTO
 {
-	public class BaseQueryDTO : BaseRequest
+	public class BaseQuery : BaseRequest
 	{
 		public int PageIndex { get; set; } = 1;
 		public int PageSize { get; set; } = 10;

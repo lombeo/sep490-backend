@@ -37,6 +37,7 @@ namespace Sep490_Backend.Infra
             ContractConfiguration.Config(modelBuilder);
             ContractDetailConfiguration.Config(modelBuilder);
             VehicleConfiguration.Config(modelBuilder);
+            CustomerConfiguration.Config(modelBuilder);
             //OnModelCreatingPartial(modelBuilder);
         }
 

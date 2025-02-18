@@ -1,11 +1,12 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Sep490_Backend.Controllers;
-using Sep490_Backend.DTO.AdminDTO;
+using Sep490_Backend.DTO.Admin;
 using Sep490_Backend.DTO.Common;
 using Sep490_Backend.Infra;
 using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Services.AuthenService;
+using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.EmailService;
 using Sep490_Backend.Services.HelperService;
 using System.Text.RegularExpressions;
@@ -15,7 +16,6 @@ namespace Sep490_Backend.Services.AdminService
 {
     public interface IAdminService
     {
-        Task<List<User>> ListUser(AdminSearchUserDTO model);
         Task<bool> DeleteUser(int userId, int actionBy);
         Task<bool> CreateUser(AdminCreateUserDTO model, int actionBy);
         Task<bool> UpdateUser(AdminUpdateUserDTO model, int actionBy);
@@ -27,13 +27,15 @@ namespace Sep490_Backend.Services.AdminService
         private readonly IAuthenService _authenService;
         private readonly IEmailService _emailService;
         private readonly IHelperService _helperService;
+        private readonly IDataService _dataService;
 
-        public AdminService(IHelperService helperService, BackendContext context, IAuthenService authenService, IEmailService emailService)
+        public AdminService(IHelperService helperService, BackendContext context, IAuthenService authenService, IEmailService emailService, IDataService dataService)
         {
             _context = context;
             _authenService = authenService;
             _helperService = helperService;
             _emailService = emailService;
+            _dataService = dataService;
         }
 
         public async Task<bool> DeleteUser(int userId, int actionBy)
@@ -62,44 +64,6 @@ namespace Sep490_Backend.Services.AdminService
             _authenService.TriggerUpdateUserMemory(userId);
 
             return true;
-        }
-
-        public async Task<List<User>> ListUser(AdminSearchUserDTO model)
-        {
-            var data = StaticVariable.UserMemory.ToList();
-            bool check = IsAdmin(model.ActionBy);
-            if (!check)
-            {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
-            }
-
-            data = data.OrderByDescending(t => t.CreatedAt).ToList();
-
-            if (!string.IsNullOrWhiteSpace(model.KeyWord))
-            {
-                data = data.Where(t => t.FullName.Contains(model.KeyWord) || t.Username.Contains(model.KeyWord) || t.Email.Contains(model.KeyWord) || t.Phone.Contains(model.KeyWord)).ToList();
-            }
-            if (!string.IsNullOrWhiteSpace(model.Role))
-            {
-                data = data.Where(t => t.Role == model.Role).ToList();
-            }
-            if (model.Gender != null)
-            {
-                data = data.Where(t => t.Gender == model.Gender).ToList();
-            }
-            if (model.Dob != null)
-            {
-                data = data.Where(t => t.Dob == model.Dob).ToList();
-            }
-
-            model.Total = data.Count();
-
-            if (model.PageSize > 0)
-            {
-                data = data.Skip(model.Skip).Take(model.PageSize).ToList();
-            }
-
-            return data;
         }
 
         public async Task<bool> UpdateUser(AdminUpdateUserDTO model, int actionBy)

@@ -1,6 +1,6 @@
 ﻿using Newtonsoft.Json;
 
-namespace Sep490_Backend.DTO.AuthenDTO
+namespace Sep490_Backend.DTO.Authen
 {
     public class ReturnSignInDTO
     {

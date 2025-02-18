@@ -1,4 +1,4 @@
-﻿namespace Sep490_Backend.DTO.ProjectDTO
+﻿namespace Sep490_Backend.DTO.Project
 {
     public class ListProjectStatusDTO
     {

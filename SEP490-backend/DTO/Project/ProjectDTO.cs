@@ -1,14 +1,14 @@
 ﻿using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Infra.Enums;
 
-namespace Sep490_Backend.DTO.ProjectDTO
+namespace Sep490_Backend.DTO.Project
 {
     public class ProjectDTO : CommonEntity
     {
         public int Id { get; set; }
         public string ProjectCode { get; set; }
         public string ProjectName { get; set; }
-        public Customer Customer { get; set; }
+        public Infra.Entities.Customer Customer { get; set; }
         public int ConstructType { get; set; }
         public string? Location { get; set; }
         public string? Area { get; set; }

@@ -1,11 +1,12 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Sep490_Backend.DTO.AdminDTO;
+using Sep490_Backend.DTO.Admin;
 using Sep490_Backend.DTO.Common;
-using Sep490_Backend.DTO.CustomerDTO;
+using Sep490_Backend.DTO.Customer;
 using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Services.CustomerService;
+using Sep490_Backend.Services.DataService;
 
 namespace Sep490_Backend.Controllers
 {
@@ -15,17 +16,19 @@ namespace Sep490_Backend.Controllers
     public class CustomerController : BaseAPIController 
     {
         public readonly ICustomerService _customerSerivce;
+        private readonly IDataService _dataService;
 
-        public CustomerController(ICustomerService customerSerivce)
+        public CustomerController(ICustomerService customerSerivce, IDataService dataService)
         {
             _customerSerivce = customerSerivce;
+            _dataService = dataService;
         }
 
         [HttpGet("list-customer")]
         public async Task<ResponseDTO<List<Customer>>> GetListCustomer([FromQuery] CustomerSearchDTO model)
         {
             model.ActionBy = UserId;
-            var result = await HandleException(_customerSerivce.GetListCustomer(model), Message.CustomerMessage.SEARCH_SUCCESS);
+            var result = await HandleException(_dataService.ListCustomer(model), Message.CustomerMessage.SEARCH_SUCCESS);
             result.Meta = new ResponseMeta() { Total = model.Total, Index = model.PageIndex, PageSize = model.PageSize };
             return result;
         }
