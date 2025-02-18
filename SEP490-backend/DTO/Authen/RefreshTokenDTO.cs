@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace Sep490_Backend.DTO.AuthenDTO
+namespace Sep490_Backend.DTO.Authen
 {
     public class RefreshTokenDTO
     {

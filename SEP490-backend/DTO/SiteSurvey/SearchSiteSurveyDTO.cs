@@ -1,6 +1,6 @@
-﻿namespace Sep490_Backend.DTO.SiteSurveyDTO
+﻿namespace Sep490_Backend.DTO.SiteSurvey
 {
-    public class SearchSiteSurveyDTO : BaseQueryDTO
+    public class SearchSiteSurveyDTO : BaseQuery
     {
         public string? SiteSurveyName { get; set; }
         public int? Status { get; set; }

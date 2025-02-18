@@ -2,18 +2,18 @@
 using NPOI.HSSF.Record.Chart;
 using NPOI.SS.Formula.Functions;
 using Sep490_Backend.DTO.Common;
-using Sep490_Backend.DTO.ProjectDTO;
+using Sep490_Backend.DTO.Project;
 using Sep490_Backend.Infra;
 using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Services.CacheService;
+using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.HelperService;
 
 namespace Sep490_Backend.Services.ProjectService
 {
     public interface IProjectService
     {
-        Task<List<ProjectDTO>> List(SearchProjectDTO model);
         Task<ProjectDTO> Save(Project model, int actionBy);
         Task<int> Delete(int id, int actionBy);
         Task<ListProjectStatusDTO> ListProjectStatus(int actionBy);
@@ -25,12 +25,14 @@ namespace Sep490_Backend.Services.ProjectService
         private readonly BackendContext _context;
         private readonly ICacheService _cacheService;
         private readonly IHelperService _helperService;
+        private readonly IDataService _dataService;
 
-        public ProjectService(BackendContext context, ICacheService cacheService, IHelperService helperService)
+        public ProjectService(BackendContext context, IDataService dataService, ICacheService cacheService, IHelperService helperService)
         {
             _context = context;
             _cacheService = cacheService;
             _helperService = helperService;
+            _dataService = dataService;
         }
 
         public async Task<int> Delete(int id, int actionBy)
@@ -60,90 +62,26 @@ namespace Sep490_Backend.Services.ProjectService
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
-            var data = await List(new SearchProjectDTO()
+            var data = await _dataService.ListProject(new SearchProjectDTO()
             {
                 ActionBy = actionBy
             });
             var result = data.FirstOrDefault(t => t.Id == id);
-            if(result == null)
+            if (result == null)
             {
                 throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
             return result;
         }
 
-        public async Task<List<ProjectDTO>> List(SearchProjectDTO model)
-        {
-            if (!_helperService.IsInRole(model.ActionBy, RoleConstValue.BUSINESS_EMPLOYEE))
-            {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
-            }
-
-            string cacheKey = RedisCacheKey.PROJECT_CACHE_KEY;
-            var data = await _cacheService.GetAsync<List<ProjectDTO>>(cacheKey);
-            if (data == null)
-            {
-                data = _context.Projects.Where(t => !t.Deleted).Select(t => new ProjectDTO
-                {
-                    Id = t.Id,
-                    ProjectCode = t.ProjectCode,
-                    ProjectName = t.ProjectName,
-                    Customer = _context.Customers.FirstOrDefault(c => c.Id == t.CustomerId) ?? new Customer(),
-                    ConstructType = t.ConstructType,
-                    Location = t.Location,
-                    Area = t.Area,
-                    Purpose = t.Purpose,
-                    TechnicalReqs = t.TechnicalReqs,
-                    StartDate = t.StartDate,
-                    EndDate = t.EndDate,
-                    Budget = t.Budget,
-                    Status = t.Status,
-                    Attachment = t.Attachment,
-                    Description = t.Description,
-                    UpdatedAt = t.UpdatedAt,
-                    Updater = t.Updater,
-                    CreatedAt = t.CreatedAt,
-                    Creator = t.Creator,
-                    Deleted = t.Deleted
-                }).ToList();
-
-                _ = _cacheService.SetAsync(cacheKey, data);
-            }
-            if (!string.IsNullOrWhiteSpace(model.KeyWord))
-            {
-                data = data.Where(t => t.ProjectCode.ToLower().Trim().Contains(model.KeyWord.ToLower().Trim())
-                                        || t.ProjectName.ToLower().Trim().Contains(model.KeyWord.ToLower().Trim())
-                                        || t.Customer.CustomerCode.ToLower().Trim().Contains(model.KeyWord.ToLower().Trim())
-                                        || (t.Location ?? "").ToLower().Trim().Contains(model.KeyWord.ToLower().Trim())
-                                        || t.Customer.CustomerName.ToLower().Trim().Contains(model.KeyWord.ToLower().Trim())).ToList();
-            }
-            if (model.CustomerId != 0)
-            {
-                data = data.Where(t => t.Customer.Id == model.CustomerId).ToList();
-            }
-            if (model.Status != null)
-            {
-                data = data.Where(t => t.Status == model.Status).ToList();
-            }
-
-            model.Total = data.Count();
-
-            if (model.PageSize > 0)
-            {
-                data = data.Skip(model.Skip).Take(model.PageSize).ToList();
-            }
-
-            return data;
-        }
-
         public async Task<ListProjectStatusDTO> ListProjectStatus(int actionBy)
         {
-            if (!_helperService.IsInRole(actionBy, new List<string> { RoleConstValue.BUSINESS_EMPLOYEE , RoleConstValue.EXECUTIVE_BOARD}))
+            if (!_helperService.IsInRole(actionBy, new List<string> { RoleConstValue.BUSINESS_EMPLOYEE, RoleConstValue.EXECUTIVE_BOARD }))
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
 
-            var data = await List(new SearchProjectDTO()
+            var data = await _dataService.ListProject(new SearchProjectDTO()
             {
                 ActionBy = actionBy
             });
@@ -168,13 +106,16 @@ namespace Sep490_Backend.Services.ProjectService
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
 
-            var customer = _context.Customers.Where(t => !t.Deleted).ToList();
+            var customer = await _dataService.ListCustomer(new DTO.Customer.CustomerSearchDTO
+            {
+                ActionBy = actionBy
+            });
             var data = _context.Projects.Where(t => !t.Deleted).ToList();
-            if(model.StartDate < model.EndDate)
+            if (model.StartDate < model.EndDate)
             {
                 throw new ArgumentException(Message.ProjectMessage.INVALID_DATE);
             }
-            if(customer.FirstOrDefault(t => t.Id == model.CustomerId) == null)
+            if (customer.FirstOrDefault(t => t.Id == model.CustomerId) == null)
             {
                 throw new KeyNotFoundException(Message.CustomerMessage.CUSTOMER_NOT_FOUND);
             }
@@ -197,14 +138,14 @@ namespace Sep490_Backend.Services.ProjectService
                 Updater = actionBy
             };
 
-            if(model.Id != 0)
+            if (model.Id != 0)
             {
                 var entity = data.FirstOrDefault(t => t.Id == model.Id);
                 if (entity == null)
                 {
                     throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
                 }
-                if(data.FirstOrDefault(t => t.ProjectCode == model.ProjectCode && t.ProjectCode != entity.ProjectCode) != null)
+                if (data.FirstOrDefault(t => t.ProjectCode == model.ProjectCode && t.ProjectCode != entity.ProjectCode) != null)
                 {
                     throw new ArgumentException(Message.ProjectMessage.PROJECT_CODE_EXIST);
                 }

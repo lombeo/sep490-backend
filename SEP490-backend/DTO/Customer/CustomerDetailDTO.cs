@@ -1,4 +1,4 @@
-﻿namespace Sep490_Backend.DTO.CustomerDTO
+﻿namespace Sep490_Backend.DTO.Customer
 {
     public class CustomerDetailDTO
     {
