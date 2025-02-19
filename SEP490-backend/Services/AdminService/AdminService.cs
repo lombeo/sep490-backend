@@ -5,6 +5,7 @@ using Sep490_Backend.DTO.Common;
 using Sep490_Backend.Infra;
 using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Infra.Entities;
+using Sep490_Backend.Infra.Helps;
 using Sep490_Backend.Services.AuthenService;
 using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.EmailService;
@@ -87,7 +88,7 @@ namespace Sep490_Backend.Services.AdminService
                 errors.Add(new ResponseError
                 {
                     Message = Message.AuthenMessage.INVALID_USERNAME,
-                    Field = nameof(model.UserName)
+                    Field = nameof(model.UserName).ToCamelCase()
                 });
             }
 
@@ -96,7 +97,7 @@ namespace Sep490_Backend.Services.AdminService
                 errors.Add(new ResponseError
                 {
                     Message = Message.AuthenMessage.EXIST_USERNAME,
-                    Field = nameof(model.UserName)
+                    Field = nameof(model.UserName).ToCamelCase()
                 });
             }
 
@@ -105,7 +106,7 @@ namespace Sep490_Backend.Services.AdminService
                 errors.Add(new ResponseError
                 {
                     Message = Message.AuthenMessage.EXIST_EMAIL,
-                    Field = nameof(model.UserName)
+                    Field = nameof(model.Email).ToCamelCase()
                 });
             }
 
@@ -114,7 +115,7 @@ namespace Sep490_Backend.Services.AdminService
                 errors.Add(new ResponseError
                 {
                     Message = Message.AuthenMessage.INVALID_EMAIL,
-                    Field = nameof(model.UserName)
+                    Field = nameof(model.Email).ToCamelCase()
                 });
             }
 
@@ -124,7 +125,7 @@ namespace Sep490_Backend.Services.AdminService
                 errors.Add(new ResponseError
                 {
                     Message = Message.AdminMessage.INVALID_ROLE,
-                    Field = nameof(model.UserName)
+                    Field = nameof(model.Role).ToCamelCase()
                 });
             }
 
@@ -133,8 +134,8 @@ namespace Sep490_Backend.Services.AdminService
             {
                 errors.Add(new ResponseError
                 {
-                    Message = Message.AuthenMessage.INVALID_USERNAME,
-                    Field = nameof(model.UserName)
+                    Message = Message.CommonMessage.NOT_ALLOWED,
+                    Field = nameof(model.Id).ToCamelCase()
                 });
             }
 
@@ -181,7 +182,7 @@ namespace Sep490_Backend.Services.AdminService
                 errors.Add(new ResponseError
                 {
                     Message = Message.AuthenMessage.INVALID_USERNAME,
-                    Field = nameof(model.UserName)
+                    Field = nameof(model.UserName).ToCamelCase()
                 });
             }
 
@@ -190,7 +191,7 @@ namespace Sep490_Backend.Services.AdminService
                 errors.Add(new ResponseError
                 {
                     Message = Message.AuthenMessage.EXIST_USERNAME,
-                    Field = nameof(model.UserName)
+                    Field = nameof(model.UserName).ToCamelCase()
                 });
             }
 
@@ -199,7 +200,7 @@ namespace Sep490_Backend.Services.AdminService
                 errors.Add(new ResponseError
                 {
                     Message = Message.AuthenMessage.EXIST_EMAIL,
-                    Field = nameof(model.UserName)
+                    Field = nameof(model.Email).ToCamelCase()
                 });
             }
 
@@ -208,7 +209,7 @@ namespace Sep490_Backend.Services.AdminService
                 errors.Add(new ResponseError
                 {
                     Message = Message.AuthenMessage.INVALID_EMAIL,
-                    Field = nameof(model.UserName)
+                    Field = nameof(model.Email).ToCamelCase()
                 });
             }
 
@@ -218,7 +219,7 @@ namespace Sep490_Backend.Services.AdminService
                 errors.Add(new ResponseError
                 {
                     Message = Message.AdminMessage.INVALID_ROLE,
-                    Field = nameof(model.UserName)
+                    Field = nameof(model.Role).ToCamelCase()
                 });
             }
 

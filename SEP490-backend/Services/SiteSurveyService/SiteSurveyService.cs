@@ -5,6 +5,7 @@ using Sep490_Backend.DTO.SiteSurvey;
 using Sep490_Backend.Infra;
 using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Infra.Entities;
+using Sep490_Backend.Infra.Helps;
 using Sep490_Backend.Services.CacheService;
 using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.HelperService;
@@ -85,13 +86,13 @@ namespace Sep490_Backend.Services.SiteSurveyService
                 errors.Add(new ResponseError
                 {
                     Message = Message.CommonMessage.MISSING_PARAM,
-                    Field = nameof(model.SiteSurveyName)
+                    Field = nameof(model.SiteSurveyName).ToCamelCase()
                 });
             if (model.SurveyDate == DateTime.MinValue)
                 errors.Add(new ResponseError
                 {
                     Message = Message.CommonMessage.MISSING_PARAM,
-                    Field = nameof(model.SurveyDate)
+                    Field = nameof(model.SurveyDate).ToCamelCase()
                 });
 
             if (errors.Count > 0)
