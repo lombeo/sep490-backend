@@ -1,9 +1,12 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using Sep490_Backend.DTO.SiteSurveyDTO;
+using Sep490_Backend.Controllers;
+using Sep490_Backend.DTO.Common;
+using Sep490_Backend.DTO.SiteSurvey;
 using Sep490_Backend.Infra;
 using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Services.CacheService;
+using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.HelperService;
 using System;
 
@@ -11,7 +14,6 @@ namespace Sep490_Backend.Services.SiteSurveyService
 {
     public interface ISiteSurveyService
     {
-        Task<List<SiteSurvey>> Search(SearchSiteSurveyDTO model);
         Task<SiteSurvey> SaveSiteSurvey(SiteSurvey model, int actionBy);
         Task<int> DeleteSiteSurvey(int id, int actionBy);
         Task<SiteSurvey> GetSiteSurveyDetail(int id, int actionBy);
@@ -22,12 +24,14 @@ namespace Sep490_Backend.Services.SiteSurveyService
         private readonly BackendContext _context;
         private readonly ICacheService _cacheService;
         private readonly IHelperService _helpService;
+        private readonly IDataService _dataService;
 
-        public SiteSurveyService(BackendContext context, ICacheService cacheService, IHelperService helpService)
+        public SiteSurveyService(BackendContext context, IDataService dataService, ICacheService cacheService, IHelperService helpService)
         {
             _context = context;
             _cacheService = cacheService;
             _helpService = helpService;
+            _dataService = dataService;
         }
 
         public async Task<int> DeleteSiteSurvey(int id, int actionBy)
@@ -57,12 +61,17 @@ namespace Sep490_Backend.Services.SiteSurveyService
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
-            var data = await Search(new SearchSiteSurveyDTO());
+            var data = await _dataService.ListSiteSurvey(new SearchSiteSurveyDTO()
+            {
+                ActionBy = actionBy,
+                PageSize = int.MaxValue
+            });
             return data.FirstOrDefault(t => t.Id == id);
         }
 
         public async Task<SiteSurvey> SaveSiteSurvey(SiteSurvey model, int actionBy)
         {
+            var errors = new List<ResponseError>();
             if (!_helpService.IsInRole(actionBy, RoleConstValue.TECHNICAL_MANAGER))
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
@@ -72,6 +81,22 @@ namespace Sep490_Backend.Services.SiteSurveyService
             {
                 throw new KeyNotFoundException(Message.SiteSurveyMessage.PROJECT_NOT_FOUND);
             }
+            if (string.IsNullOrWhiteSpace(model.SiteSurveyName))
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CommonMessage.MISSING_PARAM,
+                    Field = nameof(model.SiteSurveyName)
+                });
+            if (model.SurveyDate == DateTime.MinValue)
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CommonMessage.MISSING_PARAM,
+                    Field = nameof(model.SurveyDate)
+                });
+
+            if (errors.Count > 0)
+                throw new ValidationException(errors);
+
             var survey = new SiteSurvey
             {
                 Id = model.Id,
@@ -125,39 +150,6 @@ namespace Sep490_Backend.Services.SiteSurveyService
             _ = _cacheService.DeleteAsync(RedisCacheKey.SITE_SURVEY_CACHE_KEY);
 
             return survey;
-        }
-
-        public async Task<List<SiteSurvey>> Search(SearchSiteSurveyDTO model)
-        {
-            if (!_helpService.IsInRole(model.ActionBy, new List<string> { RoleConstValue.TECHNICAL_MANAGER, RoleConstValue.EXECUTIVE_BOARD }))
-            {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
-            }
-            string cacheKey = RedisCacheKey.SITE_SURVEY_CACHE_KEY;
-            var data = await _cacheService.GetAsync<List<SiteSurvey>>(cacheKey);
-            if (data == null)
-            {
-                data = await _context.SiteSurveys.Where(t => !t.Deleted).ToListAsync();
-                _ = _cacheService.SetAsync(cacheKey, data);
-            }
-            if (!string.IsNullOrWhiteSpace(model.SiteSurveyName))
-            {
-                data = data.Where(t => t.SiteSurveyName.ToLower().Trim().Contains(model.SiteSurveyName.ToLower().Trim())).ToList();
-            }
-
-            if (model.Status != null)
-            {
-                data = data.Where(t => t.Status == model.Status).ToList();
-            }
-
-            model.Total = data.Count();
-
-            if (model.PageSize > 0)
-            {
-                data = data.Skip(model.Skip).Take(model.PageSize).ToList();
-            }
-
-            return data;
         }
     }
 }

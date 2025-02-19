@@ -18,6 +18,9 @@ using Sep490_Backend.Services.OTPService;
 using Sep490_Backend.Services.HelperService;
 using Sep490_Backend.Services.SiteSurveyService;
 using Sep490_Backend.Services.CustomerService;
+using Sep490_Backend.Services.ProjectService;
+using Sep490_Backend.Services.ContractService;
+using Sep490_Backend.Services.DataService;
 
 namespace Sep490_Backend
 {
@@ -56,6 +59,9 @@ namespace Sep490_Backend
             builder.Services.AddScoped<IHelperService, HelperService>();
             builder.Services.AddScoped<ISiteSurveyService, SiteSurveyService>();
             builder.Services.AddScoped<ICustomerService, CustomerService>();
+            builder.Services.AddScoped<IProjectService, ProjectService>();
+            builder.Services.AddScoped<IContractService, ContractService>();
+            builder.Services.AddScoped<IDataService, DataService>();
             builder.Services.AddScoped<RedisConnManager>();
             builder.Services.AddHostedService<DefaultBackgroundService>();
 

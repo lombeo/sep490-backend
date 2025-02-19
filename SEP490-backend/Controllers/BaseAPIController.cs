@@ -21,7 +21,7 @@ namespace Sep490_Backend.Controllers
 			}
 		}
 
-        public async Task<ResponseDTO<T>> HandleException<T>(Task<T> task, string successMessage = "Operation successful")
+        public async Task<ResponseDTO<T>> HandleException<T>(Task<T> task, string successMessage = Message.CommonMessage.ACTION_SUCCESS)
         {
             try
             {
@@ -51,6 +51,17 @@ namespace Sep490_Backend.Controllers
                     Success = false,
                     Code = 400,
                     Message = ex.Message
+                };
+            }
+            catch (ValidationException ex)
+            {
+                Serilog.Log.Debug(ex, "ValidationException: {Message}", ex.Message);
+                return new ResponseDTO<T>
+                {
+                    Success = false,
+                    Code = 400,
+                    Message = ex.Message,
+                    Errors = ex.Errors
                 };
             }
             catch (InvalidOperationException ex)
@@ -144,6 +155,17 @@ namespace Sep490_Backend.Controllers
                     Message = Message.CommonMessage.ERROR_HAPPENED
                 };
             }
+        }
+    }
+
+    public class ValidationException : Exception
+    {
+        public List<ResponseError> Errors { get; }
+
+        public ValidationException(List<ResponseError> errors)
+            : base("One or more validation errors occurred.")
+        {
+            Errors = errors;
         }
     }
 }

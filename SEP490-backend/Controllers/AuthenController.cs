@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Sep490_Backend.DTO;
-using Sep490_Backend.DTO.AuthenDTO;
+using Sep490_Backend.DTO.Authen;
 using Sep490_Backend.DTO.Common;
 using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Infra.Entities;

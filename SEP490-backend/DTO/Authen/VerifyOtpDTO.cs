@@ -1,6 +1,6 @@
 ﻿using Sep490_Backend.Infra.Enums;
 
-namespace Sep490_Backend.DTO.AuthenDTO
+namespace Sep490_Backend.DTO.Authen
 {
     public class VerifyOtpDTO
     {

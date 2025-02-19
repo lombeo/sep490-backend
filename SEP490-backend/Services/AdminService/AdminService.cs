@@ -1,18 +1,21 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using Sep490_Backend.DTO.AdminDTO;
+using Sep490_Backend.Controllers;
+using Sep490_Backend.DTO.Admin;
+using Sep490_Backend.DTO.Common;
 using Sep490_Backend.Infra;
 using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Services.AuthenService;
+using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.EmailService;
 using Sep490_Backend.Services.HelperService;
 using System.Text.RegularExpressions;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace Sep490_Backend.Services.AdminService
 {
     public interface IAdminService
     {
-        Task<List<User>> ListUser(AdminSearchUserDTO model);
         Task<bool> DeleteUser(int userId, int actionBy);
         Task<bool> CreateUser(AdminCreateUserDTO model, int actionBy);
         Task<bool> UpdateUser(AdminUpdateUserDTO model, int actionBy);
@@ -24,13 +27,15 @@ namespace Sep490_Backend.Services.AdminService
         private readonly IAuthenService _authenService;
         private readonly IEmailService _emailService;
         private readonly IHelperService _helperService;
+        private readonly IDataService _dataService;
 
-        public AdminService(IHelperService helperService, BackendContext context, IAuthenService authenService, IEmailService emailService)
+        public AdminService(IHelperService helperService, BackendContext context, IAuthenService authenService, IEmailService emailService, IDataService dataService)
         {
             _context = context;
             _authenService = authenService;
             _helperService = helperService;
             _emailService = emailService;
+            _dataService = dataService;
         }
 
         public async Task<bool> DeleteUser(int userId, int actionBy)
@@ -61,79 +66,14 @@ namespace Sep490_Backend.Services.AdminService
             return true;
         }
 
-        public async Task<List<User>> ListUser(AdminSearchUserDTO model)
-        {
-            var data = StaticVariable.UserMemory.ToList();
-            bool check = IsAdmin(model.ActionBy);
-            if (!check)
-            {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
-            }
-
-            data = data.OrderByDescending(t => t.CreatedAt).ToList();
-
-            if (!string.IsNullOrWhiteSpace(model.KeyWord))
-            {
-                data = data.Where(t => t.FullName.Contains(model.KeyWord) || t.Username.Contains(model.KeyWord) || t.Email.Contains(model.KeyWord) || t.Phone.Contains(model.KeyWord)).ToList();
-            }
-            if (!string.IsNullOrWhiteSpace(model.Role))
-            {
-                data = data.Where(t => t.Role == model.Role).ToList();
-            }
-            if (model.Gender != null)
-            {
-                data = data.Where(t => t.Gender == model.Gender).ToList();
-            }
-            if (model.Dob != null)
-            {
-                data = data.Where(t => t.Dob == model.Dob).ToList();
-            }
-
-            model.Total = data.Count();
-
-            if (model.PageSize > 0)
-            {
-                data = data.Skip(model.Skip).Take(model.PageSize).ToList();
-            }
-
-            return data;
-        }
-
         public async Task<bool> UpdateUser(AdminUpdateUserDTO model, int actionBy)
         {
             if (!IsAdmin(actionBy))
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
-            if (model == null || model.Id <= 0)
-            {
-                throw new ArgumentException(Message.CommonMessage.INVALID_FORMAT);
-            }
-            if (model.UserName.Contains(" "))
-            {
-                throw new ArgumentException(Message.AuthenMessage.INVALID_USERNAME);
-            }
 
-            if(StaticVariable.UserMemory.FirstOrDefault(t => t.Username == model.UserName) != null)
-            {
-                throw new ApplicationException(Message.AuthenMessage.EXIST_USERNAME);
-            }
-
-            if (StaticVariable.UserMemory.FirstOrDefault(t => t.Email == model.Email) != null)
-            {
-                throw new ApplicationException(Message.AuthenMessage.EXIST_EMAIL);
-            }
-
-            if (!Regex.IsMatch(model.Email, PatternConst.EMAIL_PATTERN))
-            {
-                throw new ArgumentException(Message.AuthenMessage.INVALID_EMAIL);
-            }
-
-            // Kiểm tra Role có hợp lệ không
-            if (!RoleConstValue.ValidRoles.Contains(model.Role))
-            {
-                throw new ArgumentException(Message.AdminMessage.INVALID_ROLE);
-            }
+            var errors = new List<ResponseError>();
 
             //Lấy user
             var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Id == model.Id && !u.Deleted);
@@ -142,11 +82,64 @@ namespace Sep490_Backend.Services.AdminService
                 throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
 
+            if (model.UserName.Contains(" "))
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.AuthenMessage.INVALID_USERNAME,
+                    Field = nameof(model.UserName)
+                });
+            }
+
+            if(StaticVariable.UserMemory.FirstOrDefault(t => t.Username == model.UserName) != null)
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.AuthenMessage.EXIST_USERNAME,
+                    Field = nameof(model.UserName)
+                });
+            }
+
+            if (StaticVariable.UserMemory.FirstOrDefault(t => t.Email == model.Email) != null)
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.AuthenMessage.EXIST_EMAIL,
+                    Field = nameof(model.UserName)
+                });
+            }
+
+            if (!Regex.IsMatch(model.Email, PatternConst.EMAIL_PATTERN))
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.AuthenMessage.INVALID_EMAIL,
+                    Field = nameof(model.UserName)
+                });
+            }
+
+            // Kiểm tra Role có hợp lệ không
+            if (!RoleConstValue.ValidRoles.Contains(model.Role))
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.AdminMessage.INVALID_ROLE,
+                    Field = nameof(model.UserName)
+                });
+            }
+
             //Admin khoong the sua admin khac
             if (existingUser.Id == actionBy || IsAdmin(existingUser.Id))
             {
-                throw new UnauthorizedAccessException(Message.AdminMessage.INVALID_ROLE);
+                errors.Add(new ResponseError
+                {
+                    Message = Message.AuthenMessage.INVALID_USERNAME,
+                    Field = nameof(model.UserName)
+                });
             }
+
+            if (errors.Count > 0)
+                throw new ValidationException(errors);
 
             //Cap nhat
             existingUser.Username = model.UserName ?? existingUser.Username;
@@ -173,25 +166,60 @@ namespace Sep490_Backend.Services.AdminService
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
-            //check format
-            if (model == null || string.IsNullOrWhiteSpace(model.UserName) || string.IsNullOrWhiteSpace(model.Email) || string.IsNullOrWhiteSpace(model.Role))
-            {
-                throw new ArgumentException(Message.CommonMessage.INVALID_FORMAT);
-            }
-            if (model.UserName.Contains(" "))
-            {
-                throw new ArgumentException(Message.AuthenMessage.INVALID_USERNAME);
-            }
 
-            if (!Regex.IsMatch(model.Email, PatternConst.EMAIL_PATTERN))
-            {
-                throw new ArgumentException(Message.AuthenMessage.INVALID_EMAIL);
-            }
+            var errors = new List<ResponseError>();
+
             //check exist
             var existingUser = StaticVariable.UserMemory.FirstOrDefault(u => u.Email == model.Email || u.Username == model.UserName);
             if (existingUser != null)
             {
                 throw new ApplicationException(Message.AdminMessage.CREATE_USER_ERROR);
+            }
+
+            if (model.UserName.Contains(" "))
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.AuthenMessage.INVALID_USERNAME,
+                    Field = nameof(model.UserName)
+                });
+            }
+
+            if (StaticVariable.UserMemory.FirstOrDefault(t => t.Username == model.UserName) != null)
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.AuthenMessage.EXIST_USERNAME,
+                    Field = nameof(model.UserName)
+                });
+            }
+
+            if (StaticVariable.UserMemory.FirstOrDefault(t => t.Email == model.Email) != null)
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.AuthenMessage.EXIST_EMAIL,
+                    Field = nameof(model.UserName)
+                });
+            }
+
+            if (!Regex.IsMatch(model.Email, PatternConst.EMAIL_PATTERN))
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.AuthenMessage.INVALID_EMAIL,
+                    Field = nameof(model.UserName)
+                });
+            }
+
+            // Kiểm tra Role có hợp lệ không
+            if (!RoleConstValue.ValidRoles.Contains(model.Role))
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.AdminMessage.INVALID_ROLE,
+                    Field = nameof(model.UserName)
+                });
             }
 
             //Tao moi 

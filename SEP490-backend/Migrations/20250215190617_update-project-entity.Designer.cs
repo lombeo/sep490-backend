@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Sep490_Backend.Infra;
@@ -11,9 +12,11 @@ using Sep490_Backend.Infra;
 namespace Sep490_Backend.Migrations
 {
     [DbContext(typeof(BackendContext))]
-    partial class BackendContextModelSnapshot : ModelSnapshot
+    [Migration("20250215190617_update-project-entity")]
+    partial class updateprojectentity
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -41,6 +44,9 @@ namespace Sep490_Backend.Migrations
                         .HasColumnType("timestamp without time zone");
 
                     b.Property<int>("Creator")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CustomerId")
                         .HasColumnType("integer");
 
                     b.Property<bool>("Deleted")
@@ -140,12 +146,10 @@ namespace Sep490_Backend.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("BankAccount")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                        .HasColumnType("text");
 
                     b.Property<string>("BankName")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                        .HasColumnType("text");
 
                     b.Property<DateTime?>("CreatedAt")
                         .HasColumnType("timestamp without time zone");
@@ -155,13 +159,11 @@ namespace Sep490_Backend.Migrations
 
                     b.Property<string>("CustomerCode")
                         .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                        .HasColumnType("text");
 
                     b.Property<string>("CustomerName")
                         .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                        .HasColumnType("text");
 
                     b.Property<bool>("Deleted")
                         .HasColumnType("boolean");
@@ -170,24 +172,19 @@ namespace Sep490_Backend.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("DirectorName")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                        .HasColumnType("text");
 
                     b.Property<string>("Email")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
+                        .HasColumnType("text");
 
                     b.Property<string>("Fax")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                        .HasColumnType("text");
 
                     b.Property<string>("Phone")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                        .HasColumnType("text");
 
                     b.Property<string>("TaxCode")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                        .HasColumnType("text");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp without time zone");
@@ -197,7 +194,7 @@ namespace Sep490_Backend.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Customers", (string)null);
+                    b.ToTable("Customers");
                 });
 
             modelBuilder.Entity("Sep490_Backend.Infra.Entities.EmailTemplate", b =>
