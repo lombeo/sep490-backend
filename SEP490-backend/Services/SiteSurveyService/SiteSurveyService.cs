@@ -63,7 +63,8 @@ namespace Sep490_Backend.Services.SiteSurveyService
             }
             var data = await _dataService.ListSiteSurvey(new SearchSiteSurveyDTO()
             {
-                ActionBy = actionBy
+                ActionBy = actionBy,
+                PageSize = int.MaxValue
             });
             return data.FirstOrDefault(t => t.Id == id);
         }

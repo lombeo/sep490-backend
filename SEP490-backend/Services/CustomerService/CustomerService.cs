@@ -113,7 +113,7 @@ namespace Sep490_Backend.Services.CustomerService
                     });
             }
 
-            var data = await _dataService.ListCustomer(new CustomerSearchDTO());
+            var data = await _dataService.ListCustomer(new CustomerSearchDTO() { ActionBy = actionBy, PageSize = int.MaxValue});
             if (data.FirstOrDefault(t => t.CustomerCode == model.CustomerCode) != null)
             {
                 errors.Add(new ResponseError
@@ -192,13 +192,29 @@ namespace Sep490_Backend.Services.CustomerService
                     Field = nameof(model.Email)
                 });
 
-            var data = await _dataService.ListCustomer(new CustomerSearchDTO());
+            var data = await _dataService.ListCustomer(new CustomerSearchDTO() { ActionBy = actionBy, PageSize = int.MaxValue});
             if (data.FirstOrDefault(t => t.CustomerCode == model.CustomerCode) != null)
             {
                 errors.Add(new ResponseError
                 {
                     Message = Message.CustomerMessage.CUSTOMER_CODE_DUPLICATE,
                     Field = nameof(model.CustomerCode)
+                });
+            }
+            if (data.FirstOrDefault(t => t.Fax == model.Fax) != null)
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CustomerMessage.FAX_CODE_DUPLICATE,
+                    Field = nameof(model.Fax)
+                });
+            }
+            if (data.FirstOrDefault(t => t.BankAccount == model.BankAccount) != null)
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CustomerMessage.BANK_ACCOUNT_DUPLICATE,
+                    Field = nameof(model.BankAccount)
                 });
             }
             if (data.FirstOrDefault(t => t.Email == model.Email) != null)
