@@ -127,7 +127,7 @@ namespace Sep490_Backend.Services.CustomerService
                 errors.Add(new ResponseError
                 {
                     Message = Message.CustomerMessage.TAX_CODE_DUPLICATE,
-                    Field = nameof(model.CustomerCode)
+                    Field = nameof(model.TaxCode)
                 });
             }
             if (data.FirstOrDefault(t => t.Fax == model.Fax) != null)
@@ -230,7 +230,7 @@ namespace Sep490_Backend.Services.CustomerService
                 errors.Add(new ResponseError
                 {
                     Message = Message.CustomerMessage.TAX_CODE_DUPLICATE,
-                    Field = nameof(model.CustomerCode)
+                    Field = nameof(model.TaxCode)
                 });
             }
             if (data.FirstOrDefault(t => t.Fax == model.Fax) != null)
