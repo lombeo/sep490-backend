@@ -64,7 +64,8 @@ namespace Sep490_Backend.Services.ProjectService
             }
             var data = await _dataService.ListProject(new SearchProjectDTO()
             {
-                ActionBy = actionBy
+                ActionBy = actionBy,
+                PageSize = int.MaxValue
             });
             var result = data.FirstOrDefault(t => t.Id == id);
             if (result == null)
@@ -83,7 +84,8 @@ namespace Sep490_Backend.Services.ProjectService
 
             var data = await _dataService.ListProject(new SearchProjectDTO()
             {
-                ActionBy = actionBy
+                ActionBy = actionBy,
+                PageSize = int.MaxValue
             });
             var result = new ListProjectStatusDTO
             {
@@ -108,7 +110,8 @@ namespace Sep490_Backend.Services.ProjectService
 
             var customer = await _dataService.ListCustomer(new DTO.Customer.CustomerSearchDTO
             {
-                ActionBy = actionBy
+                ActionBy = actionBy,
+                PageSize = int.MaxValue
             });
             var data = _context.Projects.Where(t => !t.Deleted).ToList();
             if (model.StartDate < model.EndDate)

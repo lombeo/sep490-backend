@@ -81,7 +81,8 @@ namespace Sep490_Backend.Services.ContractService
 
             var data = await _dataService.ListContract(new SearchContractDTO()
             {
-                ActionBy = actionBy
+                ActionBy = actionBy,
+                PageSize = int.MaxValue
             });
 
             var result = data.FirstOrDefault(t => t.Id == id);
@@ -103,7 +104,8 @@ namespace Sep490_Backend.Services.ContractService
 
             var project = await _dataService.ListProject(new DTO.Project.SearchProjectDTO
             {
-                ActionBy = model.ActionBy
+                ActionBy = model.ActionBy,
+                PageSize = int.MaxValue
             });
             var data = _context.Contracts.Where(t => !t.Deleted).ToList();
 

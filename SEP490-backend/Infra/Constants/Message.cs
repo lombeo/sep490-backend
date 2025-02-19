@@ -86,6 +86,8 @@ namespace Sep490_Backend.Infra.Constants
             public const string CUSTOMER_NOT_FOUND = "E-CUSTOMER-001"; //Customer not found.
             public const string CUSTOMER_CODE_DUPLICATE = "E-CUSTOMER-002"; //Customer code can't be duplicated
             public const string CUSTOMER_EMAIL_DUPLICATE = "E-CUSTOMER-003"; //Customer email can't be duplicated
+            public const string FAX_CODE_DUPLICATE = "E-CUSTOMER-004";
+            public const string BANK_ACCOUNT_DUPLICATE = "E-CUSTOMER-005";
         }
 
         public static class ProjectMessage
