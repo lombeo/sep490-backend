@@ -113,13 +113,37 @@ namespace Sep490_Backend.Services.CustomerService
                     });
             }
 
-            var data = await _dataService.ListCustomer(new CustomerSearchDTO() { ActionBy = actionBy, PageSize = int.MaxValue});
+            var data = await _dataService.ListCustomer(new CustomerSearchDTO() { ActionBy = actionBy, PageSize = int.MaxValue });
             if (data.FirstOrDefault(t => t.CustomerCode == model.CustomerCode) != null)
             {
                 errors.Add(new ResponseError
                 {
                     Message = Message.CustomerMessage.CUSTOMER_CODE_DUPLICATE,
                     Field = nameof(model.CustomerCode)
+                });
+            }
+            if (data.FirstOrDefault(t => t.TaxCode == model.TaxCode) != null)
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CustomerMessage.TAX_CODE_DUPLICATE,
+                    Field = nameof(model.CustomerCode)
+                });
+            }
+            if (data.FirstOrDefault(t => t.Fax == model.Fax) != null)
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CustomerMessage.FAX_CODE_DUPLICATE,
+                    Field = nameof(model.Fax)
+                });
+            }
+            if (data.FirstOrDefault(t => t.BankAccount == model.BankAccount) != null)
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CustomerMessage.BANK_ACCOUNT_DUPLICATE,
+                    Field = nameof(model.BankAccount)
                 });
             }
             if (data.FirstOrDefault(t => t.Email == model.Email) != null)
@@ -198,6 +222,14 @@ namespace Sep490_Backend.Services.CustomerService
                 errors.Add(new ResponseError
                 {
                     Message = Message.CustomerMessage.CUSTOMER_CODE_DUPLICATE,
+                    Field = nameof(model.CustomerCode)
+                });
+            }
+            if (data.FirstOrDefault(t => t.TaxCode == model.TaxCode) != null)
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CustomerMessage.TAX_CODE_DUPLICATE,
                     Field = nameof(model.CustomerCode)
                 });
             }
