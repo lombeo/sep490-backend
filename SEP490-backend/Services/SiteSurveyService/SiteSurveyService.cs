@@ -76,7 +76,8 @@ namespace Sep490_Backend.Services.SiteSurveyService
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
-            var project = await _context.Projects.FirstOrDefaultAsync(t => t.Id == model.ProjectId);
+            var projectList = await _dataService.ListProject(new DTO.Project.SearchProjectDTO { ActionBy = actionBy, PageSize = int.MaxValue });
+            var project = projectList.FirstOrDefault(t => t.Id == model.ProjectId);
             if (project == null)
             {
                 throw new KeyNotFoundException(Message.SiteSurveyMessage.PROJECT_NOT_FOUND);
