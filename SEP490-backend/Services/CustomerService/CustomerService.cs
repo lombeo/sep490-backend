@@ -147,6 +147,30 @@ namespace Sep490_Backend.Services.CustomerService
                     Field = nameof(model.BankAccount).ToCamelCase()
                 });
             }
+            if (data.FirstOrDefault(t => t.TaxCode == model.TaxCode) != null)
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CustomerMessage.TAX_CODE_DUPLICATE,
+                    Field = nameof(model.CustomerCode)
+                });
+            }
+            if (data.FirstOrDefault(t => t.Fax == model.Fax) != null)
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CustomerMessage.FAX_CODE_DUPLICATE,
+                    Field = nameof(model.Fax)
+                });
+            }
+            if (data.FirstOrDefault(t => t.BankAccount == model.BankAccount) != null)
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CustomerMessage.BANK_ACCOUNT_DUPLICATE,
+                    Field = nameof(model.BankAccount)
+                });
+            }
             if (data.FirstOrDefault(t => t.Email == model.Email) != null)
             {
                 errors.Add(new ResponseError
@@ -248,6 +272,30 @@ namespace Sep490_Backend.Services.CustomerService
                 {
                     Message = Message.CustomerMessage.BANK_ACCOUNT_DUPLICATE,
                     Field = nameof(model.BankAccount).ToCamelCase()
+                });
+            }
+            if (data.FirstOrDefault(t => t.TaxCode == model.TaxCode) != null)
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CustomerMessage.TAX_CODE_DUPLICATE,
+                    Field = nameof(model.CustomerCode)
+                });
+            }
+            if (data.FirstOrDefault(t => t.Fax == model.Fax) != null)
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CustomerMessage.FAX_CODE_DUPLICATE,
+                    Field = nameof(model.Fax)
+                });
+            }
+            if (data.FirstOrDefault(t => t.BankAccount == model.BankAccount) != null)
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CustomerMessage.BANK_ACCOUNT_DUPLICATE,
+                    Field = nameof(model.BankAccount)
                 });
             }
             if (data.FirstOrDefault(t => t.Email == model.Email) != null)

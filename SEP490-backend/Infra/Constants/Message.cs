@@ -82,6 +82,7 @@ namespace Sep490_Backend.Infra.Constants
             public const string DELETE_CUSTOMER_SUCCESS = "S-CUS-002"; //Delete customer successfully!
             public const string CREATE_CUSTOMER_SUCCESS = "S-CUS-003"; //Create customer successfully!
             public const string UPDATE_CUSTOMER_SUCCESS = "S-CUS-004"; //Update customer successfully!
+          
             //Error
             public const string CUSTOMER_NOT_FOUND = "E-CUS-001"; //Customer not found.
             public const string CUSTOMER_CODE_DUPLICATE = "E-CUS-002"; //Customer code has already exist in the system.
@@ -113,6 +114,16 @@ namespace Sep490_Backend.Infra.Constants
             public const string SAVE_SUCCESS = "S-CTR-003"; //Save contract successfully!
             //Error
             public const string CONTRACT_CODE_EXIST = "E-CTR-001"; //Contract code has already exist
+        }
+
+        public static class ContractMessage
+        {
+            //Success
+            public const string SEARCH_SUCCESS = "S-CONTRACT-001"; //Search list contract successfully!
+            public const string DELETE_SUCCESS = "S-CONTRACT-002"; //Delete contract successfully!
+            public const string SAVE_SUCCESS = "S-CONTRACT-003"; //Save contract successfully!
+            //Error
+            public const string CONTRACT_CODE_EXIST = "E-CONTRACT-001"; //Contract code has already exist
         }
     }
 }

@@ -102,7 +102,7 @@ namespace Sep490_Backend.Services.ContractService
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
 
-            var project = await _dataService.ListProject(new DTO.Project.SearchProjectDTO
+            var project = await _dataService.ListProject(new SearchProjectDTO
             {
                 ActionBy = model.ActionBy,
                 PageSize = int.MaxValue

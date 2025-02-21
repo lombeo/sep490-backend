@@ -41,6 +41,7 @@ namespace Sep490_Backend.Controllers
         [HttpPost("save-contract")]
         public async Task<ResponseDTO<ContractDTO>> SaveContract([FromBody] SaveContractDTO model)
         {
+            model.ActionBy = UserId;
             return await HandleException(_contractService.Save(model), Message.ContractMessage.SAVE_SUCCESS);
         }
 
