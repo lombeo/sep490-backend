@@ -114,6 +114,7 @@ namespace Sep490_Backend.Services.ProjectService
                 PageSize = int.MaxValue
             });
             var data = _context.Projects.Where(t => !t.Deleted).ToList();
+
             if (model.StartDate > model.EndDate)
             {
                 throw new ArgumentException(Message.ProjectMessage.INVALID_DATE);

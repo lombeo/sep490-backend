@@ -66,43 +66,54 @@ namespace Sep490_Backend.Infra.Constants
         public static class SiteSurveyMessage
         {
             //Success
-            public const string SEARCH_SUCCESS = "S-SURVEY-001"; //Search list site survey successfully!
-            public const string DELETE_SUCCESS = "S-SURVEY-002";
-            public const string SAVE_SUCCESS = "S-SURVEY-003";
-            public const string GET_DETAIL_SUCCESS = "S-SURVEY-004";
+            public const string SEARCH_SUCCESS = "S-SUR-001"; //Search list site survey successfully!
+            public const string DELETE_SUCCESS = "S-SUR-002"; //Delete site survey successfully!
+            public const string SAVE_SUCCESS = "S-SUR-003"; //Save site survey successfully!
+            public const string GET_DETAIL_SUCCESS = "S-SUR-004"; //Get detail site survey successfully!
 
             //Error
-            public const string PROJECT_NOT_FOUND = "E-SURVEY-001";
+            public const string PROJECT_NOT_FOUND = "E-SUR-001"; //Project not found!
         }
 
         public static class CustomerMessage
         {
             //Success
-            public const string SEARCH_SUCCESS = "S-CUSTOMER-001"; //Search list customer successfully!
-            public const string DELETE_CUSTOMER_SUCCESS = "S-CUSTOMER-002"; //Delete customer successfully!
-            public const string CREATE_CUSTOMER_SUCCESS = "S-CUSTOMER-003"; //Create customer successfully!
-            public const string UPDATE_CUSTOMER_SUCCESS = "S-CUSTOMER-004"; //Update customer successfully!
+            public const string SEARCH_SUCCESS = "S-CUS-001"; //Search list customer successfully!
+            public const string DELETE_CUSTOMER_SUCCESS = "S-CUS-002"; //Delete customer successfully!
+            public const string CREATE_CUSTOMER_SUCCESS = "S-CUS-003"; //Create customer successfully!
+            public const string UPDATE_CUSTOMER_SUCCESS = "S-CUS-004"; //Update customer successfully!
+          
             //Error
-            public const string CUSTOMER_NOT_FOUND = "E-CUSTOMER-001"; //Customer not found.
-            public const string CUSTOMER_CODE_DUPLICATE = "E-CUSTOMER-002"; //Customer code can't be duplicated
-            public const string CUSTOMER_EMAIL_DUPLICATE = "E-CUSTOMER-003"; //Customer email can't be duplicated
-            public const string FAX_CODE_DUPLICATE = "E-CUSTOMER-004";
-            public const string TAX_CODE_DUPLICATE = "E-CUSTOMER-005";
-            public const string BANK_ACCOUNT_DUPLICATE = "E-CUSTOMER-006";
+            public const string CUSTOMER_NOT_FOUND = "E-CUS-001"; //Customer not found.
+            public const string CUSTOMER_CODE_DUPLICATE = "E-CUS-002"; //Customer code has already exist in the system.
+            public const string CUSTOMER_EMAIL_DUPLICATE = "E-CUS-003"; //Customer email has already exist in the system.
+            public const string FAX_CODE_DUPLICATE = "E-CUS-004"; //Fax code has already exist in the system.
+            public const string TAX_CODE_DUPLICATE = "E-CUS-005"; //Tax code has already exist in the system.
+            public const string BANK_ACCOUNT_DUPLICATE = "E-CUS-006"; //Bank account has already exist in the system.
         }
 
         public static class ProjectMessage
         {
             //Success
-            public const string SEARCH_SUCCESS = "S-PROJECT-001"; //Search list project successfully!
-            public const string DELETE_SUCCESS = "S-PROJECT-002"; //Delete project successfully!
-            public const string SAVE_SUCCESS = "S-PROJECT-003"; //Save project successfully!
-            public const string GET_LIST_STATUS_SUCCESS = "S-PROJECT-004"; //Get list status successfully!
-            public const string GET_DETAIL_SUCCESS = "S-PROJECT-005";
+            public const string SEARCH_SUCCESS = "S-PRJ-001"; //Search list project successfully!
+            public const string DELETE_SUCCESS = "S-PRJ-002"; //Delete project successfully!
+            public const string SAVE_SUCCESS = "S-PRJ-003"; //Save project successfully!
+            public const string GET_LIST_STATUS_SUCCESS = "S-PRJ-004"; //Get list status successfully!
+            public const string GET_DETAIL_SUCCESS = "S-PRJ-005"; //Get detail project successfully!
 
             //Error
-            public const string INVALID_DATE = "E-PROJECT-001"; //The end date cannot be before the start date.
-            public const string PROJECT_CODE_EXIST = "E-PROJECT-002"; //Project code has already exist!
+            public const string INVALID_DATE = "E-PRJ-001"; //The end date cannot be before the start date.
+            public const string PROJECT_CODE_EXIST = "E-PRJ-002"; //Project code has already exist!
+        }
+
+        public static class ContractMessage
+        {
+            //Success
+            public const string SEARCH_SUCCESS = "S-CTR-001"; //Search list contract successfully!
+            public const string DELETE_SUCCESS = "S-CTR-002"; //Delete contract successfully!
+            public const string SAVE_SUCCESS = "S-CTR-003"; //Save contract successfully!
+            //Error
+            public const string CONTRACT_CODE_EXIST = "E-CTR-001"; //Contract code has already exist
         }
 
         public static class ContractMessage

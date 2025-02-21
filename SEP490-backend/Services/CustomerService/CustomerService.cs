@@ -5,6 +5,7 @@ using Sep490_Backend.DTO.Customer;
 using Sep490_Backend.Infra;
 using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Infra.Entities;
+using Sep490_Backend.Infra.Helps;
 using Sep490_Backend.Services.AuthenService;
 using Sep490_Backend.Services.CacheService;
 using Sep490_Backend.Services.DataService;
@@ -87,7 +88,7 @@ namespace Sep490_Backend.Services.CustomerService
             // Model validation
             if (model == null)
             {
-                throw new ArgumentNullException(nameof(model));
+                throw new ArgumentNullException(nameof(model).ToCamelCase());
             }
             else
             {
@@ -95,21 +96,21 @@ namespace Sep490_Backend.Services.CustomerService
                     errors.Add(new ResponseError
                     {
                         Message = Message.CommonMessage.MISSING_PARAM,
-                        Field = nameof(model.CustomerCode)
+                        Field = nameof(model.CustomerCode).ToCamelCase()
                     });
 
                 if (string.IsNullOrWhiteSpace(model.CustomerName))
                     errors.Add(new ResponseError
                     {
                         Message = Message.CommonMessage.MISSING_PARAM,
-                        Field = nameof(model.CustomerName)
+                        Field = nameof(model.CustomerName).ToCamelCase()
                     });
 
                 if (string.IsNullOrWhiteSpace(model.Email) || !Regex.IsMatch(model.Email, PatternConst.EMAIL_PATTERN))
                     errors.Add(new ResponseError
                     {
                         Message = Message.AuthenMessage.INVALID_EMAIL,
-                        Field = nameof(model.Email)
+                        Field = nameof(model.Email).ToCamelCase()
                     });
             }
 
@@ -119,7 +120,31 @@ namespace Sep490_Backend.Services.CustomerService
                 errors.Add(new ResponseError
                 {
                     Message = Message.CustomerMessage.CUSTOMER_CODE_DUPLICATE,
-                    Field = nameof(model.CustomerCode)
+                    Field = nameof(model.CustomerCode).ToCamelCase()
+                });
+            }
+            if (data.FirstOrDefault(t => t.TaxCode == model.TaxCode) != null)
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CustomerMessage.TAX_CODE_DUPLICATE,
+                    Field = nameof(model.TaxCode).ToCamelCase()
+                });
+            }
+            if (data.FirstOrDefault(t => t.Fax == model.Fax) != null)
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CustomerMessage.FAX_CODE_DUPLICATE,
+                    Field = nameof(model.Fax).ToCamelCase()
+                });
+            }
+            if (data.FirstOrDefault(t => t.BankAccount == model.BankAccount) != null)
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CustomerMessage.BANK_ACCOUNT_DUPLICATE,
+                    Field = nameof(model.BankAccount).ToCamelCase()
                 });
             }
             if (data.FirstOrDefault(t => t.TaxCode == model.TaxCode) != null)
@@ -151,7 +176,7 @@ namespace Sep490_Backend.Services.CustomerService
                 errors.Add(new ResponseError
                 {
                     Message = Message.CustomerMessage.CUSTOMER_EMAIL_DUPLICATE,
-                    Field = nameof(model.Email)
+                    Field = nameof(model.Email).ToCamelCase()
                 });
             }
 
@@ -199,21 +224,21 @@ namespace Sep490_Backend.Services.CustomerService
                 errors.Add(new ResponseError
                 {
                     Message = Message.CommonMessage.MISSING_PARAM,
-                    Field = nameof(model.CustomerCode)
+                    Field = nameof(model.CustomerCode).ToCamelCase()
                 });
 
             if (string.IsNullOrWhiteSpace(model.CustomerName))
                 errors.Add(new ResponseError
                 {
                     Message = Message.CommonMessage.MISSING_PARAM,
-                    Field = nameof(model.CustomerName)
+                    Field = nameof(model.CustomerName).ToCamelCase()
                 });
 
             if (string.IsNullOrWhiteSpace(model.Email) || !Regex.IsMatch(model.Email, PatternConst.EMAIL_PATTERN))
                 errors.Add(new ResponseError
                 {
                     Message = Message.AuthenMessage.INVALID_EMAIL,
-                    Field = nameof(model.Email)
+                    Field = nameof(model.Email).ToCamelCase()
                 });
 
             var data = await _dataService.ListCustomer(new CustomerSearchDTO() { ActionBy = actionBy, PageSize = int.MaxValue});
@@ -222,7 +247,31 @@ namespace Sep490_Backend.Services.CustomerService
                 errors.Add(new ResponseError
                 {
                     Message = Message.CustomerMessage.CUSTOMER_CODE_DUPLICATE,
-                    Field = nameof(model.CustomerCode)
+                    Field = nameof(model.CustomerCode).ToCamelCase()
+                });
+            }
+            if (data.FirstOrDefault(t => t.TaxCode == model.TaxCode) != null)
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CustomerMessage.TAX_CODE_DUPLICATE,
+                    Field = nameof(model.TaxCode).ToCamelCase()
+                });
+            }
+            if (data.FirstOrDefault(t => t.Fax == model.Fax) != null)
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CustomerMessage.FAX_CODE_DUPLICATE,
+                    Field = nameof(model.Fax).ToCamelCase()
+                });
+            }
+            if (data.FirstOrDefault(t => t.BankAccount == model.BankAccount) != null)
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CustomerMessage.BANK_ACCOUNT_DUPLICATE,
+                    Field = nameof(model.BankAccount).ToCamelCase()
                 });
             }
             if (data.FirstOrDefault(t => t.TaxCode == model.TaxCode) != null)
@@ -254,7 +303,7 @@ namespace Sep490_Backend.Services.CustomerService
                 errors.Add(new ResponseError
                 {
                     Message = Message.CustomerMessage.CUSTOMER_EMAIL_DUPLICATE,
-                    Field = nameof(model.Email)
+                    Field = nameof(model.Email).ToCamelCase()
                 });
             }
 
