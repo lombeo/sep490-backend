@@ -115,15 +115,5 @@ namespace Sep490_Backend.Infra.Constants
             //Error
             public const string CONTRACT_CODE_EXIST = "E-CTR-001"; //Contract code has already exist
         }
-
-        public static class ContractMessage
-        {
-            //Success
-            public const string SEARCH_SUCCESS = "S-CONTRACT-001"; //Search list contract successfully!
-            public const string DELETE_SUCCESS = "S-CONTRACT-002"; //Delete contract successfully!
-            public const string SAVE_SUCCESS = "S-CONTRACT-003"; //Save contract successfully!
-            //Error
-            public const string CONTRACT_CODE_EXIST = "E-CONTRACT-001"; //Contract code has already exist
-        }
     }
 }
