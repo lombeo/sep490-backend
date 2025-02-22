@@ -85,34 +85,26 @@ namespace Sep490_Backend.Services.CustomerService
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
 
-            // Model validation
-            if (model == null)
-            {
-                throw new ArgumentNullException(nameof(model).ToCamelCase());
-            }
-            else
-            {
-                if (string.IsNullOrWhiteSpace(model.CustomerCode))
-                    errors.Add(new ResponseError
-                    {
-                        Message = Message.CommonMessage.MISSING_PARAM,
-                        Field = nameof(model.CustomerCode).ToCamelCase()
-                    });
+            if (string.IsNullOrWhiteSpace(model.CustomerCode))
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CommonMessage.MISSING_PARAM,
+                    Field = nameof(model.CustomerCode).ToCamelCase()
+                });
 
-                if (string.IsNullOrWhiteSpace(model.CustomerName))
-                    errors.Add(new ResponseError
-                    {
-                        Message = Message.CommonMessage.MISSING_PARAM,
-                        Field = nameof(model.CustomerName).ToCamelCase()
-                    });
+            if (string.IsNullOrWhiteSpace(model.TaxCode))
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CommonMessage.MISSING_PARAM,
+                    Field = nameof(model.TaxCode).ToCamelCase()
+                });
 
-                if (string.IsNullOrWhiteSpace(model.Email) || !Regex.IsMatch(model.Email, PatternConst.EMAIL_PATTERN))
-                    errors.Add(new ResponseError
-                    {
-                        Message = Message.AuthenMessage.INVALID_EMAIL,
-                        Field = nameof(model.Email).ToCamelCase()
-                    });
-            }
+            if (!string.IsNullOrWhiteSpace(model.Email) && !Regex.IsMatch(model.Email, PatternConst.EMAIL_PATTERN))
+                errors.Add(new ResponseError
+                {
+                    Message = Message.AuthenMessage.INVALID_EMAIL,
+                    Field = nameof(model.Email).ToCamelCase()
+                });
 
             var data = await _dataService.ListCustomer(new CustomerSearchDTO() { ActionBy = actionBy, PageSize = int.MaxValue });
             if (data.FirstOrDefault(t => t.CustomerCode == model.CustomerCode) != null)
@@ -131,7 +123,7 @@ namespace Sep490_Backend.Services.CustomerService
                     Field = nameof(model.TaxCode).ToCamelCase()
                 });
             }
-            if (data.FirstOrDefault(t => t.Fax == model.Fax) != null)
+            if (!string.IsNullOrWhiteSpace(model.Fax) && data.FirstOrDefault(t => t.Fax == model.Fax) != null)
             {
                 errors.Add(new ResponseError
                 {
@@ -139,7 +131,7 @@ namespace Sep490_Backend.Services.CustomerService
                     Field = nameof(model.Fax).ToCamelCase()
                 });
             }
-            if (data.FirstOrDefault(t => t.BankAccount == model.BankAccount) != null)
+            if (!string.IsNullOrWhiteSpace(model.BankAccount) && data.FirstOrDefault(t => t.BankAccount == model.BankAccount) != null)
             {
                 errors.Add(new ResponseError
                 {
@@ -147,31 +139,7 @@ namespace Sep490_Backend.Services.CustomerService
                     Field = nameof(model.BankAccount).ToCamelCase()
                 });
             }
-            if (data.FirstOrDefault(t => t.TaxCode == model.TaxCode) != null)
-            {
-                errors.Add(new ResponseError
-                {
-                    Message = Message.CustomerMessage.TAX_CODE_DUPLICATE,
-                    Field = nameof(model.CustomerCode)
-                });
-            }
-            if (data.FirstOrDefault(t => t.Fax == model.Fax) != null)
-            {
-                errors.Add(new ResponseError
-                {
-                    Message = Message.CustomerMessage.FAX_CODE_DUPLICATE,
-                    Field = nameof(model.Fax)
-                });
-            }
-            if (data.FirstOrDefault(t => t.BankAccount == model.BankAccount) != null)
-            {
-                errors.Add(new ResponseError
-                {
-                    Message = Message.CustomerMessage.BANK_ACCOUNT_DUPLICATE,
-                    Field = nameof(model.BankAccount)
-                });
-            }
-            if (data.FirstOrDefault(t => t.Email == model.Email) != null)
+            if (!string.IsNullOrWhiteSpace(model.Email) && data.FirstOrDefault(t => t.Email == model.Email) != null)
             {
                 errors.Add(new ResponseError
                 {
@@ -187,10 +155,10 @@ namespace Sep490_Backend.Services.CustomerService
             var customer = new Customer
             {
                 CustomerCode = model.CustomerCode,
-                CustomerName = model.CustomerName,
+                CustomerName = model.CustomerName ?? "",
                 Email = model.Email ?? "",
                 Phone = model.Phone ?? "",
-                TaxCode = model.TaxCode ?? "",
+                TaxCode = model.TaxCode,
                 Fax = model.Fax ?? "",
                 Address = model.Address ?? "",
                 DirectorName = model.DirectorName ?? "",
@@ -227,21 +195,21 @@ namespace Sep490_Backend.Services.CustomerService
                     Field = nameof(model.CustomerCode).ToCamelCase()
                 });
 
-            if (string.IsNullOrWhiteSpace(model.CustomerName))
+            if (string.IsNullOrWhiteSpace(model.TaxCode))
                 errors.Add(new ResponseError
                 {
                     Message = Message.CommonMessage.MISSING_PARAM,
-                    Field = nameof(model.CustomerName).ToCamelCase()
+                    Field = nameof(model.TaxCode).ToCamelCase()
                 });
 
-            if (string.IsNullOrWhiteSpace(model.Email) || !Regex.IsMatch(model.Email, PatternConst.EMAIL_PATTERN))
+            if (!string.IsNullOrWhiteSpace(model.Email) && !Regex.IsMatch(model.Email, PatternConst.EMAIL_PATTERN))
                 errors.Add(new ResponseError
                 {
                     Message = Message.AuthenMessage.INVALID_EMAIL,
                     Field = nameof(model.Email).ToCamelCase()
                 });
 
-            var data = await _dataService.ListCustomer(new CustomerSearchDTO() { ActionBy = actionBy, PageSize = int.MaxValue});
+            var data = await _dataService.ListCustomer(new CustomerSearchDTO() { ActionBy = actionBy, PageSize = int.MaxValue });
             if (data.FirstOrDefault(t => t.CustomerCode == model.CustomerCode) != null)
             {
                 errors.Add(new ResponseError
@@ -258,7 +226,7 @@ namespace Sep490_Backend.Services.CustomerService
                     Field = nameof(model.TaxCode).ToCamelCase()
                 });
             }
-            if (data.FirstOrDefault(t => t.Fax == model.Fax) != null)
+            if (!string.IsNullOrWhiteSpace(model.Fax) && data.FirstOrDefault(t => t.Fax == model.Fax) != null)
             {
                 errors.Add(new ResponseError
                 {
@@ -266,7 +234,7 @@ namespace Sep490_Backend.Services.CustomerService
                     Field = nameof(model.Fax).ToCamelCase()
                 });
             }
-            if (data.FirstOrDefault(t => t.BankAccount == model.BankAccount) != null)
+            if (!string.IsNullOrWhiteSpace(model.BankAccount) && data.FirstOrDefault(t => t.BankAccount == model.BankAccount) != null)
             {
                 errors.Add(new ResponseError
                 {
@@ -274,31 +242,7 @@ namespace Sep490_Backend.Services.CustomerService
                     Field = nameof(model.BankAccount).ToCamelCase()
                 });
             }
-            if (data.FirstOrDefault(t => t.TaxCode == model.TaxCode) != null)
-            {
-                errors.Add(new ResponseError
-                {
-                    Message = Message.CustomerMessage.TAX_CODE_DUPLICATE,
-                    Field = nameof(model.CustomerCode)
-                });
-            }
-            if (data.FirstOrDefault(t => t.Fax == model.Fax) != null)
-            {
-                errors.Add(new ResponseError
-                {
-                    Message = Message.CustomerMessage.FAX_CODE_DUPLICATE,
-                    Field = nameof(model.Fax)
-                });
-            }
-            if (data.FirstOrDefault(t => t.BankAccount == model.BankAccount) != null)
-            {
-                errors.Add(new ResponseError
-                {
-                    Message = Message.CustomerMessage.BANK_ACCOUNT_DUPLICATE,
-                    Field = nameof(model.BankAccount)
-                });
-            }
-            if (data.FirstOrDefault(t => t.Email == model.Email) != null)
+            if (!string.IsNullOrWhiteSpace(model.Email) && data.FirstOrDefault(t => t.Email == model.Email) != null)
             {
                 errors.Add(new ResponseError
                 {
@@ -329,7 +273,5 @@ namespace Sep490_Backend.Services.CustomerService
             _ = _cacheService.DeleteAsync(RedisCacheKey.CUSTOMER_CACHE_KEY);
             return existCustomer;
         }
-
-
     }
 }
