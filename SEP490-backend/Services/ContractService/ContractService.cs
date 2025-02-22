@@ -102,12 +102,24 @@ namespace Sep490_Backend.Services.ContractService
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
 
-            var project = await _dataService.ListProject(new SearchProjectDTO
+            var projectList = await _dataService.ListProject(new SearchProjectDTO
             {
                 ActionBy = model.ActionBy,
                 PageSize = int.MaxValue
             });
             var data = _context.Contracts.Where(t => !t.Deleted).ToList();
+
+            var project = projectList.FirstOrDefault(t => t.Id == model.ProjectId);
+
+            if(project == null)
+            {
+                throw new KeyNotFoundException(Message.SiteSurveyMessage.PROJECT_NOT_FOUND);
+            }
+
+            if(model.StartDate > model.EndDate)
+            {
+                throw new ArgumentException(Message.ProjectMessage.INVALID_DATE);
+            }
 
             var contract = new Contract()
             {
@@ -165,7 +177,7 @@ namespace Sep490_Backend.Services.ContractService
             {
                 Id = contract.Id,
                 ContractCode = contract.ContractCode,
-                Project = project.FirstOrDefault(p => p.Id == contract.ProjectId) ?? new ProjectDTO(),
+                Project = project,
                 StartDate = contract.StartDate,
                 EndDate = contract.EndDate,
                 EstimatedDays = contract.EstimatedDays,
