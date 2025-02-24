@@ -21,6 +21,7 @@ using Sep490_Backend.Services.CustomerService;
 using Sep490_Backend.Services.ProjectService;
 using Sep490_Backend.Services.ContractService;
 using Sep490_Backend.Services.DataService;
+using Sep490_Backend.Services.MaterialService;
 
 namespace Sep490_Backend
 {
@@ -62,6 +63,7 @@ namespace Sep490_Backend
             builder.Services.AddScoped<IProjectService, ProjectService>();
             builder.Services.AddScoped<IContractService, ContractService>();
             builder.Services.AddScoped<IDataService, DataService>();
+            builder.Services.AddScoped<IMaterialService, MaterialService>(); 
             builder.Services.AddScoped<RedisConnManager>();
             builder.Services.AddHostedService<DefaultBackgroundService>();
 

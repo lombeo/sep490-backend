@@ -25,6 +25,7 @@ namespace Sep490_Backend.Infra
         public virtual DbSet<ContractDetail> ContractDetails { get; set; }
         public virtual DbSet<Vehicle> Vehicles { get; set; }
         public virtual DbSet<Customer> Customers { get; set; }
+        public virtual DbSet<Material> Materials { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -38,6 +39,7 @@ namespace Sep490_Backend.Infra
             ContractDetailConfiguration.Config(modelBuilder);
             VehicleConfiguration.Config(modelBuilder);
             CustomerConfiguration.Config(modelBuilder);
+            MaterialConfiguration.Config(modelBuilder);
             //OnModelCreatingPartial(modelBuilder);
         }
 

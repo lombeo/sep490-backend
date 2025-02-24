@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Sep490_Backend.DTO.Admin;
 using Sep490_Backend.DTO.Contract;
 using Sep490_Backend.DTO.Customer;
+using Sep490_Backend.DTO.Material;
 using Sep490_Backend.DTO.Project;
 using Sep490_Backend.DTO.SiteSurvey;
 using Sep490_Backend.Infra;
@@ -20,6 +21,7 @@ namespace Sep490_Backend.Services.DataService
         Task<List<Customer>> ListCustomer(CustomerSearchDTO model);
         Task<List<ProjectDTO>> ListProject(SearchProjectDTO model);
         Task<List<SiteSurvey>> ListSiteSurvey(SearchSiteSurveyDTO model);
+        Task<List<Material>> ListMaterial(MaterialSearchDTO model);
     }
 
     public class DataService : IDataService
@@ -45,7 +47,7 @@ namespace Sep490_Backend.Services.DataService
             string cacheKey = RedisCacheKey.CUSTOMER_CACHE_KEY;
             var data = await _cacheService.GetAsync<List<ContractDTO>>(cacheKey);
 
-            if(data == null)
+            if (data == null)
             {
                 var project = await ListProject(new SearchProjectDTO()
                 {
@@ -80,15 +82,15 @@ namespace Sep490_Backend.Services.DataService
                                     || t.Project.ProjectName.ToLower().Trim().Contains(model.KeyWord.ToLower().Trim())).ToList();
             }
 
-            if(model.ProjectId != 0)
+            if (model.ProjectId != 0)
             {
                 data = data.Where(t => t.Project.Id == model.ProjectId).ToList();
             }
-            if(model.Status != null)
+            if (model.Status != null)
             {
                 data = data.Where(t => t.Status == model.Status).ToList();
             }
-            if(model.SignDate != null)
+            if (model.SignDate != null)
             {
                 data = data.Where(t => t.SignDate == model.SignDate).ToList();
             }
@@ -262,6 +264,34 @@ namespace Sep490_Backend.Services.DataService
             }
 
             return data;
+        }
+        public async Task<List<Material>> ListMaterial(MaterialSearchDTO model)
+        {
+            if (!_helpService.IsInRole(model.ActionBy, new List<string> { RoleConstValue.RESOURCE_MANAGER, RoleConstValue.EXECUTIVE_BOARD }))
+            {
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+            }
+
+            string cacheKey = RedisCacheKey.MATERIAL_CACHE_KEY;
+            var materialCacheList = await _cacheService.GetAsync<List<Material>>(cacheKey);
+            if (materialCacheList == null)
+            {
+                materialCacheList = await _context.Materials.Where(c => !c.Deleted).ToListAsync();
+                _ = _cacheService.SetAsync(cacheKey, materialCacheList);
+            }
+            if (!string.IsNullOrEmpty(model.KeyWord))
+            {
+                materialCacheList = materialCacheList.Where(t => t.MaterialCode.ToLower().Trim().Contains(model.KeyWord.ToLower().Trim())
+                                || t.MaterialName.ToLower().Trim().Contains(model.KeyWord.ToLower().Trim())
+                                || t.MadeIn.ToLower().Trim().Contains(model.KeyWord.ToLower().Trim())).ToList();
+            }
+            model.Total = materialCacheList.Count();
+            if(model.PageSize > 0)
+            {
+                materialCacheList = materialCacheList.Skip(model.Skip).Take(model.PageSize).ToList();
+            }
+
+            return materialCacheList;
         }
     }
 }

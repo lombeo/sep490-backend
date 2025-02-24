@@ -115,5 +115,19 @@ namespace Sep490_Backend.Infra.Constants
             //Error
             public const string CONTRACT_CODE_EXIST = "E-CTR-001"; //Contract code has already exist
         }
+
+        public static class MaterialMessage
+        {
+            //Sucess
+            public const string SEARCH_SUCCESS = "S-MAT-001"; //Search list material successfully!
+            public const string DELETE_SUCCESS = "S-MAT-002"; //Delete material successfully!
+            public const string CREATE_SUCCESS = "S-MAT-003"; //Create material successfully!
+            public const string SAVE_SUCCESS = "S-MAT-004"; //Save material successfully!
+            public const string GET_DETAIL_SUCCESS = "S-MAT-005"; //Get detail material successfully!
+
+            //Error
+            public const string MATERIAL_NOT_FOUND = "E-MAT-001"; //Material not found.
+            public const string MATERIAL_CODE_DUPLICATE = "E-MAT-002"; //Material code has already exist in the system.
+        }
     }
 }
