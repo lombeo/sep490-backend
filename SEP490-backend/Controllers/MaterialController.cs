@@ -44,7 +44,7 @@ namespace Sep490_Backend.Controllers
             return await HandleException(_materialService.CreateMaterial(model, UserId), Message.MaterialMessage.CREATE_SUCCESS);
         }
 
-        [HttpPut("update-customer")]
+        [HttpPut("update-material")]
         public async Task<ResponseDTO<Material>> UpdateMaterial([FromBody] Material model)
         {
             return await HandleException(_materialService.UpdateMaterial(model, UserId), Message.MaterialMessage.SAVE_SUCCESS);
