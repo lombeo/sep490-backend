@@ -76,7 +76,17 @@ jobs:
       # Create environment file for deploy
       - name: Create environment file
         run: |
-          echo '${{ secrets.DOTNET_ENV_FILE }}' > ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/.env
+          cat > ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/.env << 'EOL'
+          DATABASE_CONNECTION_STRING=${{ secrets.DATABASE_CONNECTION_STRING }}
+          MAIL_PASSWORD=${{ secrets.MAIL_PASSWORD }}
+          JWT_VALID_ISSUER=${{ secrets.JWT_VALID_ISSUER }}
+          JWT_VALID_AUDIENCE=${{ secrets.JWT_VALID_AUDIENCE }}
+          JWT_CERTIFICATE_PATH=${{ secrets.JWT_CERTIFICATE_PATH }}
+          JWT_CERTIFICATE_PASSWORD=${{ secrets.JWT_CERTIFICATE_PASSWORD }}
+          GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_DRIVE_CREDENTIALS_JSON='${{ secrets.GOOGLE_DRIVE_CREDENTIALS_JSON }}'
+          EOL
 
       # Deploy to Azure WebApp
       - name: Deploy to Azure WebApp
