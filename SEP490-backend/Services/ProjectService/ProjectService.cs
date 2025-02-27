@@ -9,12 +9,14 @@ using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Services.CacheService;
 using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.HelperService;
+using Sep490_Backend.Services.GoogleDriveService;
+using Microsoft.AspNetCore.Http;
 
 namespace Sep490_Backend.Services.ProjectService
 {
     public interface IProjectService
     {
-        Task<ProjectDTO> Save(Project model, int actionBy);
+        Task<ProjectDTO> Save(SaveProjectDTO model, int actionBy);
         Task<int> Delete(int id, int actionBy);
         Task<ListProjectStatusDTO> ListProjectStatus(int actionBy);
         Task<ProjectDTO> Detail(int id, int actionBy);
@@ -26,13 +28,20 @@ namespace Sep490_Backend.Services.ProjectService
         private readonly ICacheService _cacheService;
         private readonly IHelperService _helperService;
         private readonly IDataService _dataService;
+        private readonly IGoogleDriveService _googleDriveService;
 
-        public ProjectService(BackendContext context, IDataService dataService, ICacheService cacheService, IHelperService helperService)
+        public ProjectService(
+            BackendContext context, 
+            IDataService dataService, 
+            ICacheService cacheService, 
+            IHelperService helperService,
+            IGoogleDriveService googleDriveService)
         {
             _context = context;
             _cacheService = cacheService;
             _helperService = helperService;
             _dataService = dataService;
+            _googleDriveService = googleDriveService;
         }
 
         public async Task<int> Delete(int id, int actionBy)
@@ -47,6 +56,21 @@ namespace Sep490_Backend.Services.ProjectService
             {
                 throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
+
+            // Delete attachment from Google Drive if exists
+            if (!string.IsNullOrEmpty(data.Attachment))
+            {
+                try
+                {
+                    await _googleDriveService.DeleteFilesByLinks(new List<string> { data.Attachment });
+                }
+                catch (Exception ex)
+                {
+                    // Log error but continue with deletion
+                    Console.WriteLine($"Failed to delete attachment: {ex.Message}");
+                }
+            }
+
             data.Deleted = true;
             _context.Update(data);
             await _context.SaveChangesAsync();
@@ -101,7 +125,7 @@ namespace Sep490_Backend.Services.ProjectService
             return result;
         }
 
-        public async Task<ProjectDTO> Save(Project model, int actionBy)
+        public async Task<ProjectDTO> Save(SaveProjectDTO model, int actionBy)
         {
             if (!_helperService.IsInRole(actionBy, RoleConstValue.BUSINESS_EMPLOYEE))
             {
@@ -123,6 +147,46 @@ namespace Sep490_Backend.Services.ProjectService
             {
                 throw new KeyNotFoundException(Message.CustomerMessage.CUSTOMER_NOT_FOUND);
             }
+
+            // Handle file attachment
+            string attachmentUrl = null; // Reset attachment URL
+            if (model.Id != 0)
+            {
+                // If this is an update, get the existing project to check old attachment
+                var existingProject = await _context.Projects.FirstOrDefaultAsync(t => t.Id == model.Id);
+                if (existingProject != null)
+                {
+                    attachmentUrl = existingProject.Attachment; // Keep existing attachment URL by default
+                }
+            }
+
+            if (model.Attachment != null)
+            {
+                // If there's an existing attachment and we're uploading a new one, delete the old one
+                if (!string.IsNullOrEmpty(attachmentUrl))
+                {
+                    try
+                    {
+                        await _googleDriveService.DeleteFilesByLinks(new List<string> { attachmentUrl });
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log error but continue with upload
+                        Console.WriteLine($"Failed to delete old attachment: {ex.Message}");
+                    }
+                }
+
+                // Upload new file
+                using (var stream = model.Attachment.OpenReadStream())
+                {
+                    attachmentUrl = await _googleDriveService.UploadFile(
+                        stream,
+                        model.Attachment.FileName,
+                        model.Attachment.ContentType
+                    );
+                }
+            }
+
             var project = new Project()
             {
                 ProjectName = model.ProjectName,
@@ -136,7 +200,7 @@ namespace Sep490_Backend.Services.ProjectService
                 EndDate = model.EndDate,
                 Budget = model.Budget,
                 Status = model.Status,
-                Attachment = model.Attachment,
+                Attachment = attachmentUrl,
                 Description = model.Description,
                 UpdatedAt = DateTime.UtcNow,
                 Updater = actionBy
@@ -156,9 +220,9 @@ namespace Sep490_Backend.Services.ProjectService
                 project.ProjectCode = model.ProjectCode;
                 project.CreatedAt = entity.CreatedAt;
                 project.Creator = entity.Creator;
+                project.Id = model.Id;
 
-                entity = project;
-                _context.Update(entity);
+                _context.Update(project);
             }
             else
             {
