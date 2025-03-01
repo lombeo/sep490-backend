@@ -11,6 +11,8 @@ using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.HelperService;
 using Sep490_Backend.Services.GoogleDriveService;
 using Microsoft.AspNetCore.Http;
+using Sep490_Backend.Infra.Helps;
+using Sep490_Backend.Controllers;
 
 namespace Sep490_Backend.Services.ProjectService
 {
@@ -132,6 +134,8 @@ namespace Sep490_Backend.Services.ProjectService
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
 
+            var errors = new List<ResponseError>();
+
             var customer = await _dataService.ListCustomer(new DTO.Customer.CustomerSearchDTO
             {
                 ActionBy = actionBy,
@@ -141,12 +145,23 @@ namespace Sep490_Backend.Services.ProjectService
 
             if (model.StartDate > model.EndDate)
             {
-                throw new ArgumentException(Message.ProjectMessage.INVALID_DATE);
+                errors.Add(new ResponseError
+                {
+                    Message = Message.ProjectMessage.INVALID_DATE,
+                    Field = nameof(model.StartDate).ToCamelCase() + ", " + nameof(model.EndDate).ToCamelCase()
+                });
             }
             if (customer.FirstOrDefault(t => t.Id == model.CustomerId) == null)
             {
-                throw new KeyNotFoundException(Message.CustomerMessage.CUSTOMER_NOT_FOUND);
+                errors.Add(new ResponseError
+                {
+                    Message = Message.CustomerMessage.CUSTOMER_NOT_FOUND,
+                    Field = nameof(model.CustomerId).ToCamelCase()
+                });
             }
+
+            if (errors.Count > 0)
+                throw new ValidationException(errors);
 
             // Handle file attachment
             string attachmentUrl = null; // Reset attachment URL
@@ -215,7 +230,13 @@ namespace Sep490_Backend.Services.ProjectService
                 }
                 if (data.FirstOrDefault(t => t.ProjectCode == model.ProjectCode && t.ProjectCode != entity.ProjectCode) != null)
                 {
-                    throw new ArgumentException(Message.ProjectMessage.PROJECT_CODE_EXIST);
+                    errors.Add(new ResponseError
+                    {
+                        Message = Message.ProjectMessage.PROJECT_CODE_EXIST,
+                        Field = nameof(model.ProjectCode).ToCamelCase()
+                    });
+                    if (errors.Count > 0)
+                        throw new ValidationException(errors);
                 }
                 project.ProjectCode = model.ProjectCode;
                 project.CreatedAt = entity.CreatedAt;
@@ -228,7 +249,13 @@ namespace Sep490_Backend.Services.ProjectService
             {
                 if (data.FirstOrDefault(t => t.ProjectCode == model.ProjectCode) != null)
                 {
-                    throw new ArgumentException(Message.ProjectMessage.PROJECT_CODE_EXIST);
+                    errors.Add(new ResponseError
+                    {
+                        Message = Message.ProjectMessage.PROJECT_CODE_EXIST,
+                        Field = nameof(model.ProjectCode).ToCamelCase()
+                    });
+                    if (errors.Count > 0)
+                        throw new ValidationException(errors);
                 }
 
                 project.ProjectCode = model.ProjectCode;
