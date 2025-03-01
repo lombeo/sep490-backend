@@ -10,6 +10,7 @@ using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Services.CacheService;
 using Sep490_Backend.Services.HelperService;
+using System.Text.Json;
 
 namespace Sep490_Backend.Services.DataService
 {
@@ -141,7 +142,11 @@ namespace Sep490_Backend.Services.DataService
             var data = await _cacheService.GetAsync<List<ProjectDTO>>(cacheKey);
             if (data == null)
             {
-                data = _context.Projects.Where(t => !t.Deleted).Select(t => new ProjectDTO
+                var projects = await _context.Projects
+                    .Where(t => !t.Deleted)
+                    .ToListAsync();
+
+                data = projects.Select(t => new ProjectDTO
                 {
                     Id = t.Id,
                     ProjectCode = t.ProjectCode,
@@ -156,7 +161,9 @@ namespace Sep490_Backend.Services.DataService
                     EndDate = t.EndDate,
                     Budget = t.Budget,
                     Status = t.Status,
-                    Attachment = t.Attachment,
+                    Attachments = t.Attachments != null ? 
+                        JsonSerializer.Deserialize<List<AttachmentInfo>>(t.Attachments.RootElement.ToString()) 
+                        : null,
                     Description = t.Description,
                     UpdatedAt = t.UpdatedAt,
                     Updater = t.Updater,

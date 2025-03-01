@@ -13,6 +13,7 @@ using Sep490_Backend.Services.GoogleDriveService;
 using Microsoft.AspNetCore.Http;
 using Sep490_Backend.Infra.Helps;
 using Sep490_Backend.Controllers;
+using System.Text.Json;
 
 namespace Sep490_Backend.Services.ProjectService
 {
@@ -59,17 +60,22 @@ namespace Sep490_Backend.Services.ProjectService
                 throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
 
-            // Delete attachment from Google Drive if exists
-            if (!string.IsNullOrEmpty(data.Attachment))
+            // Delete attachments from Google Drive if they exist
+            if (data.Attachments != null)
             {
                 try
                 {
-                    await _googleDriveService.DeleteFilesByLinks(new List<string> { data.Attachment });
+                    var attachments = System.Text.Json.JsonSerializer.Deserialize<List<AttachmentInfo>>(data.Attachments.RootElement.ToString());
+                    if (attachments != null && attachments.Any())
+                    {
+                        var linksToDelete = attachments.Select(a => a.WebContentLink).ToList();
+                        await _googleDriveService.DeleteFilesByLinks(linksToDelete);
+                    }
                 }
                 catch (Exception ex)
                 {
                     // Log error but continue with deletion
-                    Console.WriteLine($"Failed to delete attachment: {ex.Message}");
+                    Console.WriteLine($"Failed to delete attachments: {ex.Message}");
                 }
             }
 
@@ -163,42 +169,61 @@ namespace Sep490_Backend.Services.ProjectService
             if (errors.Count > 0)
                 throw new ValidationException(errors);
 
-            // Handle file attachment
-            string attachmentUrl = null; // Reset attachment URL
+            // Handle file attachments
+            List<AttachmentInfo> attachmentInfos = new List<AttachmentInfo>();
+            string existingAttachmentsJson = null;
+
             if (model.Id != 0)
             {
-                // If this is an update, get the existing project to check old attachment
+                // If this is an update, get the existing project to check old attachments
                 var existingProject = await _context.Projects.FirstOrDefaultAsync(t => t.Id == model.Id);
-                if (existingProject != null)
+                if (existingProject?.Attachments != null)
                 {
-                    attachmentUrl = existingProject.Attachment; // Keep existing attachment URL by default
+                    existingAttachmentsJson = existingProject.Attachments.RootElement.ToString();
+                    attachmentInfos = System.Text.Json.JsonSerializer.Deserialize<List<AttachmentInfo>>(existingAttachmentsJson);
                 }
             }
 
-            if (model.Attachment != null)
+            if (model.Attachments != null && model.Attachments.Any())
             {
-                // If there's an existing attachment and we're uploading a new one, delete the old one
-                if (!string.IsNullOrEmpty(attachmentUrl))
+                // If there are existing attachments and we're uploading new ones, delete the old ones
+                if (attachmentInfos.Any())
                 {
                     try
                     {
-                        await _googleDriveService.DeleteFilesByLinks(new List<string> { attachmentUrl });
+                        var linksToDelete = attachmentInfos.Select(a => a.WebContentLink).ToList();
+                        await _googleDriveService.DeleteFilesByLinks(linksToDelete);
+                        attachmentInfos.Clear();
                     }
                     catch (Exception ex)
                     {
                         // Log error but continue with upload
-                        Console.WriteLine($"Failed to delete old attachment: {ex.Message}");
+                        Console.WriteLine($"Failed to delete old attachments: {ex.Message}");
                     }
                 }
 
-                // Upload new file
-                using (var stream = model.Attachment.OpenReadStream())
+                // Upload new files
+                foreach (var file in model.Attachments)
                 {
-                    attachmentUrl = await _googleDriveService.UploadFile(
-                        stream,
-                        model.Attachment.FileName,
-                        model.Attachment.ContentType
-                    );
+                    using (var stream = file.OpenReadStream())
+                    {
+                        var uploadResult = await _googleDriveService.UploadFile(
+                            stream,
+                            file.FileName,
+                            file.ContentType
+                        );
+
+                        // Parse Google Drive response to get file ID
+                        var fileId = uploadResult.Split("id=").Last().Split("&").First();
+                        
+                        attachmentInfos.Add(new AttachmentInfo
+                        {
+                            Id = fileId,
+                            Name = file.FileName,
+                            WebViewLink = $"https://drive.google.com/file/d/{fileId}/view",
+                            WebContentLink = uploadResult
+                        });
+                    }
                 }
             }
 
@@ -215,7 +240,7 @@ namespace Sep490_Backend.Services.ProjectService
                 EndDate = model.EndDate,
                 Budget = model.Budget,
                 Status = model.Status,
-                Attachment = attachmentUrl,
+                Attachments = attachmentInfos.Any() ? JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(attachmentInfos)) : null,
                 Description = model.Description,
                 UpdatedAt = DateTime.UtcNow,
                 Updater = actionBy
@@ -283,7 +308,9 @@ namespace Sep490_Backend.Services.ProjectService
                 EndDate = project.EndDate,
                 Budget = project.Budget,
                 Status = project.Status,
-                Attachment = project.Attachment,
+                Attachments = project.Attachments != null ? 
+                    System.Text.Json.JsonSerializer.Deserialize<List<AttachmentInfo>>(project.Attachments.RootElement.ToString()) 
+                    : null,
                 Description = project.Description,
                 UpdatedAt = project.UpdatedAt,
                 Updater = project.Updater,
