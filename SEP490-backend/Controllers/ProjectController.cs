@@ -33,7 +33,7 @@ namespace Sep490_Backend.Controllers
         }
 
         [HttpPost("save")]
-        public async Task<ResponseDTO<ProjectDTO>> Save([FromForm] SaveProjectDTO model)
+        public async Task<ResponseDTO<ProjectDTO>> Save([FromBody] SaveProjectDTO model)
         {
             var result = await HandleException(_projectService.Save(model, UserId), Message.ProjectMessage.SAVE_SUCCESS);
             return result;
