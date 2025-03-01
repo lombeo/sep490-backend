@@ -1,8 +1,17 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Sep490_Backend.Infra.Enums;
+using System.Text.Json;
 
 namespace Sep490_Backend.Infra.Entities
 {
+    public class AttachmentInfo
+    {
+        public string Id { get; set; }
+        public string Name { get; set; }
+        public string WebViewLink { get; set; }
+        public string WebContentLink { get; set; }
+    }
+
     public class Project : CommonEntity
     {
         public int Id { get; set; }
@@ -18,9 +27,8 @@ namespace Sep490_Backend.Infra.Entities
         public DateTime EndDate { get; set; }
         public decimal Budget { get; set; }
         public ProjectStatusEnum Status { get; set; }
-        public string? Attachment { get; set; }
+        public JsonDocument? Attachments { get; set; }
         public string? Description { get; set; }
-
     }
 
     public static class ProjectConfiguration
@@ -65,8 +73,8 @@ namespace Sep490_Backend.Infra.Entities
                     .HasColumnType("text");
                 entity.Property(e => e.TechnicalReqs)
                     .HasColumnType("text");
-                entity.Property(e => e.Attachment)
-                    .HasColumnType("text");
+                entity.Property(e => e.Attachments)
+                    .HasColumnType("jsonb");
                 entity.Property(e => e.Description)
                     .HasColumnType("text");
 
@@ -75,5 +83,4 @@ namespace Sep490_Backend.Infra.Entities
             });
         }
     }
-
 }

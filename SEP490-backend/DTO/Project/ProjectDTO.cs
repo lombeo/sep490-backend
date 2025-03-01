@@ -1,5 +1,6 @@
 ﻿using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Infra.Enums;
+using System.Collections.Generic;
 
 namespace Sep490_Backend.DTO.Project
 {
@@ -18,7 +19,7 @@ namespace Sep490_Backend.DTO.Project
         public DateTime EndDate { get; set; }
         public decimal Budget { get; set; }
         public ProjectStatusEnum Status { get; set; }
-        public string? Attachment { get; set; }
+        public List<AttachmentInfo>? Attachments { get; set; }
         public string? Description { get; set; }
     }
 }
