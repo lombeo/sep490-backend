@@ -10,7 +10,7 @@ namespace Sep490_Backend.DTO.Project
         public string ProjectCode { get; set; }
         public string ProjectName { get; set; }
         public int CustomerId { get; set; }
-        public int ConstructType { get; set; }
+        public string ConstructType { get; set; }
         public string? Location { get; set; }
         public string? Area { get; set; }
         public string? Purpose { get; set; }

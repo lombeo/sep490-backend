@@ -248,7 +248,7 @@ namespace Sep490_Backend.Services.ProjectService
 
             if (model.Id != 0)
             {
-                var entity = data.FirstOrDefault(t => t.Id == model.Id);
+                var entity = await _context.Projects.FirstOrDefaultAsync(t => t.Id == model.Id);
                 if (entity == null)
                 {
                     throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
@@ -263,12 +263,27 @@ namespace Sep490_Backend.Services.ProjectService
                     if (errors.Count > 0)
                         throw new ValidationException(errors);
                 }
-                project.ProjectCode = model.ProjectCode;
-                project.CreatedAt = entity.CreatedAt;
-                project.Creator = entity.Creator;
-                project.Id = model.Id;
 
-                _context.Update(project);
+                // Update existing entity properties
+                entity.ProjectCode = model.ProjectCode;
+                entity.ProjectName = model.ProjectName;
+                entity.CustomerId = model.CustomerId;
+                entity.ConstructType = model.ConstructType;
+                entity.Location = model.Location;
+                entity.Area = model.Area;
+                entity.Purpose = model.Purpose;
+                entity.TechnicalReqs = model.TechnicalReqs;
+                entity.StartDate = model.StartDate;
+                entity.EndDate = model.EndDate;
+                entity.Budget = model.Budget;
+                entity.Status = model.Status;
+                entity.Attachments = attachmentInfos.Any() ? JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(attachmentInfos)) : null;
+                entity.Description = model.Description;
+                entity.UpdatedAt = DateTime.UtcNow;
+                entity.Updater = actionBy;
+
+                _context.Update(entity);
+                project = entity; // Use the updated entity for the return value
             }
             else
             {
