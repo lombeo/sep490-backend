@@ -69,7 +69,7 @@ namespace Sep490_Backend.Services.DataService
                     CreatedAt = t.CreatedAt,
                     Creator = t.Creator,
                     Deleted = t.Deleted
-                }).ToList();
+                }).OrderByDescending(t => t.UpdatedAt).ToList();
 
                 _ = _cacheService.SetAsync(cacheKey, data);
             }
@@ -114,7 +114,7 @@ namespace Sep490_Backend.Services.DataService
             var customerCacheList = await _cacheService.GetAsync<List<Customer>>(cacheKey);
             if (customerCacheList == null)
             {
-                customerCacheList = await _context.Customers.Where(c => !c.Deleted).ToListAsync();
+                customerCacheList = await _context.Customers.Where(c => !c.Deleted).OrderByDescending(t => t.UpdatedAt).ToListAsync();
                 _ = _cacheService.SetAsync(cacheKey, customerCacheList);
             }
             if (!string.IsNullOrWhiteSpace(model.Search))
@@ -170,7 +170,7 @@ namespace Sep490_Backend.Services.DataService
                     CreatedAt = t.CreatedAt,
                     Creator = t.Creator,
                     Deleted = t.Deleted
-                }).ToList();
+                }).OrderByDescending(t => t.UpdatedAt).ToList();
 
                 _ = _cacheService.SetAsync(cacheKey, data);
             }
@@ -211,7 +211,7 @@ namespace Sep490_Backend.Services.DataService
             var data = await _cacheService.GetAsync<List<SiteSurvey>>(cacheKey);
             if (data == null)
             {
-                data = await _context.SiteSurveys.Where(t => !t.Deleted).ToListAsync();
+                data = await _context.SiteSurveys.Where(t => !t.Deleted).OrderByDescending(t => t.UpdatedAt).ToListAsync();
                 _ = _cacheService.SetAsync(cacheKey, data);
             }
             if (!string.IsNullOrWhiteSpace(model.SiteSurveyName))
@@ -242,7 +242,7 @@ namespace Sep490_Backend.Services.DataService
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
 
-            data = data.OrderByDescending(t => t.CreatedAt).ToList();
+            data = data.OrderByDescending(t => t.UpdatedAt).ToList();
 
             if (!string.IsNullOrWhiteSpace(model.KeyWord))
             {
