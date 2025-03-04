@@ -20,6 +20,7 @@ namespace Sep490_Backend.Infra
         public virtual DbSet<RefreshToken> RefreshTokens { get; set; }
         public virtual DbSet<EmailTemplate> EmailTemplates { get; set; }
         public virtual DbSet<Project> Projects { get; set; }
+        public virtual DbSet<ProjectUser> ProjectUsers { get; set; }
         public virtual DbSet<SiteSurvey> SiteSurveys { get; set; }
         public virtual DbSet<Contract> Contracts { get; set; }
         public virtual DbSet<ContractDetail> ContractDetails { get; set; }
@@ -33,6 +34,7 @@ namespace Sep490_Backend.Infra
             RefreshTokenConfiguration.Config(modelBuilder);
             EmailTemplateConfiguration.Config(modelBuilder);
             ProjectConfiguration.Config(modelBuilder);
+            ProjectUserConfiguration.Config(modelBuilder);
             SiteSurveyConfiguration.Config(modelBuilder);
             ContractConfiguration.Config(modelBuilder);
             ContractDetailConfiguration.Config(modelBuilder);
