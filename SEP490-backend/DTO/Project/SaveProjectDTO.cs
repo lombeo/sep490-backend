@@ -21,5 +21,6 @@ namespace Sep490_Backend.DTO.Project
         public ProjectStatusEnum Status { get; set; }
         public List<IFormFile>? Attachments { get; set; }
         public string? Description { get; set; }
+        public List<int> ViewerUserIds { get; set; } = new List<int>();
     }
 }

@@ -54,38 +54,118 @@ namespace Sep490_Backend.Services.ProjectService
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
 
-            var data = await _context.Projects.FirstOrDefaultAsync(t => t.Id == id);
-            if (data == null)
+            var entity = await _context.Projects.FirstOrDefaultAsync(t => t.Id == id);
+            if (entity == null)
             {
                 throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
-
-            // Delete attachments from Google Drive if they exist
-            if (data.Attachments != null)
+            
+            // Kiểm tra xem người gọi có phải là người tạo project không
+            var projectCreator = await _context.ProjectUsers
+                .FirstOrDefaultAsync(pu => pu.ProjectId == id && pu.IsCreator && !pu.Deleted);
+                
+            if (projectCreator == null || projectCreator.UserId != actionBy)
             {
-                try
-                {
-                    var attachments = System.Text.Json.JsonSerializer.Deserialize<List<AttachmentInfo>>(data.Attachments.RootElement.ToString());
-                    if (attachments != null && attachments.Any())
-                    {
-                        var linksToDelete = attachments.Select(a => a.WebContentLink).ToList();
-                        await _googleDriveService.DeleteFilesByLinks(linksToDelete);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    // Log error but continue with deletion
-                    Console.WriteLine($"Failed to delete attachments: {ex.Message}");
-                }
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
 
-            data.Deleted = true;
-            _context.Update(data);
+            // Lấy tất cả các entity liên quan đến project để xóa mềm
+            
+            // 1. Xóa mềm toàn bộ SiteSurvey liên quan
+            var siteSurveys = await _context.SiteSurveys
+                .Where(t => t.ProjectId == id && !t.Deleted)
+                .ToListAsync();
+                
+            foreach (var survey in siteSurveys)
+            {
+                survey.Deleted = true;
+                survey.UpdatedAt = DateTime.UtcNow;
+                survey.Updater = actionBy;
+                _context.Update(survey);
+            }
+            
+            // 2. Xóa mềm toàn bộ Contract liên quan
+            var contracts = await _context.Contracts
+                .Where(c => c.ProjectId == id && !c.Deleted)
+                .ToListAsync();
+                
+            var contractIds = contracts.Select(c => c.Id).ToList();
+                
+            foreach (var contract in contracts)
+            {
+                contract.Deleted = true;
+                contract.UpdatedAt = DateTime.UtcNow;
+                contract.Updater = actionBy;
+                _context.Update(contract);
+            }
+            
+            // 3. Xóa mềm toàn bộ ContractDetail của các Contract liên quan
+            if (contractIds.Any())
+            {
+                var contractDetails = await _context.ContractDetails
+                    .Where(cd => contractIds.Contains(cd.ContractId) && !cd.Deleted)
+                    .ToListAsync();
+                    
+                foreach (var detail in contractDetails)
+                {
+                    detail.Deleted = true;
+                    detail.UpdatedAt = DateTime.UtcNow;
+                    detail.Updater = actionBy;
+                    _context.Update(detail);
+                }
+            }
+            
+            // 4. Xóa mềm toàn bộ ProjectUser liên quan
+            var projectUsers = await _context.ProjectUsers
+                .Where(pu => pu.ProjectId == id && !pu.Deleted)
+                .ToListAsync();
+                
+            foreach (var pu in projectUsers)
+            {
+                pu.Deleted = true;
+                pu.UpdatedAt = DateTime.UtcNow;
+                pu.Updater = actionBy;
+                _context.Update(pu);
+            }
+            
+            // 5. Cuối cùng, xóa mềm Project
+            entity.Deleted = true;
+            entity.UpdatedAt = DateTime.UtcNow;
+            entity.Updater = actionBy;
+            _context.Update(entity);
+
+            // Lấy tất cả người dùng liên quan đến project để xóa cache sau này
+            var relatedUsers = projectUsers.Select(pu => pu.UserId).ToList();
+
             await _context.SaveChangesAsync();
-
+            
+            // Xóa tất cả cache liên quan
+            
+            // 1. Xóa cache Project
             _ = _cacheService.DeleteAsync(RedisCacheKey.PROJECT_CACHE_KEY);
+            _ = _cacheService.DeleteAsync(RedisCacheKey.PROJECT_USER_CACHE_KEY);
+            
+            // 2. Xóa cache SiteSurvey nếu có
+            if (siteSurveys.Any())
+            {
+                _ = _cacheService.DeleteAsync(RedisCacheKey.SITE_SURVEY_CACHE_KEY);
+            }
+            
+            // 3. Xóa cache Contract nếu có
+            if (contracts.Any())
+            {
+                _ = _cacheService.DeleteAsync(RedisCacheKey.CONTRACT_CACHE_KEY);
+                _ = _cacheService.DeleteAsync(RedisCacheKey.CONTRACT_DETAIL_CACHE_KEY);
+            }
+            
+            // 4. Xóa cache của tất cả người liên quan
+            foreach (var userId in relatedUsers)
+            {
+                string userCacheKey = string.Format(RedisCacheKey.PROJECT_BY_USER_CACHE_KEY, userId);
+                _ = _cacheService.DeleteAsync(userCacheKey);
+            }
 
-            return data.Id;
+            return entity.Id;
         }
 
         public async Task<ProjectDTO> Detail(int id, int actionBy)
@@ -94,17 +174,82 @@ namespace Sep490_Backend.Services.ProjectService
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
-            var data = await _dataService.ListProject(new SearchProjectDTO()
+            
+            // Kiểm tra trong cache của người dùng trước
+            string userProjectCacheKey = string.Format(RedisCacheKey.PROJECT_BY_USER_CACHE_KEY, actionBy);
+            var userProjects = await _cacheService.GetAsync<List<ProjectDTO>>(userProjectCacheKey);
+            
+            if (userProjects != null)
             {
-                ActionBy = actionBy,
-                PageSize = int.MaxValue
-            });
-            var result = data.FirstOrDefault(t => t.Id == id);
-            if (result == null)
+                // Tìm project trong cache
+                var projectFromCache = userProjects.FirstOrDefault(p => p.Id == id);
+                if (projectFromCache != null)
+                {
+                    return projectFromCache;
+                }
+            }
+            
+            // Nếu không có trong cache, lấy từ database
+            var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == id && !p.Deleted);
+            if (project == null)
             {
                 throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
-            return result;
+            
+            // Kiểm tra quyền truy cập
+            var projectUser = await _context.ProjectUsers
+                .FirstOrDefaultAsync(pu => pu.ProjectId == id && pu.UserId == actionBy && !pu.Deleted);
+                
+            if (projectUser == null)
+            {
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+            }
+            
+            // Lấy danh sách người xem
+            var viewerIds = await _context.ProjectUsers
+                .Where(pu => pu.ProjectId == id && !pu.IsCreator && !pu.Deleted)
+                .Select(pu => pu.UserId)
+                .ToListAsync();
+                
+            // Lấy thông tin khách hàng
+            var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == project.CustomerId);
+            
+            var projectDTO = new ProjectDTO
+            {
+                Id = project.Id,
+                ProjectCode = project.ProjectCode,
+                ProjectName = project.ProjectName,
+                Customer = customer ?? new Customer(),
+                ConstructType = project.ConstructType,
+                Location = project.Location,
+                Area = project.Area,
+                Purpose = project.Purpose,
+                TechnicalReqs = project.TechnicalReqs,
+                StartDate = project.StartDate,
+                EndDate = project.EndDate,
+                Budget = project.Budget,
+                Status = project.Status,
+                Attachments = project.Attachments != null ? 
+                    System.Text.Json.JsonSerializer.Deserialize<List<AttachmentInfo>>(project.Attachments.RootElement.ToString()) 
+                    : null,
+                Description = project.Description,
+                UpdatedAt = project.UpdatedAt,
+                Updater = project.Updater,
+                CreatedAt = project.CreatedAt,
+                Creator = project.Creator,
+                Deleted = project.Deleted,
+                IsCreator = projectUser.IsCreator,
+                ViewerUserIds = viewerIds
+            };
+            
+            // Nếu userProjects đã có, thêm project vào cache
+            if (userProjects != null)
+            {
+                userProjects.Add(projectDTO);
+                _ = _cacheService.SetAsync(userProjectCacheKey, userProjects, TimeSpan.FromMinutes(30));
+            }
+            
+            return projectDTO;
         }
 
         public async Task<ListProjectStatusDTO> ListProjectStatus(int actionBy)
@@ -181,6 +326,15 @@ namespace Sep490_Backend.Services.ProjectService
                 {
                     existingAttachmentsJson = existingProject.Attachments.RootElement.ToString();
                     attachmentInfos = System.Text.Json.JsonSerializer.Deserialize<List<AttachmentInfo>>(existingAttachmentsJson);
+                }
+                
+                // Kiểm tra quyền truy cập - chỉ người tạo mới có quyền chỉnh sửa
+                var projectCreator = await _context.ProjectUsers
+                    .FirstOrDefaultAsync(pu => pu.ProjectId == model.Id && pu.IsCreator && !pu.Deleted);
+                
+                if (projectCreator == null || projectCreator.UserId != actionBy)
+                {
+                    throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
                 }
             }
 
@@ -284,6 +438,19 @@ namespace Sep490_Backend.Services.ProjectService
 
                 _context.Update(entity);
                 project = entity; // Use the updated entity for the return value
+                
+                // Xóa mềm danh sách người xem hiện tại
+                var currentViewers = await _context.ProjectUsers
+                    .Where(pu => pu.ProjectId == model.Id && !pu.IsCreator && !pu.Deleted)
+                    .ToListAsync();
+                
+                foreach (var viewer in currentViewers)
+                {
+                    viewer.Deleted = true;
+                    viewer.UpdatedAt = DateTime.UtcNow;
+                    viewer.Updater = actionBy;
+                    _context.Update(viewer);
+                }
             }
             else
             {
@@ -303,10 +470,68 @@ namespace Sep490_Backend.Services.ProjectService
                 project.Creator = actionBy;
 
                 await _context.AddAsync(project);
+                await _context.SaveChangesAsync(); // Lưu project trước để có Id
+                
+                // Thêm mới bản ghi người tạo
+                var creatorRecord = new ProjectUser
+                {
+                    ProjectId = project.Id,
+                    UserId = actionBy,
+                    IsCreator = true,
+                    CreatedAt = DateTime.UtcNow,
+                    Creator = actionBy,
+                    UpdatedAt = DateTime.UtcNow,
+                    Updater = actionBy,
+                    Deleted = false
+                };
+                
+                await _context.AddAsync(creatorRecord);
+            }
+            
+            // Thêm mới danh sách người được phép xem
+            foreach (var viewerId in model.ViewerUserIds.Distinct())
+            {
+                // Bỏ qua nếu là người tạo
+                if (viewerId == actionBy)
+                    continue;
+                    
+                var viewerRecord = new ProjectUser
+                {
+                    ProjectId = project.Id,
+                    UserId = viewerId,
+                    IsCreator = false,
+                    CreatedAt = DateTime.UtcNow,
+                    Creator = actionBy,
+                    UpdatedAt = DateTime.UtcNow,
+                    Updater = actionBy,
+                    Deleted = false
+                };
+                
+                await _context.AddAsync(viewerRecord);
             }
 
             await _context.SaveChangesAsync();
+            
+            // Xóa cache
             _ = _cacheService.DeleteAsync(RedisCacheKey.PROJECT_CACHE_KEY);
+            _ = _cacheService.DeleteAsync(RedisCacheKey.PROJECT_USER_CACHE_KEY);
+            
+            // Xóa cache của người tạo
+            string creatorCacheKey = string.Format(RedisCacheKey.PROJECT_BY_USER_CACHE_KEY, actionBy);
+            _ = _cacheService.DeleteAsync(creatorCacheKey);
+            
+            // Xóa cache của tất cả người xem
+            foreach (var viewerId in model.ViewerUserIds)
+            {
+                string viewerCacheKey = string.Format(RedisCacheKey.PROJECT_BY_USER_CACHE_KEY, viewerId);
+                _ = _cacheService.DeleteAsync(viewerCacheKey);
+            }
+            
+            // Lấy danh sách người xem
+            var viewerIds = await _context.ProjectUsers
+                .Where(pu => pu.ProjectId == project.Id && !pu.IsCreator && !pu.Deleted)
+                .Select(pu => pu.UserId)
+                .ToListAsync();
 
             return new ProjectDTO
             {
@@ -331,7 +556,9 @@ namespace Sep490_Backend.Services.ProjectService
                 Updater = project.Updater,
                 CreatedAt = project.CreatedAt,
                 Creator = project.Creator,
-                Deleted = project.Deleted
+                Deleted = project.Deleted,
+                IsCreator = true, // Người tạo luôn là true khi gọi Save
+                ViewerUserIds = viewerIds
             };
         }
     }

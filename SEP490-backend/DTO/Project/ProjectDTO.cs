@@ -21,5 +21,7 @@ namespace Sep490_Backend.DTO.Project
         public ProjectStatusEnum Status { get; set; }
         public List<AttachmentInfo>? Attachments { get; set; }
         public string? Description { get; set; }
+        public bool IsCreator { get; set; } = false;
+        public List<int> ViewerUserIds { get; set; } = new List<int>();
     }
 }

@@ -1,4 +1,6 @@
-﻿using Sep490_Backend.Infra.Enums;
+﻿using Microsoft.AspNetCore.Http;
+using Sep490_Backend.Infra.Enums;
+using System.Collections.Generic;
 
 namespace Sep490_Backend.DTO.Contract
 {
@@ -13,6 +15,7 @@ namespace Sep490_Backend.DTO.Contract
         public ContractStatusEnum Status { get; set; }
         public decimal Tax { get; set; }
         public DateTime SignDate { get; set; }
-        public string? Attachment { get; set; }
+        public List<IFormFile>? Attachments { get; set; }
+        public List<SaveContractDetailDTO> ContractDetails { get; set; } = new List<SaveContractDetailDTO>();
     }
 }
