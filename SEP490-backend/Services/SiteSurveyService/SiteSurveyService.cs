@@ -9,13 +9,15 @@ using Sep490_Backend.Infra.Helps;
 using Sep490_Backend.Services.CacheService;
 using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.HelperService;
-using System;
+using Sep490_Backend.Services.GoogleDriveService;
+using Microsoft.AspNetCore.Http;
+using System.Text.Json;
 
 namespace Sep490_Backend.Services.SiteSurveyService
 {
     public interface ISiteSurveyService
     {
-        Task<SiteSurvey> SaveSiteSurvey(SiteSurvey model, int actionBy);
+        Task<SiteSurvey> SaveSiteSurvey(SiteSurvey model, int actionBy, List<IFormFile> attachments = null);
         Task<int> DeleteSiteSurvey(int id, int actionBy);
         Task<SiteSurvey> GetSiteSurveyDetail(int id, int actionBy);
     }
@@ -26,17 +28,24 @@ namespace Sep490_Backend.Services.SiteSurveyService
         private readonly ICacheService _cacheService;
         private readonly IHelperService _helpService;
         private readonly IDataService _dataService;
+        private readonly IGoogleDriveService _googleDriveService;
 
         // Định nghĩa các key cache cho SiteSurvey
         private const string SITE_SURVEY_BY_PROJECT_CACHE_KEY = "SITE_SURVEY:PROJECT:{0}"; // Pattern: SITE_SURVEY:PROJECT:projectId
         private const string SITE_SURVEY_BY_USER_CACHE_KEY = "SITE_SURVEY:USER:{0}"; // Pattern: SITE_SURVEY:USER:userId
 
-        public SiteSurveyService(BackendContext context, IDataService dataService, ICacheService cacheService, IHelperService helpService)
+        public SiteSurveyService(
+            BackendContext context, 
+            IDataService dataService, 
+            ICacheService cacheService, 
+            IHelperService helpService,
+            IGoogleDriveService googleDriveService)
         {
             _context = context;
             _cacheService = cacheService;
             _helpService = helpService;
             _dataService = dataService;
+            _googleDriveService = googleDriveService;
         }
 
         public async Task<int> DeleteSiteSurvey(int id, int actionBy)
@@ -144,7 +153,7 @@ namespace Sep490_Backend.Services.SiteSurveyService
             return survey;
         }
 
-        public async Task<SiteSurvey> SaveSiteSurvey(SiteSurvey model, int actionBy)
+        public async Task<SiteSurvey> SaveSiteSurvey(SiteSurvey model, int actionBy, List<IFormFile> attachments = null)
         {
             var errors = new List<ResponseError>();
             
@@ -188,6 +197,64 @@ namespace Sep490_Backend.Services.SiteSurveyService
             if (errors.Count > 0)
                 throw new ValidationException(errors);
 
+            // Handle file attachments
+            List<AttachmentInfo> attachmentInfos = new List<AttachmentInfo>();
+            string existingAttachmentsJson = null;
+
+            if (model.Id != 0)
+            {
+                // If this is an update, get the existing site survey to check old attachments
+                var existingSurvey = await _context.SiteSurveys.FirstOrDefaultAsync(t => t.Id == model.Id);
+                if (existingSurvey?.Attachments != null)
+                {
+                    existingAttachmentsJson = existingSurvey.Attachments.RootElement.ToString();
+                    attachmentInfos = JsonSerializer.Deserialize<List<AttachmentInfo>>(existingAttachmentsJson);
+                }
+            }
+
+            if (attachments != null && attachments.Any())
+            {
+                // If there are existing attachments and we're uploading new ones, delete the old ones
+                if (attachmentInfos.Any())
+                {
+                    try
+                    {
+                        var linksToDelete = attachmentInfos.Select(a => a.WebContentLink).ToList();
+                        await _googleDriveService.DeleteFilesByLinks(linksToDelete);
+                        attachmentInfos.Clear();
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log error but continue with upload
+                        Console.WriteLine($"Failed to delete old attachments: {ex.Message}");
+                    }
+                }
+
+                // Upload new files
+                foreach (var file in attachments)
+                {
+                    using (var stream = file.OpenReadStream())
+                    {
+                        var uploadResult = await _googleDriveService.UploadFile(
+                            stream,
+                            file.FileName,
+                            file.ContentType
+                        );
+
+                        // Parse Google Drive response to get file ID
+                        var fileId = uploadResult.Split("id=").Last().Split("&").First();
+                        
+                        attachmentInfos.Add(new AttachmentInfo
+                        {
+                            Id = fileId,
+                            Name = file.FileName,
+                            WebViewLink = $"https://drive.google.com/file/d/{fileId}/view",
+                            WebContentLink = uploadResult
+                        });
+                    }
+                }
+            }
+
             var survey = new SiteSurvey
             {
                 Id = model.Id,
@@ -209,7 +276,7 @@ namespace Sep490_Backend.Services.SiteSurveyService
                 FinalProfit = model.FinalProfit,
                 Status = model.Status,
                 Comments = model.Comments,
-                Attachments = model.Attachments,
+                Attachments = attachmentInfos.Any() ? JsonDocument.Parse(JsonSerializer.Serialize(attachmentInfos)) : model.Attachments,
                 SurveyDate = model.SurveyDate,
                 UpdatedAt = DateTime.UtcNow,
                 Updater = actionBy,

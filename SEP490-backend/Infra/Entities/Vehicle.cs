@@ -21,6 +21,9 @@ namespace Sep490_Backend.Infra.Entities
         public int FuelTankVolume { get; set; }
         public string FuelUnit { get; set; }
         public string Attachment { get; set; }
+        
+        // Navigation property
+        public virtual User User { get; set; }
     }
 
     public static class VehicleConfiguration
@@ -86,6 +89,12 @@ namespace Sep490_Backend.Infra.Entities
 
                 entity.Property(e => e.Deleted)
                       .HasDefaultValue(false);
+
+                // Relationships
+                entity.HasOne(e => e.User)
+                      .WithMany(u => u.Vehicles)
+                      .HasForeignKey(e => e.Driver)
+                      .OnDelete(DeleteBehavior.Restrict);
             });
         }
     }

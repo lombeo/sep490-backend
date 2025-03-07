@@ -433,13 +433,7 @@ namespace Sep490_Backend.Services.DataService
         public async Task<List<User>> ListUser(AdminSearchUserDTO model)
         {
             var data = StaticVariable.UserMemory.ToList();
-            if (!_helpService.IsInRole(model.ActionBy, new List<string> { RoleConstValue.ADMIN }))
-            {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
-            }
-
             data = data.OrderByDescending(t => t.UpdatedAt).ToList();
-
             if (!string.IsNullOrWhiteSpace(model.KeyWord))
             {
                 data = data.Where(t => t.FullName.Contains(model.KeyWord) || t.Username.Contains(model.KeyWord) || t.Email.Contains(model.KeyWord) || t.Phone.Contains(model.KeyWord)).ToList();
@@ -456,14 +450,11 @@ namespace Sep490_Backend.Services.DataService
             {
                 data = data.Where(t => t.Dob == model.Dob).ToList();
             }
-
             model.Total = data.Count();
-
             if (model.PageSize > 0)
             {
                 data = data.Skip(model.Skip).Take(model.PageSize).ToList();
             }
-
             return data;
         }
     }

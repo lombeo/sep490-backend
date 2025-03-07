@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace Sep490_Backend.Infra.Entities
 {
@@ -23,8 +24,11 @@ namespace Sep490_Backend.Infra.Entities
         public decimal FinalProfit { get; set; }
         public int Status { get; set; }
         public string? Comments { get; set; }
-        public string? Attachments { get; set; }
+        public JsonDocument? Attachments { get; set; }
         public DateTime SurveyDate { get; set; }
+
+        // Navigation property
+        public virtual Project Project { get; set; }
     }
 
     public static class SiteSurveyConfiguration
@@ -77,11 +81,16 @@ namespace Sep490_Backend.Infra.Entities
                 entity.Property(e => e.Comments)
                       .HasColumnType("text");
                 entity.Property(e => e.Attachments)
-                      .HasColumnType("text");
+                      .HasColumnType("jsonb");
                 entity.Property(e => e.SiteSurveyName)
                       .HasMaxLength(200)
                       .IsRequired();
 
+                // Relationship
+                entity.HasOne(e => e.Project)
+                      .WithMany(p => p.SiteSurveys)
+                      .HasForeignKey(e => e.ProjectId)
+                      .OnDelete(DeleteBehavior.Cascade);
             });
         }
     }

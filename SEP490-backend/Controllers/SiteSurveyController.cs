@@ -40,9 +40,9 @@ namespace Sep490_Backend.Controllers
         }
 
         [HttpPost("save")]
-        public async Task<ResponseDTO<SiteSurvey>> SaveSiteSurvey([FromBody] SiteSurvey model)
+        public async Task<ResponseDTO<SiteSurvey>> SaveSiteSurvey([FromForm] SiteSurvey model, [FromForm] List<IFormFile> attachments = null)
         {
-            var result = await HandleException(_siteSurveyService.SaveSiteSurvey(model, UserId), Message.SiteSurveyMessage.SAVE_SUCCESS);
+            var result = await HandleException(_siteSurveyService.SaveSiteSurvey(model, UserId, attachments), Message.SiteSurveyMessage.SAVE_SUCCESS);
             return result;
         }
 

@@ -12,6 +12,9 @@ namespace Sep490_Backend.Infra.Entities
         public string Unit { get; set; }
         public decimal Quantity { get; set; }
         public decimal UnitPrice { get; set; }
+        
+        // Navigation property
+        public virtual Contract Contract { get; set; }
     }
 
     public static class ContractDetailConfiguration
@@ -50,6 +53,12 @@ namespace Sep490_Backend.Infra.Entities
 
                 entity.Property(e => e.Deleted)
                       .HasDefaultValue(false);
+
+                // Relationship
+                entity.HasOne(e => e.Contract)
+                      .WithMany(c => c.ContractDetails)
+                      .HasForeignKey(e => e.ContractId)
+                      .OnDelete(DeleteBehavior.Cascade);
             });
         }
     }

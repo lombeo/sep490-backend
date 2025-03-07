@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using System.Collections.Generic;
 
 namespace Sep490_Backend.Infra.Entities
 {
@@ -14,6 +15,11 @@ namespace Sep490_Backend.Infra.Entities
         public bool Gender { get; set; }
         public DateTime Dob { get; set; }
         public bool IsVerify { get; set; }
+        
+        // Navigation properties
+        public virtual ICollection<RefreshToken> RefreshTokens { get; set; }
+        public virtual ICollection<ProjectUser> ProjectUsers { get; set; }
+        public virtual ICollection<Vehicle> Vehicles { get; set; }
     }
 
     public static class UserAuthenConfiguration
@@ -39,6 +45,22 @@ namespace Sep490_Backend.Infra.Entities
                       .HasColumnType("timestamp without time zone");
                 entity.Property(e => e.Creator);
                 entity.Property(e => e.Updater);
+
+                // Relationships
+                entity.HasMany(e => e.RefreshTokens)
+                      .WithOne()
+                      .HasForeignKey(e => e.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasMany(e => e.ProjectUsers)
+                      .WithOne()
+                      .HasForeignKey(e => e.UserId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasMany(e => e.Vehicles)
+                      .WithOne()
+                      .HasForeignKey(e => e.Driver)
+                      .OnDelete(DeleteBehavior.Restrict);
             });
         }
     }

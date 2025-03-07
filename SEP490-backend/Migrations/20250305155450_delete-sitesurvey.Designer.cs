@@ -3,6 +3,7 @@ using System;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Sep490_Backend.Infra;
@@ -12,9 +13,11 @@ using Sep490_Backend.Infra;
 namespace Sep490_Backend.Migrations
 {
     [DbContext(typeof(BackendContext))]
-    partial class BackendContextModelSnapshot : ModelSnapshot
+    [Migration("20250305155450_delete-sitesurvey")]
+    partial class deletesitesurvey
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -76,9 +79,6 @@ namespace Sep490_Backend.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ProjectId")
-                        .IsUnique();
-
                     b.ToTable("Contracts", (string)null);
                 });
 
@@ -129,8 +129,6 @@ namespace Sep490_Backend.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("WorkCode");
-
-                    b.HasIndex("ContractId");
 
                     b.ToTable("ContractDetails", (string)null);
                 });
@@ -320,8 +318,6 @@ namespace Sep490_Backend.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CustomerId");
-
                     b.ToTable("Projects", (string)null);
                 });
 
@@ -363,8 +359,6 @@ namespace Sep490_Backend.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId");
-
                     b.HasIndex("ProjectId", "UserId");
 
                     b.ToTable("ProjectUsers", (string)null);
@@ -405,98 +399,6 @@ namespace Sep490_Backend.Migrations
                         .HasDatabaseName("ix_refresh_tokens_user_id");
 
                     b.ToTable("RefreshTokens", (string)null);
-                });
-
-            modelBuilder.Entity("Sep490_Backend.Infra.Entities.SiteSurvey", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<JsonDocument>("Attachments")
-                        .HasColumnType("jsonb");
-
-                    b.Property<double>("BidWinProb")
-                        .HasColumnType("double precision");
-
-                    b.Property<int>("BiddingDecision")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Comments")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ConstructionRequirements")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("CreatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<int>("Creator")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("Deleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<double>("DiscountRate")
-                        .HasColumnType("double precision");
-
-                    b.Property<string>("EquipmentRequirements")
-                        .HasColumnType("text");
-
-                    b.Property<decimal>("EstimatedExpenses")
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<decimal>("EstimatedProfits")
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<decimal>("FinalProfit")
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<string>("HumanResourceCapacity")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ProfitAssessment")
-                        .HasColumnType("text");
-
-                    b.Property<decimal>("ProjectCost")
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<int>("ProjectId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("RiskAssessment")
-                        .HasColumnType("text");
-
-                    b.Property<string>("SiteSurveyName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("SurveyDate")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<decimal>("TenderPackagePrice")
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<decimal>("TotalBidPrice")
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<int>("Updater")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId");
-
-                    b.ToTable("SiteSurveys", (string)null);
                 });
 
             modelBuilder.Entity("Sep490_Backend.Infra.Entities.User", b =>
@@ -660,123 +562,7 @@ namespace Sep490_Backend.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Driver");
-
                     b.ToTable("Vehicles", (string)null);
-                });
-
-            modelBuilder.Entity("Sep490_Backend.Infra.Entities.Contract", b =>
-                {
-                    b.HasOne("Sep490_Backend.Infra.Entities.Project", "Project")
-                        .WithOne("Contract")
-                        .HasForeignKey("Sep490_Backend.Infra.Entities.Contract", "ProjectId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Project");
-                });
-
-            modelBuilder.Entity("Sep490_Backend.Infra.Entities.ContractDetail", b =>
-                {
-                    b.HasOne("Sep490_Backend.Infra.Entities.Contract", "Contract")
-                        .WithMany("ContractDetails")
-                        .HasForeignKey("ContractId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Contract");
-                });
-
-            modelBuilder.Entity("Sep490_Backend.Infra.Entities.Project", b =>
-                {
-                    b.HasOne("Sep490_Backend.Infra.Entities.Customer", "Customer")
-                        .WithMany("Projects")
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Customer");
-                });
-
-            modelBuilder.Entity("Sep490_Backend.Infra.Entities.ProjectUser", b =>
-                {
-                    b.HasOne("Sep490_Backend.Infra.Entities.Project", "Project")
-                        .WithMany("ProjectUsers")
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Sep490_Backend.Infra.Entities.User", "User")
-                        .WithMany("ProjectUsers")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Project");
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("Sep490_Backend.Infra.Entities.RefreshToken", b =>
-                {
-                    b.HasOne("Sep490_Backend.Infra.Entities.User", "User")
-                        .WithMany("RefreshTokens")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("Sep490_Backend.Infra.Entities.SiteSurvey", b =>
-                {
-                    b.HasOne("Sep490_Backend.Infra.Entities.Project", "Project")
-                        .WithMany("SiteSurveys")
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Project");
-                });
-
-            modelBuilder.Entity("Sep490_Backend.Infra.Entities.Vehicle", b =>
-                {
-                    b.HasOne("Sep490_Backend.Infra.Entities.User", "User")
-                        .WithMany("Vehicles")
-                        .HasForeignKey("Driver")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("Sep490_Backend.Infra.Entities.Contract", b =>
-                {
-                    b.Navigation("ContractDetails");
-                });
-
-            modelBuilder.Entity("Sep490_Backend.Infra.Entities.Customer", b =>
-                {
-                    b.Navigation("Projects");
-                });
-
-            modelBuilder.Entity("Sep490_Backend.Infra.Entities.Project", b =>
-                {
-                    b.Navigation("Contract")
-                        .IsRequired();
-
-                    b.Navigation("ProjectUsers");
-
-                    b.Navigation("SiteSurveys");
-                });
-
-            modelBuilder.Entity("Sep490_Backend.Infra.Entities.User", b =>
-                {
-                    b.Navigation("ProjectUsers");
-
-                    b.Navigation("RefreshTokens");
-
-                    b.Navigation("Vehicles");
                 });
 #pragma warning restore 612, 618
         }
