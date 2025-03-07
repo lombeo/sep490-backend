@@ -248,10 +248,9 @@ namespace Sep490_Backend.Services.ContractService
             {
                 throw new KeyNotFoundException(Message.SiteSurveyMessage.PROJECT_NOT_FOUND);
             }
-            
+
             // Kiểm tra xem người dùng có phải là người tạo Project không
-            var isProjectCreator = await _context.ProjectUsers
-                .AnyAsync(pu => pu.ProjectId == model.ProjectId && pu.UserId == model.ActionBy && pu.IsCreator && !pu.Deleted);
+            var isProjectCreator = (project.Creator == model.ActionBy); 
                 
             if (!isProjectCreator)
             {
