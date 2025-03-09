@@ -118,15 +118,15 @@ namespace Sep490_Backend.Services.ContractService
 
         public async Task<ContractDTO> Detail(int id, int actionBy)
         {
-            // Kiểm tra vai trò người dùng
-            if (!_helpService.IsInRole(actionBy, new List<string>
-            {
-                RoleConstValue.EXECUTIVE_BOARD, RoleConstValue.BUSINESS_EMPLOYEE
-            }))
+            if (!_helpService.IsInRole(actionBy, new List<string> { RoleConstValue.BUSINESS_EMPLOYEE, RoleConstValue.EXECUTIVE_BOARD }))
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
-
+            
+            // Verificar si el usuario es Executive Board
+            var user = StaticVariable.UserMemory.FirstOrDefault(u => u.Id == actionBy);
+            bool isExecutiveBoard = user != null && user.Role == RoleConstValue.EXECUTIVE_BOARD;
+            
             // Kiểm tra trong cache của người dùng trước
             string userContractCacheKey = string.Format(CONTRACT_BY_USER_CACHE_KEY, actionBy);
             var userContracts = await _cacheService.GetAsync<List<ContractDTO>>(userContractCacheKey);
@@ -161,13 +161,17 @@ namespace Sep490_Backend.Services.ContractService
                 throw new KeyNotFoundException(Message.SiteSurveyMessage.PROJECT_NOT_FOUND);
             }
             
-            // Kiểm tra quyền truy cập
-            var hasAccess = await _context.ProjectUsers
-                .AnyAsync(pu => pu.ProjectId == contract.ProjectId && pu.UserId == actionBy && !pu.Deleted);
-                
-            if (!hasAccess)
+            // Si es Executive Board, permitir acceso sin restricciones
+            if (!isExecutiveBoard)
             {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+                // Kiểm tra quyền truy cập
+                var hasAccess = await _context.ProjectUsers
+                    .AnyAsync(pu => pu.ProjectId == contract.ProjectId && pu.UserId == actionBy && !pu.Deleted);
+                    
+                if (!hasAccess)
+                {
+                    throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+                }
             }
             
             // Lấy danh sách ContractDetail

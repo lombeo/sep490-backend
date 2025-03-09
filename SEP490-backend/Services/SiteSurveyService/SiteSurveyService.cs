@@ -128,6 +128,10 @@ namespace Sep490_Backend.Services.SiteSurveyService
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
 
+            // Verificar si el usuario es Executive Board
+            var user = StaticVariable.UserMemory.FirstOrDefault(u => u.Id == actionBy);
+            bool isExecutiveBoard = user != null && user.Role == RoleConstValue.EXECUTIVE_BOARD;
+
             // Kiểm tra cache theo user trước
             string userCacheKey = string.Format(SITE_SURVEY_BY_USER_CACHE_KEY, actionBy);
             var userSurveys = await _cacheService.GetAsync<List<SiteSurvey>>(userCacheKey);
@@ -148,6 +152,12 @@ namespace Sep490_Backend.Services.SiteSurveyService
                 throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
 
+            // Si es Executive Board, permitir acceso sin restricciones
+            if (isExecutiveBoard)
+            {
+                return survey;
+            }
+
             // Kiểm tra quyền truy cập (người dùng phải là thành viên của project chứa site survey này)
             var hasAccess = await _context.ProjectUsers
                 .AnyAsync(pu => pu.ProjectId == survey.ProjectId && pu.UserId == actionBy && !pu.Deleted);
@@ -155,18 +165,6 @@ namespace Sep490_Backend.Services.SiteSurveyService
             if (!hasAccess)
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
-            }
-
-            // Cập nhật cache nếu cần
-            if (userSurveys != null)
-            {
-                userSurveys.Add(survey);
-                _ = _cacheService.SetAsync(userCacheKey, userSurveys, TimeSpan.FromMinutes(30));
-            }
-            else
-            {
-                userSurveys = new List<SiteSurvey> { survey };
-                _ = _cacheService.SetAsync(userCacheKey, userSurveys, TimeSpan.FromMinutes(30));
             }
 
             return survey;
@@ -190,9 +188,9 @@ namespace Sep490_Backend.Services.SiteSurveyService
                 throw new KeyNotFoundException(Message.SiteSurveyMessage.PROJECT_NOT_FOUND);
             }
             
-            // Kiểm tra xem người dùng có phải là người tạo Project không
+            // Kiểm tra xem người dùng có phải là người trong Project không
             var isProjectCreator = await _context.ProjectUsers
-                .AnyAsync(pu => pu.ProjectId == model.ProjectId && pu.UserId == actionBy && pu.IsCreator && !pu.Deleted);
+                .AnyAsync(pu => pu.ProjectId == model.ProjectId && pu.UserId == actionBy && !pu.Deleted);
                 
             if (!isProjectCreator)
             {
