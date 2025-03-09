@@ -207,6 +207,7 @@ namespace Sep490_Backend.Services.ContractService
                 EstimatedDays = contract.EstimatedDays,
                 Status = contract.Status,
                 Tax = contract.Tax,
+                Total = contract.Total,
                 SignDate = contract.SignDate,
                 Attachments = contract.Attachments != null ? 
                     System.Text.Json.JsonSerializer.Deserialize<List<AttachmentInfo>>(contract.Attachments.RootElement.ToString()) 
@@ -362,6 +363,7 @@ namespace Sep490_Backend.Services.ContractService
                 contract.EstimatedDays = model.EstimatedDays;
                 contract.Status = model.Status;
                 contract.Tax = model.Tax;
+                contract.Total = model.Total;
                 contract.SignDate = model.SignDate;
                 contract.Attachments = attachmentInfos.Any() ? 
                     JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(attachmentInfos)) : null;
@@ -383,6 +385,7 @@ namespace Sep490_Backend.Services.ContractService
                     EstimatedDays = model.EstimatedDays,
                     Status = model.Status,
                     Tax = model.Tax,
+                    Total = model.Total,
                     SignDate = model.SignDate,
                     Attachments = attachmentInfos.Any() ? 
                         JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(attachmentInfos)) : null,
@@ -526,6 +529,7 @@ namespace Sep490_Backend.Services.ContractService
                 EstimatedDays = contract.EstimatedDays,
                 Status = contract.Status,
                 Tax = contract.Tax,
+                Total = contract.Total,
                 SignDate = contract.SignDate,
                 Attachments = contract.Attachments != null ? 
                     System.Text.Json.JsonSerializer.Deserialize<List<AttachmentInfo>>(contract.Attachments.RootElement.ToString()) 

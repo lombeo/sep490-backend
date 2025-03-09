@@ -97,6 +97,7 @@ namespace Sep490_Backend.Services.DataService
                     EstimatedDays = t.EstimatedDays,
                     Status = t.Status,
                     Tax = t.Tax,
+                    Total = t.Total,
                     SignDate = t.SignDate,
                     Attachments = t.Attachments != null ? 
                         System.Text.Json.JsonSerializer.Deserialize<List<AttachmentInfo>>(t.Attachments.RootElement.ToString()) 
