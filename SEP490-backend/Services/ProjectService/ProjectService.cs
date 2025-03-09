@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Http;
 using Sep490_Backend.Infra.Helps;
 using Sep490_Backend.Controllers;
 using System.Text.Json;
+using Sep490_Backend.DTO;
 
 namespace Sep490_Backend.Services.ProjectService
 {

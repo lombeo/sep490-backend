@@ -1,5 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Sep490_Backend.DTO;
 using Sep490_Backend.DTO.Admin;
+using Sep490_Backend.DTO.Common;
 using Sep490_Backend.DTO.Contract;
 using Sep490_Backend.DTO.Customer;
 using Sep490_Backend.DTO.Project;
@@ -88,6 +90,7 @@ namespace Sep490_Backend.Services.DataService
                 {
                     Id = t.Id,
                     ContractCode = t.ContractCode,
+                    ContractName = t.ContractName,
                     Project = project.FirstOrDefault(p => p.Id == t.ProjectId) ?? new ProjectDTO(),
                     StartDate = t.StartDate,
                     EndDate = t.EndDate,
@@ -160,6 +163,7 @@ namespace Sep490_Backend.Services.DataService
             if (!string.IsNullOrWhiteSpace(model.KeyWord))
             {
                 result = result.Where(t => t.ContractCode.ToLower().Trim().Contains(model.KeyWord.ToLower().Trim())
+                                     || t.ContractName.ToLower().Trim().Contains(model.KeyWord.ToLower().Trim())
                                      || t.Project.ProjectCode.ToLower().Trim().Contains(model.KeyWord.ToLower().Trim())
                                      || t.Project.ProjectName.ToLower().Trim().Contains(model.KeyWord.ToLower().Trim())).ToList();
             }
