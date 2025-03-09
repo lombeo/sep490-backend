@@ -1,5 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Sep490_Backend.DTO;
 using Sep490_Backend.DTO.Admin;
+using Sep490_Backend.DTO.Common;
 using Sep490_Backend.DTO.Contract;
 using Sep490_Backend.DTO.Customer;
 using Sep490_Backend.DTO.Project;
@@ -88,6 +90,7 @@ namespace Sep490_Backend.Services.DataService
                 {
                     Id = t.Id,
                     ContractCode = t.ContractCode,
+                    ContractName = t.ContractName,
                     Project = project.FirstOrDefault(p => p.Id == t.ProjectId) ?? new ProjectDTO(),
                     StartDate = t.StartDate,
                     EndDate = t.EndDate,
@@ -160,6 +163,7 @@ namespace Sep490_Backend.Services.DataService
             if (!string.IsNullOrWhiteSpace(model.KeyWord))
             {
                 result = result.Where(t => t.ContractCode.ToLower().Trim().Contains(model.KeyWord.ToLower().Trim())
+                                     || t.ContractName.ToLower().Trim().Contains(model.KeyWord.ToLower().Trim())
                                      || t.Project.ProjectCode.ToLower().Trim().Contains(model.KeyWord.ToLower().Trim())
                                      || t.Project.ProjectName.ToLower().Trim().Contains(model.KeyWord.ToLower().Trim())).ToList();
             }
@@ -211,10 +215,13 @@ namespace Sep490_Backend.Services.DataService
 
         public async Task<List<ProjectDTO>> ListProject(SearchProjectDTO model)
         {
-            if (!_helpService.IsInRole(model.ActionBy, RoleConstValue.BUSINESS_EMPLOYEE))
+            if (!_helpService.IsInRole(model.ActionBy, new List<string> { RoleConstValue.BUSINESS_EMPLOYEE, RoleConstValue.EXECUTIVE_BOARD }))
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
+
+            var user = StaticVariable.UserMemory.FirstOrDefault(u => u.Id == model.ActionBy);
+            bool isExecutiveBoard = user != null && user.Role == RoleConstValue.EXECUTIVE_BOARD;
 
             // Tạo cache key riêng cho từng user để lưu trữ danh sách project theo phân quyền
             string userProjectCacheKey = string.Format(RedisCacheKey.PROJECT_BY_USER_CACHE_KEY, model.ActionBy);
@@ -260,23 +267,9 @@ namespace Sep490_Backend.Services.DataService
                 // 4. Xác định những project mà user có quyền xem
                 userProjects = new List<ProjectDTO>();
                 
-                foreach (var project in allProjects)
+                if (isExecutiveBoard)
                 {
-                    // Xác định nếu người dùng hiện tại là người tạo
-                    var isCreator = allProjectPermissions.Any(pu => 
-                        pu.ProjectId == project.Id && 
-                        pu.IsCreator && 
-                        pu.UserId == model.ActionBy);
-                    
-                    // Xác định nếu người dùng hiện tại là người được chỉ định xem
-                    var isViewer = allProjectPermissions.Any(pu => 
-                        pu.ProjectId == project.Id && 
-                        !pu.IsCreator && 
-                        pu.UserId == model.ActionBy && 
-                        !pu.Deleted);
-                    
-                    // Chỉ đưa vào danh sách những project mà người dùng có quyền
-                    if (isCreator || isViewer)
+                    foreach (var project in allProjects)
                     {
                         // Danh sách người có quyền xem project
                         var viewerIds = allProjectPermissions
@@ -310,9 +303,67 @@ namespace Sep490_Backend.Services.DataService
                             CreatedAt = project.CreatedAt,
                             Creator = project.Creator,
                             Deleted = project.Deleted,
-                            IsCreator = isCreator,
+                            IsCreator = false,
                             ViewerUserIds = viewerIds
                         });
+                    }
+                }
+                else
+                {
+                    foreach (var project in allProjects)
+                    {
+                        // Xác định nếu người dùng hiện tại là người tạo
+                        var isCreator = allProjectPermissions.Any(pu => 
+                            pu.ProjectId == project.Id && 
+                            pu.IsCreator && 
+                            pu.UserId == model.ActionBy);
+                        
+                        // Xác định nếu người dùng hiện tại là người được chỉ định xem
+                        var isViewer = allProjectPermissions.Any(pu => 
+                            pu.ProjectId == project.Id && 
+                            !pu.IsCreator && 
+                            pu.UserId == model.ActionBy && 
+                            !pu.Deleted);
+                        
+                        // Chỉ đưa vào danh sách những project mà người dùng có quyền
+                        if (isCreator || isViewer)
+                        {
+                            // Danh sách người có quyền xem project
+                            var viewerIds = allProjectPermissions
+                                .Where(pu => pu.ProjectId == project.Id && !pu.IsCreator && !pu.Deleted)
+                                .Select(pu => pu.UserId)
+                                .ToList();
+                            
+                            var customer = allCustomers.FirstOrDefault(c => c.Id == project.CustomerId) ?? new Customer();
+                            
+                            userProjects.Add(new ProjectDTO
+                            {
+                                Id = project.Id,
+                                ProjectCode = project.ProjectCode,
+                                ProjectName = project.ProjectName,
+                                Customer = customer,
+                                ConstructType = project.ConstructType,
+                                Location = project.Location,
+                                Area = project.Area,
+                                Purpose = project.Purpose,
+                                TechnicalReqs = project.TechnicalReqs,
+                                StartDate = project.StartDate,
+                                EndDate = project.EndDate,
+                                Budget = project.Budget,
+                                Status = project.Status,
+                                Attachments = project.Attachments != null ? 
+                                    JsonSerializer.Deserialize<List<AttachmentInfo>>(project.Attachments.RootElement.ToString()) 
+                                    : null,
+                                Description = project.Description,
+                                UpdatedAt = project.UpdatedAt,
+                                Updater = project.Updater,
+                                CreatedAt = project.CreatedAt,
+                                Creator = project.Creator,
+                                Deleted = project.Deleted,
+                                IsCreator = isCreator,
+                                ViewerUserIds = viewerIds
+                            });
+                        }
                     }
                 }
                 
@@ -359,6 +410,9 @@ namespace Sep490_Backend.Services.DataService
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
             
+            var user = StaticVariable.UserMemory.FirstOrDefault(u => u.Id == model.ActionBy);
+            bool isExecutiveBoard = user != null && user.Role == RoleConstValue.EXECUTIVE_BOARD;
+            
             // Xác định các key cache
             string generalCacheKey = RedisCacheKey.SITE_SURVEY_CACHE_KEY;
             string userCacheKey = string.Format("SITE_SURVEY:USER:{0}", model.ActionBy);
@@ -378,31 +432,43 @@ namespace Sep490_Backend.Services.DataService
                 return filteredData;
             }
             
-            // Nếu không có trong cache của user, thử lấy từ cache chung
-            var data = await _cacheService.GetAsync<List<SiteSurvey>>(generalCacheKey);
-            if (data == null)
-            {
-                // Nếu không có trong cache chung, query từ database
-                data = await _context.SiteSurveys.Where(t => !t.Deleted).OrderByDescending(t => t.UpdatedAt).ToListAsync();
+            // Nếu không có trong cache chung, query từ database
+            var data = await _context.SiteSurveys.Where(t => !t.Deleted).OrderByDescending(t => t.UpdatedAt).ToListAsync();
                 
-                // Lưu vào cache chung
-                _ = _cacheService.SetAsync(generalCacheKey, data, TimeSpan.FromMinutes(30));
+            // Si es Executive Board, devolver todos los sitios de estudio
+            if (isExecutiveBoard)
+            {
+                // Cache todos los sitios para este usuario
+                _ = _cacheService.SetAsync(userCacheKey, data, TimeSpan.FromMinutes(30));
+                
+                var filteredData = ApplyFilters(data, model);
+                model.Total = filteredData.Count();
+                
+                if (model.PageSize > 0)
+                {
+                    filteredData = filteredData.Skip(model.Skip).Take(model.PageSize).ToList();
+                }
+                
+                return filteredData;
             }
             
             // Lọc dữ liệu theo quyền truy cập của người dùng
             // Chỉ lấy các SiteSurvey thuộc project mà người dùng là thành viên
+            
+            // Lấy danh sách project mà người dùng có quyền truy cập
             var projectIds = await _context.ProjectUsers
                 .Where(pu => pu.UserId == model.ActionBy && !pu.Deleted)
                 .Select(pu => pu.ProjectId)
                 .ToListAsync();
-                
-            var accessibleData = data.Where(s => projectIds.Contains(s.ProjectId)).ToList();
             
-            // Lưu vào cache của user
-            _ = _cacheService.SetAsync(userCacheKey, accessibleData, TimeSpan.FromMinutes(30));
+            // Lọc các SiteSurvey thuộc các project của người dùng
+            var filteredSurveys = data.Where(s => projectIds.Contains(s.ProjectId)).ToList();
             
-            // Áp dụng bộ lọc theo điều kiện search
-            var result = ApplyFilters(accessibleData, model);
+            // Cache cho user
+            _ = _cacheService.SetAsync(userCacheKey, filteredSurveys, TimeSpan.FromMinutes(30));
+            
+            // Áp dụng bộ lọc
+            var result = ApplyFilters(filteredSurveys, model);
             model.Total = result.Count();
             
             if (model.PageSize > 0)
@@ -433,10 +499,6 @@ namespace Sep490_Backend.Services.DataService
         public async Task<List<User>> ListUser(AdminSearchUserDTO model)
         {
             var data = StaticVariable.UserMemory.ToList();
-            if (!_helpService.IsInRole(model.ActionBy, new List<string> { RoleConstValue.ADMIN }))
-            {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
-            }
 
             data = data.OrderByDescending(t => t.UpdatedAt).ToList();
 

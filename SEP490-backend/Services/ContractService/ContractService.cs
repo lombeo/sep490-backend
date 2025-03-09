@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using NPOI.SS.Formula.Functions;
+using Sep490_Backend.DTO;
 using Sep490_Backend.DTO.Contract;
 using Sep490_Backend.DTO.Project;
 using Sep490_Backend.Infra;
@@ -117,15 +118,15 @@ namespace Sep490_Backend.Services.ContractService
 
         public async Task<ContractDTO> Detail(int id, int actionBy)
         {
-            // Kiểm tra vai trò người dùng
-            if (!_helpService.IsInRole(actionBy, new List<string>
-            {
-                RoleConstValue.EXECUTIVE_BOARD, RoleConstValue.BUSINESS_EMPLOYEE
-            }))
+            if (!_helpService.IsInRole(actionBy, new List<string> { RoleConstValue.BUSINESS_EMPLOYEE, RoleConstValue.EXECUTIVE_BOARD }))
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
-
+            
+            // Verificar si el usuario es Executive Board
+            var user = StaticVariable.UserMemory.FirstOrDefault(u => u.Id == actionBy);
+            bool isExecutiveBoard = user != null && user.Role == RoleConstValue.EXECUTIVE_BOARD;
+            
             // Kiểm tra trong cache của người dùng trước
             string userContractCacheKey = string.Format(CONTRACT_BY_USER_CACHE_KEY, actionBy);
             var userContracts = await _cacheService.GetAsync<List<ContractDTO>>(userContractCacheKey);
@@ -160,13 +161,17 @@ namespace Sep490_Backend.Services.ContractService
                 throw new KeyNotFoundException(Message.SiteSurveyMessage.PROJECT_NOT_FOUND);
             }
             
-            // Kiểm tra quyền truy cập
-            var hasAccess = await _context.ProjectUsers
-                .AnyAsync(pu => pu.ProjectId == contract.ProjectId && pu.UserId == actionBy && !pu.Deleted);
-                
-            if (!hasAccess)
+            // Si es Executive Board, permitir acceso sin restricciones
+            if (!isExecutiveBoard)
             {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+                // Kiểm tra quyền truy cập
+                var hasAccess = await _context.ProjectUsers
+                    .AnyAsync(pu => pu.ProjectId == contract.ProjectId && pu.UserId == actionBy && !pu.Deleted);
+                    
+                if (!hasAccess)
+                {
+                    throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+                }
             }
             
             // Lấy danh sách ContractDetail
@@ -195,6 +200,7 @@ namespace Sep490_Backend.Services.ContractService
             {
                 Id = contract.Id,
                 ContractCode = contract.ContractCode,
+                ContractName = contract.ContractName,
                 Project = project,
                 StartDate = contract.StartDate,
                 EndDate = contract.EndDate,
@@ -263,25 +269,37 @@ namespace Sep490_Backend.Services.ContractService
                 throw new ArgumentException(Message.ProjectMessage.INVALID_DATE);
             }
 
-            var data = await _context.Contracts.Where(t => !t.Deleted).ToListAsync();
-
             // Handle file attachments
             List<AttachmentInfo> attachmentInfos = new List<AttachmentInfo>();
             string existingAttachmentsJson = null;
 
             if (model.Id != 0)
             {
-                // If this is an update, get the existing contract to check old attachments
+                // Find the entity directly instead of loading all contracts first
                 var existingContract = await _context.Contracts.FirstOrDefaultAsync(t => t.Id == model.Id && !t.Deleted);
                 if (existingContract == null)
                 {
                     throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
+                }
+
+                // Check for duplicate contract code excluding current contract
+                if (await _context.Contracts.AnyAsync(t => t.ContractCode == model.ContractCode && t.Id != model.Id && !t.Deleted))
+                {
+                    throw new ArgumentException(Message.ContractMessage.CONTRACT_CODE_EXIST);
                 }
                 
                 if (existingContract?.Attachments != null)
                 {
                     existingAttachmentsJson = existingContract.Attachments.RootElement.ToString();
                     attachmentInfos = System.Text.Json.JsonSerializer.Deserialize<List<AttachmentInfo>>(existingAttachmentsJson);
+                }
+            }
+            else
+            {
+                // Check for duplicate contract code for new contracts
+                if (await _context.Contracts.AnyAsync(t => t.ContractCode == model.ContractCode && !t.Deleted))
+                {
+                    throw new ArgumentException(Message.ContractMessage.CONTRACT_CODE_EXIST);
                 }
             }
 
@@ -328,53 +346,55 @@ namespace Sep490_Backend.Services.ContractService
                 }
             }
 
-            var contract = new Contract()
-            {
-                ProjectId = model.ProjectId,
-                StartDate = model.StartDate,
-                EndDate = model.EndDate,
-                EstimatedDays = model.EstimatedDays,
-                Status = model.Status,
-                Tax = model.Tax,
-                SignDate = model.SignDate,
-                Attachments = attachmentInfos.Any() ? JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(attachmentInfos)) : null,
-                UpdatedAt = DateTime.UtcNow,
-                Updater = model.ActionBy,
-                Deleted = false
-            };
-
+            Contract contract;
+            
             if (model.Id != 0)
             {
-                var entity = data.FirstOrDefault(t => t.Id == model.Id);
-                if(entity == null)
-                {
-                    throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
-                }
-                if(data.FirstOrDefault(t => t.ContractCode == model.ContractCode && t.ContractCode != entity.ContractCode) != null)
-                {
-                    throw new ArgumentException(Message.ContractMessage.CONTRACT_CODE_EXIST);
-                }
-
+                // Update existing contract - fetch it directly and update its properties
+                contract = await _context.Contracts.FirstOrDefaultAsync(t => t.Id == model.Id && !t.Deleted);
+                
+                // Update properties on the tracked entity instead of creating a new one
+                contract.ProjectId = model.ProjectId;
                 contract.ContractCode = model.ContractCode;
-                contract.CreatedAt = entity.CreatedAt;
-                contract.Creator = entity.Creator;
-                contract.Id = entity.Id;
-
+                contract.ContractName = model.ContractName;
+                contract.StartDate = model.StartDate;
+                contract.EndDate = model.EndDate;
+                contract.EstimatedDays = model.EstimatedDays;
+                contract.Status = model.Status;
+                contract.Tax = model.Tax;
+                contract.SignDate = model.SignDate;
+                contract.Attachments = attachmentInfos.Any() ? 
+                    JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(attachmentInfos)) : null;
+                contract.UpdatedAt = DateTime.UtcNow;
+                contract.Updater = model.ActionBy;
+                
                 _context.Update(contract);
             }
             else
             {
-                if(data.FirstOrDefault(t => t.ContractCode == model.ContractCode) != null)
+                // Create new contract
+                contract = new Contract()
                 {
-                    throw new ArgumentException(Message.ContractMessage.CONTRACT_CODE_EXIST);
-                }
-
-                contract.ContractCode = model.ContractCode;
-                contract.CreatedAt = DateTime.UtcNow;
-                contract.Creator = model.ActionBy;
+                    ContractCode = model.ContractCode,
+                    ContractName = model.ContractName,
+                    ProjectId = model.ProjectId,
+                    StartDate = model.StartDate,
+                    EndDate = model.EndDate,
+                    EstimatedDays = model.EstimatedDays,
+                    Status = model.Status,
+                    Tax = model.Tax,
+                    SignDate = model.SignDate,
+                    Attachments = attachmentInfos.Any() ? 
+                        JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(attachmentInfos)) : null,
+                    CreatedAt = DateTime.UtcNow,
+                    Creator = model.ActionBy,
+                    UpdatedAt = DateTime.UtcNow,
+                    Updater = model.ActionBy,
+                    Deleted = false
+                };
 
                 await _context.AddAsync(contract);
-                await _context.SaveChangesAsync(); // Lưu contract trước để có Id
+                await _context.SaveChangesAsync(); // Save to get the ID
             }
 
             // Lấy tất cả các ContractDetail của Contract này
@@ -499,6 +519,7 @@ namespace Sep490_Backend.Services.ContractService
             {
                 Id = contract.Id,
                 ContractCode = contract.ContractCode,
+                ContractName = contract.ContractName,
                 Project = project,
                 StartDate = contract.StartDate,
                 EndDate = contract.EndDate,

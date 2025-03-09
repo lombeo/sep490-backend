@@ -4,14 +4,6 @@ using System.Text.Json;
 
 namespace Sep490_Backend.Infra.Entities
 {
-    public class AttachmentInfo
-    {
-        public string Id { get; set; }
-        public string Name { get; set; }
-        public string WebViewLink { get; set; }
-        public string WebContentLink { get; set; }
-    }
-
     public class Project : CommonEntity
     {
         public int Id { get; set; }

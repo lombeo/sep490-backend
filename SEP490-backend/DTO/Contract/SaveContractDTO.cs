@@ -10,6 +10,7 @@ namespace Sep490_Backend.DTO.Contract
     {
         public int Id { get; set; }
         public string ContractCode { get; set; }
+        public string ContractName { get; set; }
         public int ProjectId { get; set; }
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
