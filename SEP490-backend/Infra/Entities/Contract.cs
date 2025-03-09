@@ -15,6 +15,7 @@ namespace Sep490_Backend.Infra.Entities
         public int EstimatedDays { get; set; }
         public ContractStatusEnum Status { get; set; }
         public decimal Tax { get; set; }
+        public decimal Total { get; set; }
         public DateTime SignDate { get; set; }
         public JsonDocument? Attachments { get; set; }
     }
@@ -54,6 +55,9 @@ namespace Sep490_Backend.Infra.Entities
                       .HasColumnType("timestamp without time zone");
 
                 entity.Property(e => e.Tax)
+                      .HasColumnType("numeric(18,2)");
+                      
+                entity.Property(e => e.Total)
                       .HasColumnType("numeric(18,2)");
                       
                 entity.Property(e => e.Attachments)
