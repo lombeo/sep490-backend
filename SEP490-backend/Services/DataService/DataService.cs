@@ -97,7 +97,6 @@ namespace Sep490_Backend.Services.DataService
                     EstimatedDays = t.EstimatedDays,
                     Status = t.Status,
                     Tax = t.Tax,
-                    Total = t.Total,
                     SignDate = t.SignDate,
                     Attachments = t.Attachments != null ? 
                         System.Text.Json.JsonSerializer.Deserialize<List<AttachmentInfo>>(t.Attachments.RootElement.ToString()) 
@@ -120,6 +119,7 @@ namespace Sep490_Backend.Services.DataService
                             Unit = cd.Unit,
                             Quantity = cd.Quantity,
                             UnitPrice = cd.UnitPrice,
+                            Total = cd.Total,
                             CreatedAt = cd.CreatedAt,
                             Creator = cd.Creator,
                             UpdatedAt = cd.UpdatedAt,

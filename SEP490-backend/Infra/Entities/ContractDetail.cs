@@ -12,6 +12,7 @@ namespace Sep490_Backend.Infra.Entities
         public string Unit { get; set; }
         public decimal Quantity { get; set; }
         public decimal UnitPrice { get; set; }
+        public decimal Total { get; set; }
     }
 
     public static class ContractDetailConfiguration
@@ -40,6 +41,9 @@ namespace Sep490_Backend.Infra.Entities
                       .HasColumnType("numeric(18,2)");
 
                 entity.Property(e => e.UnitPrice)
+                      .HasColumnType("numeric(18,2)");
+
+                entity.Property(e => e.Total)
                       .HasColumnType("numeric(18,2)");
 
                 entity.Property(e => e.CreatedAt)

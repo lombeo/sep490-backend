@@ -17,7 +17,6 @@ namespace Sep490_Backend.DTO.Contract
         public int EstimatedDays { get; set; }
         public ContractStatusEnum Status { get; set; }
         public decimal Tax { get; set; }
-        public decimal Total { get; set; }
         public DateTime SignDate { get; set; }
         public List<IFormFile>? Attachments { get; set; }
         

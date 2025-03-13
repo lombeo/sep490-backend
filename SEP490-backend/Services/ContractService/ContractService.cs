@@ -187,6 +187,7 @@ namespace Sep490_Backend.Services.ContractService
                     Unit = cd.Unit,
                     Quantity = cd.Quantity,
                     UnitPrice = cd.UnitPrice,
+                    Total = cd.Total,
                     CreatedAt = cd.CreatedAt,
                     Creator = cd.Creator,
                     UpdatedAt = cd.UpdatedAt,
@@ -207,7 +208,6 @@ namespace Sep490_Backend.Services.ContractService
                 EstimatedDays = contract.EstimatedDays,
                 Status = contract.Status,
                 Tax = contract.Tax,
-                Total = contract.Total,
                 SignDate = contract.SignDate,
                 Attachments = contract.Attachments != null ? 
                     System.Text.Json.JsonSerializer.Deserialize<List<AttachmentInfo>>(contract.Attachments.RootElement.ToString()) 
@@ -363,7 +363,6 @@ namespace Sep490_Backend.Services.ContractService
                 contract.EstimatedDays = model.EstimatedDays;
                 contract.Status = model.Status;
                 contract.Tax = model.Tax;
-                contract.Total = model.Total;
                 contract.SignDate = model.SignDate;
                 contract.Attachments = attachmentInfos.Any() ? 
                     JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(attachmentInfos)) : null;
@@ -385,7 +384,6 @@ namespace Sep490_Backend.Services.ContractService
                     EstimatedDays = model.EstimatedDays,
                     Status = model.Status,
                     Tax = model.Tax,
-                    Total = model.Total,
                     SignDate = model.SignDate,
                     Attachments = attachmentInfos.Any() ? 
                         JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(attachmentInfos)) : null,
@@ -435,6 +433,7 @@ namespace Sep490_Backend.Services.ContractService
                     Unit = detailDto.Unit,
                     Quantity = detailDto.Quantity,
                     UnitPrice = detailDto.UnitPrice,
+                    Total = detailDto.Quantity * detailDto.UnitPrice,
                     UpdatedAt = DateTime.UtcNow,
                     Updater = model.ActionBy,
                     Deleted = false
@@ -511,6 +510,7 @@ namespace Sep490_Backend.Services.ContractService
                 Unit = cd.Unit,
                 Quantity = cd.Quantity,
                 UnitPrice = cd.UnitPrice,
+                Total = cd.Total,
                 CreatedAt = cd.CreatedAt,
                 Creator = cd.Creator,
                 UpdatedAt = cd.UpdatedAt,
@@ -529,7 +529,6 @@ namespace Sep490_Backend.Services.ContractService
                 EstimatedDays = contract.EstimatedDays,
                 Status = contract.Status,
                 Tax = contract.Tax,
-                Total = contract.Total,
                 SignDate = contract.SignDate,
                 Attachments = contract.Attachments != null ? 
                     System.Text.Json.JsonSerializer.Deserialize<List<AttachmentInfo>>(contract.Attachments.RootElement.ToString()) 
