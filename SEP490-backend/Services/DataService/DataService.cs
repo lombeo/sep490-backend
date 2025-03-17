@@ -502,7 +502,6 @@ namespace Sep490_Backend.Services.DataService
             var data = StaticVariable.UserMemory.ToList();
 
             data = data.OrderByDescending(t => t.UpdatedAt).ToList();
-
             if (!string.IsNullOrWhiteSpace(model.KeyWord))
             {
                 data = data.Where(t => t.FullName.Contains(model.KeyWord) || t.Username.Contains(model.KeyWord) || t.Email.Contains(model.KeyWord) || t.Phone.Contains(model.KeyWord)).ToList();
@@ -519,14 +518,11 @@ namespace Sep490_Backend.Services.DataService
             {
                 data = data.Where(t => t.Dob == model.Dob).ToList();
             }
-
             model.Total = data.Count();
-
             if (model.PageSize > 0)
             {
                 data = data.Skip(model.Skip).Take(model.PageSize).ToList();
             }
-
             return data;
         }
     }
