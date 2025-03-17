@@ -3,6 +3,7 @@ using System;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Sep490_Backend.Infra;
@@ -12,9 +13,11 @@ using Sep490_Backend.Infra;
 namespace Sep490_Backend.Migrations
 {
     [DbContext(typeof(BackendContext))]
-    partial class BackendContextModelSnapshot : ModelSnapshot
+    [Migration("20250304184600_Attachment-Contract")]
+    partial class AttachmentContract
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -35,10 +38,6 @@ namespace Sep490_Backend.Migrations
                         .HasColumnType("jsonb");
 
                     b.Property<string>("ContractCode")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ContractName")
                         .IsRequired()
                         .HasColumnType("text");
 
@@ -70,9 +69,6 @@ namespace Sep490_Backend.Migrations
                         .HasColumnType("integer");
 
                     b.Property<decimal>("Tax")
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<decimal>("Total")
                         .HasColumnType("numeric(18,2)");
 
                     b.Property<DateTime?>("UpdatedAt")
@@ -325,49 +321,6 @@ namespace Sep490_Backend.Migrations
                     b.ToTable("Projects", (string)null);
                 });
 
-            modelBuilder.Entity("Sep490_Backend.Infra.Entities.ProjectUser", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime?>("CreatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<int>("Creator")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("Deleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<bool>("IsCreator")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<int>("ProjectId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<int>("Updater")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId", "UserId");
-
-                    b.ToTable("ProjectUsers", (string)null);
-                });
-
             modelBuilder.Entity("Sep490_Backend.Infra.Entities.RefreshToken", b =>
                 {
                     b.Property<int>("Id")
@@ -413,8 +366,8 @@ namespace Sep490_Backend.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<JsonDocument>("Attachments")
-                        .HasColumnType("jsonb");
+                    b.Property<string>("Attachments")
+                        .HasColumnType("text");
 
                     b.Property<double>("BidWinProb")
                         .HasColumnType("double precision");

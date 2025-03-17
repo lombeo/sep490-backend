@@ -1,5 +1,6 @@
 ﻿using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Infra.Enums;
+using System.Collections.Generic;
 
 namespace Sep490_Backend.DTO.Project
 {
@@ -9,7 +10,7 @@ namespace Sep490_Backend.DTO.Project
         public string ProjectCode { get; set; }
         public string ProjectName { get; set; }
         public Infra.Entities.Customer Customer { get; set; }
-        public int ConstructType { get; set; }
+        public string ConstructType { get; set; }
         public string? Location { get; set; }
         public string? Area { get; set; }
         public string? Purpose { get; set; }
@@ -18,7 +19,9 @@ namespace Sep490_Backend.DTO.Project
         public DateTime EndDate { get; set; }
         public decimal Budget { get; set; }
         public ProjectStatusEnum Status { get; set; }
-        public string? Attachment { get; set; }
+        public List<AttachmentInfo>? Attachments { get; set; }
         public string? Description { get; set; }
+        public bool IsCreator { get; set; } = false;
+        public List<int> ViewerUserIds { get; set; } = new List<int>();
     }
 }

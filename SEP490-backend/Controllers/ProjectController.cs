@@ -33,6 +33,7 @@ namespace Sep490_Backend.Controllers
         }
 
         [HttpPost("save")]
+        [Consumes("multipart/form-data")]
         public async Task<ResponseDTO<ProjectDTO>> Save([FromForm] SaveProjectDTO model)
         {
             var result = await HandleException(_projectService.Save(model, UserId), Message.ProjectMessage.SAVE_SUCCESS);
@@ -56,7 +57,7 @@ namespace Sep490_Backend.Controllers
         [HttpGet("detail/{id}")]
         public async Task<ResponseDTO<ProjectDTO>> Detail(int id)
         {
-            var result = await HandleException(_projectService.Detail(id ,UserId), Message.ProjectMessage.GET_DETAIL_SUCCESS);
+            var result = await HandleException(_projectService.Detail(id, UserId), Message.ProjectMessage.GET_DETAIL_SUCCESS);
             return result;
         }
     }

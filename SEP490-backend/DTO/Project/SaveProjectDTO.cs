@@ -1,4 +1,6 @@
-﻿using Sep490_Backend.Infra.Enums;
+﻿using Microsoft.AspNetCore.Http;
+using Sep490_Backend.Infra.Enums;
+using System.Collections.Generic;
 
 namespace Sep490_Backend.DTO.Project
 {
@@ -8,7 +10,7 @@ namespace Sep490_Backend.DTO.Project
         public string ProjectCode { get; set; }
         public string ProjectName { get; set; }
         public int CustomerId { get; set; }
-        public int ConstructType { get; set; }
+        public string ConstructType { get; set; }
         public string? Location { get; set; }
         public string? Area { get; set; }
         public string? Purpose { get; set; }
@@ -17,7 +19,8 @@ namespace Sep490_Backend.DTO.Project
         public DateTime EndDate { get; set; }
         public decimal Budget { get; set; }
         public ProjectStatusEnum Status { get; set; }
-        public IFormFile Attachment { get; set; }
+        public List<IFormFile>? Attachments { get; set; }
         public string? Description { get; set; }
+        public List<int> ViewerUserIds { get; set; } = new List<int>();
     }
 }

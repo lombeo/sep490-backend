@@ -1,6 +1,7 @@
 ﻿using Sep490_Backend.DTO.Project;
 using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Infra.Enums;
+using System.Collections.Generic;
 
 namespace Sep490_Backend.DTO.Contract
 {
@@ -8,6 +9,7 @@ namespace Sep490_Backend.DTO.Contract
     {
         public int Id { get; set; }
         public string ContractCode { get; set; }
+        public string ContractName { get; set; }
         public ProjectDTO Project { get; set; }
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
@@ -15,6 +17,7 @@ namespace Sep490_Backend.DTO.Contract
         public ContractStatusEnum Status { get; set; }
         public decimal Tax { get; set; }
         public DateTime SignDate { get; set; }
-        public string? Attachment { get; set; }
+        public List<AttachmentInfo>? Attachments { get; set; }
+        public List<ContractDetailDTO> ContractDetails { get; set; } = new List<ContractDetailDTO>();
     }
 }

@@ -4,13 +4,15 @@ namespace Sep490_Backend.Infra.Entities
 {
     public class ContractDetail : CommonEntity
     {
-        public int Id { get; set; }
+        public string WorkCode { get; set; }
+        public string Index { get; set; }
         public int ContractId { get; set; }
-        public int ParentId { get; set; }
+        public string? ParentIndex { get; set; }
         public string WorkName { get; set; }
         public string Unit { get; set; }
         public decimal Quantity { get; set; }
         public decimal UnitPrice { get; set; }
+        public decimal Total { get; set; }
     }
 
     public static class ContractDetailConfiguration
@@ -21,7 +23,11 @@ namespace Sep490_Backend.Infra.Entities
             {
                 entity.ToTable("ContractDetails");
 
-                entity.HasKey(e => e.Id);
+                entity.HasKey(e => e.WorkCode);
+
+                entity.Property(e => e.WorkCode)
+                      .IsRequired()
+                      .HasColumnType("text");
 
                 entity.Property(e => e.WorkName)
                       .IsRequired()
@@ -35,6 +41,9 @@ namespace Sep490_Backend.Infra.Entities
                       .HasColumnType("numeric(18,2)");
 
                 entity.Property(e => e.UnitPrice)
+                      .HasColumnType("numeric(18,2)");
+
+                entity.Property(e => e.Total)
                       .HasColumnType("numeric(18,2)");
 
                 entity.Property(e => e.CreatedAt)

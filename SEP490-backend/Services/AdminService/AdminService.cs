@@ -92,7 +92,7 @@ namespace Sep490_Backend.Services.AdminService
                 });
             }
 
-            if(StaticVariable.UserMemory.FirstOrDefault(t => t.Username == model.UserName) != null)
+            if(StaticVariable.UserMemory.FirstOrDefault(t => t.Username == model.UserName && existingUser.Username != model.UserName) != null)
             {
                 errors.Add(new ResponseError
                 {
@@ -101,7 +101,7 @@ namespace Sep490_Backend.Services.AdminService
                 });
             }
 
-            if (StaticVariable.UserMemory.FirstOrDefault(t => t.Email == model.Email) != null)
+            if (StaticVariable.UserMemory.FirstOrDefault(t => t.Email == model.Email && existingUser.Email != model.Email) != null)
             {
                 errors.Add(new ResponseError
                 {
@@ -223,6 +223,9 @@ namespace Sep490_Backend.Services.AdminService
                 });
             }
 
+            if (errors.Count > 0)
+                throw new ValidationException(errors);
+
             //Tao moi 
             var password = _helperService.GenerateStrongPassword();
             var passwordHash = _helperService.HashPassword(password);
@@ -239,8 +242,11 @@ namespace Sep490_Backend.Services.AdminService
                 Gender = model.Gender,
                 Dob = model.Dob,
                 IsVerify = true,
+                Creator = actionBy,
+                Updater = actionBy
             };
-            await _context.AddAsync(newUser);
+
+            await _context.Users.AddAsync(newUser);
             await _context.SaveChangesAsync();
 
             var emailTemp = await _context.EmailTemplates.FirstOrDefaultAsync(t => t.Title == "Your new password");
