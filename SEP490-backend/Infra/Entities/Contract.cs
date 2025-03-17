@@ -17,10 +17,6 @@ namespace Sep490_Backend.Infra.Entities
         public decimal Tax { get; set; }
         public DateTime SignDate { get; set; }
         public JsonDocument? Attachments { get; set; }
-
-        // Navigation properties
-        public virtual Project Project { get; set; }
-        public virtual ICollection<ContractDetail> ContractDetails { get; set; }
     }
 
     public static class ContractConfiguration
@@ -63,16 +59,6 @@ namespace Sep490_Backend.Infra.Entities
                 entity.Property(e => e.Attachments)
                       .HasColumnType("jsonb");
 
-                // Relationships
-                entity.HasOne(e => e.Project)
-                      .WithMany(p => p.Contracts)
-                      .HasForeignKey(e => e.ProjectId)
-                      .OnDelete(DeleteBehavior.Restrict);
-
-                entity.HasMany(e => e.ContractDetails)
-                      .WithOne(cd => cd.Contract)
-                      .HasForeignKey(cd => cd.ContractId)
-                      .OnDelete(DeleteBehavior.Cascade);
             });
         }
     }

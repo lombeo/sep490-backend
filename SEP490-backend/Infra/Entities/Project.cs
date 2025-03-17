@@ -21,14 +21,6 @@ namespace Sep490_Backend.Infra.Entities
         public ProjectStatusEnum Status { get; set; }
         public JsonDocument? Attachments { get; set; }
         public string? Description { get; set; }
-
-        // Navigation properties
-        public virtual Customer Customer { get; set; }
-        public virtual ICollection<Contract> Contracts { get; set; }
-        public virtual ICollection<SiteSurvey> SiteSurveys { get; set; }
-        public virtual ICollection<ConstructionPlan> ConstructionPlans { get; set; }
-        public virtual ICollection<ResourceMobilizationReqs> ResourceMobilizationReqs { get; set; }
-        public virtual ICollection<ProjectUser> ProjectUsers { get; set; }
     }
 
     public static class ProjectConfiguration
@@ -80,27 +72,6 @@ namespace Sep490_Backend.Infra.Entities
 
                 entity.Property(e => e.Deleted)
                     .HasDefaultValue(false);
-
-                // Relationships
-                entity.HasOne(e => e.Customer)
-                      .WithMany(c => c.Projects)
-                      .HasForeignKey(e => e.CustomerId)
-                      .OnDelete(DeleteBehavior.Restrict);
-
-                entity.HasMany(e => e.Contracts)
-                      .WithOne(c => c.Project)
-                      .HasForeignKey(c => c.ProjectId)
-                      .OnDelete(DeleteBehavior.Restrict);
-
-                entity.HasMany(e => e.SiteSurveys)
-                      .WithOne(s => s.Project)
-                      .HasForeignKey(s => s.ProjectId)
-                      .OnDelete(DeleteBehavior.Cascade);
-
-                entity.HasMany(e => e.ProjectUsers)
-                      .WithOne(pu => pu.Project)
-                      .HasForeignKey(pu => pu.ProjectId)
-                      .OnDelete(DeleteBehavior.Cascade);
             });
         }
     }

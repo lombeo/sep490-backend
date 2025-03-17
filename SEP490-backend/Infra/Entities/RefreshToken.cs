@@ -9,9 +9,6 @@ namespace Sep490_Backend.Infra.Entities
         public string Token { get; set; }
         public DateTime ExpiryDate { get; set; }
         public bool IsRevoked { get; set; }
-        
-        // Navigation property
-        public virtual User User { get; set; }
     }
     public static class RefreshTokenConfiguration
     {
@@ -47,12 +44,6 @@ namespace Sep490_Backend.Infra.Entities
 
                 entity.HasIndex(e => e.UserId)
                     .HasDatabaseName("ix_refresh_tokens_user_id");
-
-                // Relationship
-                entity.HasOne(e => e.User)
-                      .WithMany(u => u.RefreshTokens)
-                      .HasForeignKey(e => e.UserId)
-                      .OnDelete(DeleteBehavior.Cascade);
             });
         }
     }
