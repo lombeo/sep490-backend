@@ -13,8 +13,8 @@ using Sep490_Backend.Infra;
 namespace Sep490_Backend.Migrations
 {
     [DbContext(typeof(BackendContext))]
-    [Migration("20250305155957_add-siteSurvey")]
-    partial class addsiteSurvey
+    [Migration("20250309172128_add-total-contract")]
+    partial class addtotalcontract
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -38,6 +38,10 @@ namespace Sep490_Backend.Migrations
                         .HasColumnType("jsonb");
 
                     b.Property<string>("ContractCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ContractName")
                         .IsRequired()
                         .HasColumnType("text");
 
@@ -69,6 +73,9 @@ namespace Sep490_Backend.Migrations
                         .HasColumnType("integer");
 
                     b.Property<decimal>("Tax")
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("Total")
                         .HasColumnType("numeric(18,2)");
 
                     b.Property<DateTime?>("UpdatedAt")

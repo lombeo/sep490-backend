@@ -8,6 +8,7 @@ namespace Sep490_Backend.Infra.Entities
     {
         public int Id { get; set; }
         public string ContractCode { get; set; }
+        public string ContractName { get; set; }
         public int ProjectId { get; set; }
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
@@ -16,10 +17,6 @@ namespace Sep490_Backend.Infra.Entities
         public decimal Tax { get; set; }
         public DateTime SignDate { get; set; }
         public JsonDocument? Attachments { get; set; }
-
-        // Navigation properties
-        public virtual Project Project { get; set; }
-        public virtual ICollection<ContractDetail> ContractDetails { get; set; }
     }
 
     public static class ContractConfiguration
@@ -34,6 +31,9 @@ namespace Sep490_Backend.Infra.Entities
 
                 entity.Property(e => e.ContractCode)
                       .IsRequired();// Bắt buộc
+                      
+                entity.Property(e => e.ContractName)
+                      .IsRequired();
 
                 entity.Property(e => e.StartDate)
                       .IsRequired()
@@ -55,20 +55,10 @@ namespace Sep490_Backend.Infra.Entities
 
                 entity.Property(e => e.Tax)
                       .HasColumnType("numeric(18,2)");
-
+                      
                 entity.Property(e => e.Attachments)
                       .HasColumnType("jsonb");
 
-                // Relationships
-                entity.HasOne(e => e.Project)
-                      .WithMany(p => p.Contracts)
-                      .HasForeignKey(e => e.ProjectId)
-                      .OnDelete(DeleteBehavior.Restrict);
-
-                entity.HasMany(e => e.ContractDetails)
-                      .WithOne(cd => cd.Contract)
-                      .HasForeignKey(cd => cd.ContractId)
-                      .OnDelete(DeleteBehavior.Cascade);
             });
         }
     }
