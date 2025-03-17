@@ -61,8 +61,8 @@ namespace Sep490_Backend.Infra.Entities
 
                 // Relationships
                 entity.HasOne(e => e.Project)
-                      .WithOne(p => p.Contract)
-                      .HasForeignKey<Contract>(e => e.ProjectId)
+                      .WithMany(p => p.Contracts)
+                      .HasForeignKey(e => e.ProjectId)
                       .OnDelete(DeleteBehavior.Restrict);
 
                 entity.HasMany(e => e.ContractDetails)

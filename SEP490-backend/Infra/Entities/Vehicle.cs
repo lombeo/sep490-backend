@@ -24,6 +24,7 @@ namespace Sep490_Backend.Infra.Entities
         
         // Navigation property
         public virtual User User { get; set; }
+        public virtual ICollection<ConstructPlanItemDetail> ConstructPlanItemDetails { get; set; }
     }
 
     public static class VehicleConfiguration
@@ -90,10 +91,10 @@ namespace Sep490_Backend.Infra.Entities
                 entity.Property(e => e.Deleted)
                       .HasDefaultValue(false);
 
-                // Relationships
+                // One-to-one relationship with User
                 entity.HasOne(e => e.User)
-                      .WithMany(u => u.Vehicles)
-                      .HasForeignKey(e => e.Driver)
+                      .WithOne(u => u.Vehicle)
+                      .HasForeignKey<Vehicle>(e => e.Driver)
                       .OnDelete(DeleteBehavior.Restrict);
             });
         }
