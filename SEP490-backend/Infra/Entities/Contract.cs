@@ -8,6 +8,7 @@ namespace Sep490_Backend.Infra.Entities
     {
         public int Id { get; set; }
         public string ContractCode { get; set; }
+        public string ContractName { get; set; }
         public int ProjectId { get; set; }
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
@@ -34,6 +35,10 @@ namespace Sep490_Backend.Infra.Entities
 
                 entity.Property(e => e.ContractCode)
                       .IsRequired();// Bắt buộc
+                      
+                entity.Property(e => e.ContractName)
+                      .IsRequired()
+                      .HasColumnType("text");
 
                 entity.Property(e => e.StartDate)
                       .IsRequired()

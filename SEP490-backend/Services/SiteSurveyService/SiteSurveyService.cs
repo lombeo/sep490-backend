@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Sep490_Backend.Controllers;
+using Sep490_Backend.DTO;
 using Sep490_Backend.DTO.Common;
 using Sep490_Backend.DTO.SiteSurvey;
 using Sep490_Backend.Infra;
@@ -10,14 +11,13 @@ using Sep490_Backend.Services.CacheService;
 using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.HelperService;
 using Sep490_Backend.Services.GoogleDriveService;
-using Microsoft.AspNetCore.Http;
 using System.Text.Json;
 
 namespace Sep490_Backend.Services.SiteSurveyService
 {
     public interface ISiteSurveyService
     {
-        Task<SiteSurvey> SaveSiteSurvey(SiteSurvey model, int actionBy, List<IFormFile> attachments = null);
+        Task<SiteSurvey> SaveSiteSurvey(SaveSiteSurveyDTO model, int actionBy);
         Task<int> DeleteSiteSurvey(int id, int actionBy);
         Task<SiteSurvey> GetSiteSurveyDetail(int id, int actionBy);
     }
@@ -70,6 +70,25 @@ namespace Sep490_Backend.Services.SiteSurveyService
             if (projectCreator == null || projectCreator.UserId != actionBy)
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+            }
+
+            // Xóa các file đính kèm từ Google Drive
+            if (data.Attachments != null)
+            {
+                try
+                {
+                    var attachments = JsonSerializer.Deserialize<List<DTO.AttachmentInfo>>(data.Attachments.RootElement.ToString());
+                    if (attachments != null && attachments.Any())
+                    {
+                        var linksToDelete = attachments.Select(a => a.WebContentLink).ToList();
+                        await _googleDriveService.DeleteFilesByLinks(linksToDelete);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Log lỗi nhưng vẫn tiếp tục xóa bản ghi
+                    Console.WriteLine($"Failed to delete attachments: {ex.Message}");
+                }
             }
 
             // Xóa mềm SiteSurvey
@@ -153,7 +172,7 @@ namespace Sep490_Backend.Services.SiteSurveyService
             return survey;
         }
 
-        public async Task<SiteSurvey> SaveSiteSurvey(SiteSurvey model, int actionBy, List<IFormFile> attachments = null)
+        public async Task<SiteSurvey> SaveSiteSurvey(SaveSiteSurveyDTO model, int actionBy)
         {
             var errors = new List<ResponseError>();
             
@@ -197,13 +216,13 @@ namespace Sep490_Backend.Services.SiteSurveyService
             if (errors.Count > 0)
                 throw new ValidationException(errors);
 
-            // Handle file attachments
+            // Xử lý file đính kèm
             List<AttachmentInfo> attachmentInfos = new List<AttachmentInfo>();
             string existingAttachmentsJson = null;
 
             if (model.Id != 0)
             {
-                // If this is an update, get the existing site survey to check old attachments
+                // Nếu là cập nhật, lấy bản ghi cũ để kiểm tra các tệp đính kèm cũ
                 var existingSurvey = await _context.SiteSurveys.FirstOrDefaultAsync(t => t.Id == model.Id);
                 if (existingSurvey?.Attachments != null)
                 {
@@ -212,10 +231,10 @@ namespace Sep490_Backend.Services.SiteSurveyService
                 }
             }
 
-            if (attachments != null && attachments.Any())
+            if (model.Attachments != null && model.Attachments.Any())
             {
-                // If there are existing attachments and we're uploading new ones, delete the old ones
-                if (attachmentInfos.Any())
+                // Nếu có tệp đính kèm hiện có và chúng tôi đang tải lên các tệp mới, hãy xóa các tệp cũ
+                if (attachmentInfos != null && attachmentInfos.Any())
                 {
                     try
                     {
@@ -225,13 +244,13 @@ namespace Sep490_Backend.Services.SiteSurveyService
                     }
                     catch (Exception ex)
                     {
-                        // Log error but continue with upload
+                        // Log lỗi nhưng vẫn tiếp tục tải lên
                         Console.WriteLine($"Failed to delete old attachments: {ex.Message}");
                     }
                 }
 
-                // Upload new files
-                foreach (var file in attachments)
+                // Tải lên các tệp mới
+                foreach (var file in model.Attachments)
                 {
                     using (var stream = file.OpenReadStream())
                     {
@@ -241,7 +260,7 @@ namespace Sep490_Backend.Services.SiteSurveyService
                             file.ContentType
                         );
 
-                        // Parse Google Drive response to get file ID
+                        // Phân tích cú pháp phản hồi Google Drive để lấy ID tệp
                         var fileId = uploadResult.Split("id=").Last().Split("&").First();
                         
                         attachmentInfos.Add(new AttachmentInfo
@@ -255,6 +274,7 @@ namespace Sep490_Backend.Services.SiteSurveyService
                 }
             }
 
+            // Tạo đối tượng SiteSurvey từ DTO
             var survey = new SiteSurvey
             {
                 Id = model.Id,
@@ -276,7 +296,7 @@ namespace Sep490_Backend.Services.SiteSurveyService
                 FinalProfit = model.FinalProfit,
                 Status = model.Status,
                 Comments = model.Comments,
-                Attachments = attachmentInfos.Any() ? JsonDocument.Parse(JsonSerializer.Serialize(attachmentInfos)) : model.Attachments,
+                Attachments = attachmentInfos.Any() ? JsonDocument.Parse(JsonSerializer.Serialize(attachmentInfos)) : null,
                 SurveyDate = model.SurveyDate,
                 UpdatedAt = DateTime.UtcNow,
                 Updater = actionBy,

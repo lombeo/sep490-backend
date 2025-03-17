@@ -83,6 +83,13 @@ namespace Sep490_Backend.Services.HelperService
             {
                 throw new ApplicationException(Message.CommonMessage.NOT_FOUND);
             }
+            
+            // Si el usuario tiene el rol "Executive Board", siempre permitir acceso
+            if(user.Role.CompareTo(RoleConstValue.EXECUTIVE_BOARD) == 0)
+            {
+                return true;
+            }
+            
             if(user.Role.CompareTo(role) == 0)
             {
                 return true;
@@ -98,6 +105,13 @@ namespace Sep490_Backend.Services.HelperService
             {
                 throw new ApplicationException(Message.CommonMessage.NOT_FOUND);
             }
+            
+            // Si el usuario tiene el rol "Executive Board", siempre permitir acceso
+            if(user.Role.CompareTo(RoleConstValue.EXECUTIVE_BOARD) == 0)
+            {
+                return true;
+            }
+            
             foreach(var item in role)
             {
                 if (user.Role.CompareTo(item) == 0)
