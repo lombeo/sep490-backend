@@ -13,8 +13,8 @@ using Sep490_Backend.Infra;
 namespace Sep490_Backend.Migrations
 {
     [DbContext(typeof(BackendContext))]
-    [Migration("20250309143503_text-to-jsonb-siteSurvey")]
-    partial class texttojsonbsiteSurvey
+    [Migration("20250305155450_delete-sitesurvey")]
+    partial class deletesitesurvey
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -38,10 +38,6 @@ namespace Sep490_Backend.Migrations
                         .HasColumnType("jsonb");
 
                     b.Property<string>("ContractCode")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ContractName")
                         .IsRequired()
                         .HasColumnType("text");
 
@@ -403,96 +399,6 @@ namespace Sep490_Backend.Migrations
                         .HasDatabaseName("ix_refresh_tokens_user_id");
 
                     b.ToTable("RefreshTokens", (string)null);
-                });
-
-            modelBuilder.Entity("Sep490_Backend.Infra.Entities.SiteSurvey", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<JsonDocument>("Attachments")
-                        .HasColumnType("jsonb");
-
-                    b.Property<double>("BidWinProb")
-                        .HasColumnType("double precision");
-
-                    b.Property<int>("BiddingDecision")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Comments")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ConstructionRequirements")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("CreatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<int>("Creator")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("Deleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<double>("DiscountRate")
-                        .HasColumnType("double precision");
-
-                    b.Property<string>("EquipmentRequirements")
-                        .HasColumnType("text");
-
-                    b.Property<decimal>("EstimatedExpenses")
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<decimal>("EstimatedProfits")
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<decimal>("FinalProfit")
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<string>("HumanResourceCapacity")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ProfitAssessment")
-                        .HasColumnType("text");
-
-                    b.Property<decimal>("ProjectCost")
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<int>("ProjectId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("RiskAssessment")
-                        .HasColumnType("text");
-
-                    b.Property<string>("SiteSurveyName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("SurveyDate")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<decimal>("TenderPackagePrice")
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<decimal>("TotalBidPrice")
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<int>("Updater")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("SiteSurveys", (string)null);
                 });
 
             modelBuilder.Entity("Sep490_Backend.Infra.Entities.User", b =>
