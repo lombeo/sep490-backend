@@ -14,7 +14,6 @@ using Microsoft.AspNetCore.Http;
 using Sep490_Backend.Infra.Helps;
 using Sep490_Backend.Controllers;
 using System.Text.Json;
-using Sep490_Backend.DTO;
 
 namespace Sep490_Backend.Services.ProjectService
 {
@@ -61,21 +60,13 @@ namespace Sep490_Backend.Services.ProjectService
                 throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
             
-            var user = StaticVariable.UserMemory.FirstOrDefault(u => u.Id == actionBy);
-            if (user != null && user.Role == RoleConstValue.EXECUTIVE_BOARD)
+            // Kiểm tra xem người gọi có phải là người tạo project không
+            var projectCreator = await _context.ProjectUsers
+                .FirstOrDefaultAsync(pu => pu.ProjectId == id && pu.IsCreator && !pu.Deleted);
+                
+            if (projectCreator == null || projectCreator.UserId != actionBy)
             {
-                // Si es Executive Board, permiso sin restricciones
-            }
-            else
-            {
-                // Kiểm tra xem người gọi có phải là người tạo project không
-                var projectCreator = await _context.ProjectUsers
-                    .FirstOrDefaultAsync(pu => pu.ProjectId == id && pu.IsCreator && !pu.Deleted);
-                    
-                if (projectCreator == null || projectCreator.UserId != actionBy)
-                {
-                    throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
-                }
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
 
             // Lấy tất cả các entity liên quan đến project để xóa mềm
@@ -205,24 +196,13 @@ namespace Sep490_Backend.Services.ProjectService
                 throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
             
-            // Verificar si el usuario es Executive Board
-            var user = StaticVariable.UserMemory.FirstOrDefault(u => u.Id == actionBy);
-            ProjectUser? projectUser = null;
-            if (user != null && user.Role == RoleConstValue.EXECUTIVE_BOARD)
-            {
-                // Si es Executive Board, permiso sin restricciones
-                // Continuar con la obtención de los datos del proyecto
-            }
-            else
-            {
-                // Kiểm tra quyền truy cập
-                projectUser = await _context.ProjectUsers
+            // Kiểm tra quyền truy cập
+            var projectUser = await _context.ProjectUsers
                 .FirstOrDefaultAsync(pu => pu.ProjectId == id && pu.UserId == actionBy && !pu.Deleted);
-                    
-                if (projectUser == null)
-                {
-                    throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
-                }
+                
+            if (projectUser == null)
+            {
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
             
             // Lấy danh sách người xem
@@ -258,7 +238,7 @@ namespace Sep490_Backend.Services.ProjectService
                 CreatedAt = project.CreatedAt,
                 Creator = project.Creator,
                 Deleted = project.Deleted,
-                IsCreator = projectUser != null ? projectUser.IsCreator : false,
+                IsCreator = projectUser.IsCreator,
                 ViewerUserIds = viewerIds
             };
             
@@ -348,22 +328,13 @@ namespace Sep490_Backend.Services.ProjectService
                     attachmentInfos = System.Text.Json.JsonSerializer.Deserialize<List<AttachmentInfo>>(existingAttachmentsJson);
                 }
                 
-                // Verificar si el usuario es Executive Board
-                var user = StaticVariable.UserMemory.FirstOrDefault(u => u.Id == actionBy);
-                if (user != null && user.Role == RoleConstValue.EXECUTIVE_BOARD)
+                // Kiểm tra quyền truy cập - chỉ người tạo mới có quyền chỉnh sửa
+                var projectCreator = await _context.ProjectUsers
+                    .FirstOrDefaultAsync(pu => pu.ProjectId == model.Id && pu.IsCreator && !pu.Deleted);
+                
+                if (projectCreator == null || projectCreator.UserId != actionBy)
                 {
-                    // Si es Executive Board, permiso sin restricciones
-                }
-                else
-                {
-                    // Kiểm tra quyền truy cập - chỉ người tạo mới có quyền chỉnh sửa
-                    var projectCreator = await _context.ProjectUsers
-                        .FirstOrDefaultAsync(pu => pu.ProjectId == model.Id && pu.IsCreator && !pu.Deleted);
-                    
-                    if (projectCreator == null || projectCreator.UserId != actionBy)
-                    {
-                        throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
-                    }
+                    throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
                 }
             }
 

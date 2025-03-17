@@ -5,7 +5,6 @@ using Sep490_Backend.Services.CacheService;
 using Sep490_Backend.Services.Hosted;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using System.ComponentModel.Design;
@@ -23,7 +22,6 @@ using Sep490_Backend.Services.ProjectService;
 using Sep490_Backend.Services.ContractService;
 using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.GoogleDriveService;
-using Sep490_Backend.Infra.ModelBinders;
 
 namespace Sep490_Backend
 {
@@ -46,10 +44,7 @@ namespace Sep490_Backend
             {
                 options.EnableDetailedErrors = true;
             });
-            builder.Services.AddControllers(options =>
-            {
-                options.ModelBinderProviders.Insert(0, new Infra.ModelBinders.ContractDetailModelBinderProvider());
-            });
+            builder.Services.AddControllers();
             builder.Services.AddDistributedRedisCache(options =>
             {
                 var connectionString = StaticVariable.RedisConfig.ConnectionString;

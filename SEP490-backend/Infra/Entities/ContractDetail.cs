@@ -12,7 +12,11 @@ namespace Sep490_Backend.Infra.Entities
         public string Unit { get; set; }
         public decimal Quantity { get; set; }
         public decimal UnitPrice { get; set; }
-        public decimal Total { get; set; }
+        
+        // Navigation property
+        public virtual Contract Contract { get; set; }
+        public virtual ContractDetail ParentItem { get; set; }
+        public virtual ICollection<ContractDetail> ChildItems { get; set; }
     }
 
     public static class ContractDetailConfiguration
@@ -29,6 +33,13 @@ namespace Sep490_Backend.Infra.Entities
                       .IsRequired()
                       .HasColumnType("text");
 
+                entity.Property(e => e.Index)
+                      .IsRequired()
+                      .HasMaxLength(50);
+
+                entity.Property(e => e.ParentIndex)
+                      .HasMaxLength(50);
+
                 entity.Property(e => e.WorkName)
                       .IsRequired()
                       .HasColumnType("text");
@@ -43,9 +54,6 @@ namespace Sep490_Backend.Infra.Entities
                 entity.Property(e => e.UnitPrice)
                       .HasColumnType("numeric(18,2)");
 
-                entity.Property(e => e.Total)
-                      .HasColumnType("numeric(18,2)");
-
                 entity.Property(e => e.CreatedAt)
                       .HasColumnType("timestamp without time zone");
 
@@ -54,8 +62,24 @@ namespace Sep490_Backend.Infra.Entities
 
                 entity.Property(e => e.Deleted)
                       .HasDefaultValue(false);
+
+                // Relationships
+                entity.HasOne(e => e.Contract)
+                      .WithMany(c => c.ContractDetails)
+                      .HasForeignKey(e => e.ContractId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                // Parent-child relationships
+                entity.HasOne(e => e.ParentItem)
+                    .WithMany(e => e.ChildItems)
+                    .HasForeignKey(e => e.ParentIndex)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasMany(e => e.ChildItems)
+                    .WithOne(e => e.ParentItem)
+                    .HasForeignKey(e => e.ParentIndex)
+                    .OnDelete(DeleteBehavior.Restrict);
             });
         }
     }
-
 }
