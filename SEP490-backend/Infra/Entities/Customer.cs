@@ -1,5 +1,4 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using System.Collections.Generic;
 
 namespace Sep490_Backend.Infra.Entities
 {
@@ -17,9 +16,6 @@ namespace Sep490_Backend.Infra.Entities
         public string? Description { get; set; }
         public string? BankAccount { get; set; }
         public string? BankName { get; set; }
-        
-        // Navigation property
-        public virtual ICollection<Project> Projects { get; set; }
     }
 
     public static class CustomerConfiguration
@@ -63,11 +59,6 @@ namespace Sep490_Backend.Infra.Entities
                 entity.Property(e => e.BankName)
                       .HasMaxLength(255);
 
-                // Relationships
-                entity.HasMany(e => e.Projects)
-                      .WithOne(p => p.Customer)
-                      .HasForeignKey(p => p.CustomerId)
-                      .OnDelete(DeleteBehavior.Restrict);
             });
         }
     }

@@ -23,11 +23,21 @@ namespace Sep490_Backend.Controllers
             _dataService = dataService;
         }
 
+        [HttpGet("list-user")]
+        public async Task<ResponseDTO<List<User>>> ListUser([FromQuery] AdminSearchUserDTO model)
+        {
+            model.ActionBy = UserId;
+            var result = await HandleException(_dataService.ListUser(model), Message.AdminMessage.SEARCH_SUCCESS);
+            result.Meta = new ResponseMeta() { Total = model.Total, Index = model.PageIndex, PageSize = model.PageSize };
+            return result;
+        }
+
         [HttpDelete("delete-user/{userId}")]
         public async Task<ResponseDTO<bool>> DeleteUser(int userId)
         {
             return await HandleException(_adminService.DeleteUser(userId, UserId), Message.AdminMessage.DELETE_USER_SUCCESS);
         }
+
 
         [HttpPost("create-user")]
         public async Task<ResponseDTO<bool>> CreateUser([FromBody] AdminCreateUserDTO model)

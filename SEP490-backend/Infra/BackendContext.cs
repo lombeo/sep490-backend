@@ -26,15 +26,6 @@ namespace Sep490_Backend.Infra
         public virtual DbSet<ContractDetail> ContractDetails { get; set; }
         public virtual DbSet<Vehicle> Vehicles { get; set; }
         public virtual DbSet<Customer> Customers { get; set; }
-        public virtual DbSet<ActionLog> ActionLogs { get; set; }
-        public virtual DbSet<ConstructionPlan> ConstructionPlans { get; set; }
-        public virtual DbSet<ConstructionTeam> ConstructionTeams { get; set; }
-        public virtual DbSet<ConstructPlanItem> ConstructPlanItems { get; set; }
-        public virtual DbSet<ConstructPlanItemDetail> ConstructPlanItemDetails { get; set; }
-        public virtual DbSet<ResourceAllocationReqs> ResourceAllocationReqs { get; set; }
-        public virtual DbSet<ResourceMobilizationReqs> ResourceMobilizationReqs { get; set; }
-        public virtual DbSet<Material> Materials { get; set; }
-
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -49,14 +40,6 @@ namespace Sep490_Backend.Infra
             ContractDetailConfiguration.Config(modelBuilder);
             VehicleConfiguration.Config(modelBuilder);
             CustomerConfiguration.Config(modelBuilder);
-            ActionLogConfiguration.Config(modelBuilder);
-            ConstructionPlanConfiguration.Config(modelBuilder);
-            ConstructionTeamConfiguration.Config(modelBuilder);
-            ConstructPlanItemConfiguration.Config(modelBuilder);
-            ConstructPlanItemDetailConfiguration.Config(modelBuilder);
-            ResourceAllocationReqsConfiguration.Config(modelBuilder);
-            ResourceMobilizationReqsConfiguration.Config(modelBuilder);
-            MaterialConfiguration.Config(modelBuilder);
             //OnModelCreatingPartial(modelBuilder);
         }
 
