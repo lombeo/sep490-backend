@@ -15,12 +15,12 @@ namespace Sep490_Backend.Infra.Entities
         public bool Gender { get; set; }
         public DateTime Dob { get; set; }
         public bool IsVerify { get; set; }
+        public int? TeamId { get; set; }  // Foreign key for membership in a team
         
         // Navigation properties
         public virtual ICollection<RefreshToken> RefreshTokens { get; set; }
         public virtual ICollection<ProjectUser> ProjectUsers { get; set; }
         public virtual Vehicle Vehicle { get; set; }
-        public virtual ConstructionTeam ManagedTeam { get; set; }
         public virtual ConstructionTeam Team { get; set; }
         public virtual ICollection<ConstructPlanItem> QAItems { get; set; }
         public virtual ICollection<ConstructPlanItemDetail> ResourceAllocations { get; set; }
@@ -73,15 +73,16 @@ namespace Sep490_Backend.Infra.Entities
                       .HasForeignKey<Vehicle>(v => v.Driver)
                       .OnDelete(DeleteBehavior.Restrict);
 
-                // Construction Team relationships
-                entity.HasOne(e => e.ManagedTeam)
-                      .WithOne(ct => ct.Manager)
-                      .HasForeignKey<ConstructionTeam>(ct => ct.TeamManager)
-                      .OnDelete(DeleteBehavior.Restrict);
-
+                // Single Construction Team relationship
                 entity.HasOne(e => e.Team)
                       .WithMany(ct => ct.Members)
+                      .HasForeignKey(u => u.TeamId)
+                      .IsRequired(false)
                       .OnDelete(DeleteBehavior.Restrict);
+
+                // Property configuration for nullable foreign key
+                entity.Property(e => e.TeamId)
+                      .IsRequired(false);
 
                 // Construction Plan relationships - QAItems (many-to-many)
                 entity.HasMany(e => e.QAItems)

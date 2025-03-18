@@ -18,10 +18,10 @@ namespace Sep490_Backend.Infra.Entities
         public string? Attachment { get; set; }  // đường dẫn?
         public DateTime? ExpireDate { get; set; }  // Ngày hết hạn
         public DateTime? ProductionDate { get; set; }  // Ngày sản xuất
-        public string Description { get; set; }  // Mô tả
+        public string? Description { get; set; }  // Mô tả
 
         // Navigation property
-        public virtual ICollection<ConstructPlanItemDetail> ConstructPlanItemDetails { get; set; }
+        public virtual ICollection<ConstructPlanItemDetail>? ConstructPlanItemDetails { get; set; }
     }
 }
 
@@ -74,6 +74,7 @@ public static class MaterialConfiguration
                    .HasColumnType("timestamp without time zone");
 
             entity.Property(m => m.Description)
+                   .IsRequired(false)
                    .HasColumnType("text");
 
             entity.Property(e => e.CreatedAt)

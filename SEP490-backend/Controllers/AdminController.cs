@@ -40,13 +40,13 @@ namespace Sep490_Backend.Controllers
 
 
         [HttpPost("create-user")]
-        public async Task<ResponseDTO<bool>> CreateUser([FromBody] AdminCreateUserDTO model)
+        public async Task<ResponseDTO<User>> CreateUser([FromBody] AdminCreateUserDTO model)
         {
             return await HandleException(_adminService.CreateUser(model, UserId), Message.AdminMessage.CREATE_USER_SUCCESS);
         }
 
         [HttpPut("update-user")]
-        public async Task<ResponseDTO<bool>> UpdateUser([FromBody] AdminUpdateUserDTO model)
+        public async Task<ResponseDTO<User>> UpdateUser([FromBody] AdminUpdateUserDTO model)
         {
             return await HandleException(_adminService.UpdateUser(model, UserId), Message.AdminMessage.UPDATE_USER_SUCCESS);
         }

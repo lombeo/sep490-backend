@@ -15,6 +15,7 @@ using Sep490_Backend.Infra.Helps;
 using Sep490_Backend.Controllers;
 using System.Text.Json;
 using Sep490_Backend.DTO;
+using Sep490_Backend.DTO.Customer;
 
 namespace Sep490_Backend.Services.ProjectService
 {
@@ -46,7 +47,7 @@ namespace Sep490_Backend.Services.ProjectService
             _helperService = helperService;
             _dataService = dataService;
             _googleDriveService = googleDriveService;
-        }
+        } 
 
         public async Task<int> Delete(int id, int actionBy)
         {
@@ -233,13 +234,35 @@ namespace Sep490_Backend.Services.ProjectService
                 
             // Lấy thông tin khách hàng
             var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == project.CustomerId);
+            var customerDTO = CustomerDTO.FromCustomer(customer);
             
             var projectDTO = new ProjectDTO
             {
                 Id = project.Id,
                 ProjectCode = project.ProjectCode,
                 ProjectName = project.ProjectName,
-                Customer = customer ?? new Customer(),
+                // Sử dụng CustomerDTO thay vì Customer để tránh tham chiếu vòng
+                Customer = customer != null ? new Customer
+                {
+                    Id = customer.Id,
+                    CustomerName = customer.CustomerName,
+                    DirectorName = customer.DirectorName,
+                    Phone = customer.Phone,
+                    Email = customer.Email,
+                    Address = customer.Address,
+                    Description = customer.Description,
+                    CustomerCode = customer.CustomerCode,
+                    TaxCode = customer.TaxCode,
+                    Fax = customer.Fax,
+                    BankAccount = customer.BankAccount,
+                    BankName = customer.BankName,
+                    CreatedAt = customer.CreatedAt,
+                    Creator = customer.Creator,
+                    UpdatedAt = customer.UpdatedAt,
+                    Updater = customer.Updater,
+                    Deleted = customer.Deleted,
+                    Projects = null // Prevent circular references
+                } : new Customer(),
                 ConstructType = project.ConstructType,
                 Location = project.Location,
                 Area = project.Area,
@@ -561,13 +584,37 @@ namespace Sep490_Backend.Services.ProjectService
                 .Where(pu => pu.ProjectId == project.Id && !pu.IsCreator && !pu.Deleted)
                 .Select(pu => pu.UserId)
                 .ToListAsync();
-
+                
+            // Lấy thông tin khách hàng
+            var customerEntity = customer.FirstOrDefault(c => c.Id == project.CustomerId);
+            
             return new ProjectDTO
             {
                 Id = project.Id,
                 ProjectCode = project.ProjectCode,
                 ProjectName = project.ProjectName,
-                Customer = customer.FirstOrDefault(c => c.Id == project.CustomerId) ?? new Customer(),
+                // Tạo Customer mới với Projects = null để tránh vòng lặp tham chiếu
+                Customer = customerEntity != null ? new Customer
+                {
+                    Id = customerEntity.Id,
+                    CustomerName = customerEntity.CustomerName,
+                    DirectorName = customerEntity.DirectorName,
+                    Phone = customerEntity.Phone,
+                    Email = customerEntity.Email,
+                    Address = customerEntity.Address,
+                    Description = customerEntity.Description,
+                    CustomerCode = customerEntity.CustomerCode,
+                    TaxCode = customerEntity.TaxCode,
+                    Fax = customerEntity.Fax,
+                    BankAccount = customerEntity.BankAccount,
+                    BankName = customerEntity.BankName,
+                    CreatedAt = customerEntity.CreatedAt,
+                    Creator = customerEntity.Creator,
+                    UpdatedAt = customerEntity.UpdatedAt,
+                    Updater = customerEntity.Updater,
+                    Deleted = customerEntity.Deleted,
+                    Projects = null // Prevent circular references
+                } : new Customer(),
                 ConstructType = project.ConstructType,
                 Location = project.Location,
                 Area = project.Area,
