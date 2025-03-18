@@ -18,8 +18,8 @@ namespace Sep490_Backend.Services.AdminService
     public interface IAdminService
     {
         Task<bool> DeleteUser(int userId, int actionBy);
-        Task<bool> CreateUser(AdminCreateUserDTO model, int actionBy);
-        Task<bool> UpdateUser(AdminUpdateUserDTO model, int actionBy);
+        Task<User> CreateUser(AdminCreateUserDTO model, int actionBy);
+        Task<User> UpdateUser(AdminUpdateUserDTO model, int actionBy);
     }
 
     public class AdminService : IAdminService
@@ -67,7 +67,7 @@ namespace Sep490_Backend.Services.AdminService
             return true;
         }
 
-        public async Task<bool> UpdateUser(AdminUpdateUserDTO model, int actionBy)
+        public async Task<User> UpdateUser(AdminUpdateUserDTO model, int actionBy)
         {
             if (!IsAdmin(actionBy))
             {
@@ -154,13 +154,35 @@ namespace Sep490_Backend.Services.AdminService
             existingUser.Updater = actionBy;
 
             _context.Update(existingUser);
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
 
             _authenService.TriggerUpdateUserMemory(existingUser.Id);
-            return true;
+            
+            // Create a secure copy without sensitive information
+            var secureUser = new User
+            {
+                Id = existingUser.Id,
+                Username = existingUser.Username,
+                Email = existingUser.Email,
+                Role = existingUser.Role,
+                FullName = existingUser.FullName,
+                Phone = existingUser.Phone,
+                Gender = existingUser.Gender,
+                Dob = existingUser.Dob,
+                IsVerify = existingUser.IsVerify,
+                TeamId = existingUser.TeamId,
+                CreatedAt = existingUser.CreatedAt,
+                UpdatedAt = existingUser.UpdatedAt,
+                Creator = existingUser.Creator,
+                Updater = existingUser.Updater,
+                Deleted = existingUser.Deleted
+                // PasswordHash and RefreshTokens are not included for security
+            };
+
+            return secureUser;
         }
 
-        public async Task<bool> CreateUser(AdminCreateUserDTO model, int actionBy)
+        public async Task<User> CreateUser(AdminCreateUserDTO model, int actionBy)
         {
             //Check admin
             if (!IsAdmin(actionBy))
@@ -259,7 +281,28 @@ namespace Sep490_Backend.Services.AdminService
 
             _authenService.TriggerUpdateUserMemory(newUser.Id);
 
-            return true;
+            // Create a secure copy without sensitive information
+            var secureUser = new User
+            {
+                Id = newUser.Id,
+                Username = newUser.Username,
+                Email = newUser.Email,
+                Role = newUser.Role,
+                FullName = newUser.FullName,
+                Phone = newUser.Phone,
+                Gender = newUser.Gender,
+                Dob = newUser.Dob,
+                IsVerify = newUser.IsVerify,
+                TeamId = newUser.TeamId,
+                CreatedAt = newUser.CreatedAt,
+                UpdatedAt = newUser.UpdatedAt,
+                Creator = newUser.Creator,
+                Updater = newUser.Updater,
+                Deleted = newUser.Deleted
+                // PasswordHash and RefreshTokens are not included for security
+            };
+
+            return secureUser;
         }
 
         private bool IsAdmin(int userId)

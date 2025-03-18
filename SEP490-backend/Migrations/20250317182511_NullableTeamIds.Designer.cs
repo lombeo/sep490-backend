@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Sep490_Backend.DTO.ResourceReqs;
@@ -14,9 +15,11 @@ using Sep490_Backend.Infra;
 namespace Sep490_Backend.Migrations
 {
     [DbContext(typeof(BackendContext))]
-    partial class BackendContextModelSnapshot : ModelSnapshot
+    [Migration("20250317182511_NullableTeamIds")]
+    partial class NullableTeamIds
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -648,6 +651,7 @@ namespace Sep490_Backend.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<string>("Description")
+                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("ExpireDate")
@@ -1128,6 +1132,9 @@ namespace Sep490_Backend.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("ConstructionTeamId")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime?>("CreatedAt")
                         .HasColumnType("timestamp without time zone");
 
@@ -1169,6 +1176,9 @@ namespace Sep490_Backend.Migrations
                     b.Property<int?>("TeamId")
                         .HasColumnType("integer");
 
+                    b.Property<int>("TeamId1")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp without time zone");
 
@@ -1194,6 +1204,8 @@ namespace Sep490_Backend.Migrations
                     b.HasIndex("Phone");
 
                     b.HasIndex("TeamId");
+
+                    b.HasIndex("TeamId1");
 
                     b.HasIndex("Username");
 
@@ -1437,7 +1449,7 @@ namespace Sep490_Backend.Migrations
             modelBuilder.Entity("Sep490_Backend.Infra.Entities.ConstructionTeam", b =>
                 {
                     b.HasOne("Sep490_Backend.Infra.Entities.User", "Manager")
-                        .WithOne()
+                        .WithOne("ManagedTeam")
                         .HasForeignKey("Sep490_Backend.Infra.Entities.ConstructionTeam", "TeamManager")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -1616,10 +1628,16 @@ namespace Sep490_Backend.Migrations
 
             modelBuilder.Entity("Sep490_Backend.Infra.Entities.User", b =>
                 {
-                    b.HasOne("Sep490_Backend.Infra.Entities.ConstructionTeam", "Team")
+                    b.HasOne("Sep490_Backend.Infra.Entities.ConstructionTeam", null)
                         .WithMany("Members")
                         .HasForeignKey("TeamId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Sep490_Backend.Infra.Entities.ConstructionTeam", "Team")
+                        .WithMany()
+                        .HasForeignKey("TeamId1")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("Team");
                 });
@@ -1689,6 +1707,9 @@ namespace Sep490_Backend.Migrations
                     b.Navigation("ApprovedSurveys");
 
                     b.Navigation("ConductedSurveys");
+
+                    b.Navigation("ManagedTeam")
+                        .IsRequired();
 
                     b.Navigation("ProjectUsers");
 

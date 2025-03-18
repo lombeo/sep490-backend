@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Sep490_Backend.DTO.ResourceReqs;
@@ -14,9 +15,11 @@ using Sep490_Backend.Infra;
 namespace Sep490_Backend.Migrations
 {
     [DbContext(typeof(BackendContext))]
-    partial class BackendContextModelSnapshot : ModelSnapshot
+    [Migration("20250317201938_FixUserTeamRelationship")]
+    partial class FixUserTeamRelationship
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -375,8 +378,7 @@ namespace Sep490_Backend.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TeamManager")
-                        .IsUnique();
+                    b.HasIndex("TeamManager");
 
                     b.HasIndex("TeamName");
 
@@ -648,6 +650,7 @@ namespace Sep490_Backend.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<string>("Description")
+                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<DateTime?>("ExpireDate")
@@ -1437,8 +1440,8 @@ namespace Sep490_Backend.Migrations
             modelBuilder.Entity("Sep490_Backend.Infra.Entities.ConstructionTeam", b =>
                 {
                     b.HasOne("Sep490_Backend.Infra.Entities.User", "Manager")
-                        .WithOne()
-                        .HasForeignKey("Sep490_Backend.Infra.Entities.ConstructionTeam", "TeamManager")
+                        .WithMany()
+                        .HasForeignKey("TeamManager")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 

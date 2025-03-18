@@ -10,5 +10,6 @@
         public const string PROJECT_BY_USER_CACHE_KEY = "PROJECT:USER:{0}"; // Pattern: PROJECT:USER:userId
         public const string CONTRACT_CACHE_KEY = "CONTRACT";
         public const string CONTRACT_DETAIL_CACHE_KEY = "CONTRACT_DETAIL";
+        public const string MATERIAL_CACHE_KEY = "MATERIAL";
     }
 }

@@ -399,30 +399,50 @@ namespace Sep490_Backend.Services.ContractService
             }
 
             // Lấy tất cả các ContractDetail của Contract này
-            var existingContractDetails = _context.Set<ContractDetail>()
+            var existingContractDetails = await _context.ContractDetails
                 .Where(cd => cd.ContractId == contract.Id && !cd.Deleted)
-                .ToList();
+                .ToListAsync();
 
+            // Tạo dictionary để theo dõi WorkCodes đã được xử lý
+            var processedWorkCodes = new HashSet<string>();
+            
             // Xử lý danh sách ContractDetail
             List<ContractDetail> updatedContractDetails = new List<ContractDetail>();
-            int counter = 1;
-
-            foreach (var detailDto in model.ContractDetails)
+            
+            // Xử lý các item bị xóa trước
+            foreach (var detailDto in model.ContractDetails.Where(d => d.IsDelete && !string.IsNullOrEmpty(d.WorkCode)))
             {
-                // Nếu isDelete = true và WorkCode tồn tại, thực hiện xóa mềm
-                if (detailDto.IsDelete && !string.IsNullOrEmpty(detailDto.WorkCode))
+                var detailToDelete = existingContractDetails.FirstOrDefault(cd => cd.WorkCode == detailDto.WorkCode);
+                if (detailToDelete != null)
                 {
-                    var detailToDelete = existingContractDetails.FirstOrDefault(cd => cd.WorkCode == detailDto.WorkCode);
-                    if (detailToDelete != null)
-                    {
-                        detailToDelete.Deleted = true;
-                        detailToDelete.UpdatedAt = DateTime.UtcNow;
-                        detailToDelete.Updater = model.ActionBy;
-                        _context.Update(detailToDelete);
-                    }
+                    detailToDelete.Deleted = true;
+                    detailToDelete.UpdatedAt = DateTime.UtcNow;
+                    detailToDelete.Updater = model.ActionBy;
+                    _context.Update(detailToDelete);
+                    processedWorkCodes.Add(detailDto.WorkCode);
+                }
+            }
+            
+            // Xử lý các chi tiết theo cấp bậc - sắp xếp theo index để đảm bảo thứ tự xử lý
+            // Sắp xếp các ContractDetails theo thứ tự từ parent đến child
+            var sortedDetails = model.ContractDetails
+                .Where(d => !d.IsDelete)
+                .OrderBy(d => d.Index.Length) // Sắp xếp theo độ dài của index (1 trước, sau đó 1.1, 1.1.1)
+                .ThenBy(d => d.Index) // Sau đó sắp xếp theo thứ tự của index
+                .ToList();
+                
+            // Dictionary để lưu trữ ánh xạ giữa Index và WorkCode mới tạo ra
+            var indexToWorkCode = new Dictionary<string, string>();
+            int nextCodeCounter = 1;
+
+            foreach (var detailDto in sortedDetails)
+            {
+                // Bỏ qua nếu đã được xử lý
+                if (processedWorkCodes.Contains(detailDto.WorkCode))
+                {
                     continue;
                 }
-
+                
                 // Tạo entity từ DTO
                 var contractDetail = new ContractDetail
                 {
@@ -443,11 +463,14 @@ namespace Sep490_Backend.Services.ContractService
                 if (string.IsNullOrEmpty(detailDto.WorkCode))
                 {
                     // Tạo WorkCode theo công thức ContractCode-số thứ tự tăng dần
-                    contractDetail.WorkCode = $"{model.ContractCode}-{counter++}";
+                    contractDetail.WorkCode = $"{model.ContractCode}-{nextCodeCounter++}";
                     contractDetail.CreatedAt = DateTime.UtcNow;
                     contractDetail.Creator = model.ActionBy;
                     
                     await _context.AddAsync(contractDetail);
+                    
+                    // Lưu mapping của index và workcode để sử dụng cho các hạng mục con
+                    indexToWorkCode[detailDto.Index] = contractDetail.WorkCode;
                 }
                 else
                 {
@@ -461,6 +484,9 @@ namespace Sep490_Backend.Services.ContractService
                         contractDetail.Creator = existingDetail.Creator;
 
                         _context.Update(contractDetail);
+                        
+                        // Cập nhật mapping
+                        indexToWorkCode[detailDto.Index] = contractDetail.WorkCode;
                     }
                     else
                     {
@@ -470,10 +496,14 @@ namespace Sep490_Backend.Services.ContractService
                         contractDetail.Creator = model.ActionBy;
                         
                         await _context.AddAsync(contractDetail);
+                        
+                        // Cập nhật mapping
+                        indexToWorkCode[detailDto.Index] = contractDetail.WorkCode;
                     }
                 }
 
                 updatedContractDetails.Add(contractDetail);
+                processedWorkCodes.Add(contractDetail.WorkCode);
             }
 
             await _context.SaveChangesAsync();
@@ -499,8 +529,14 @@ namespace Sep490_Backend.Services.ContractService
                 _ = _cacheService.DeleteAsync(userContractDetailCacheKey);
             }
 
+            // Tải lại tất cả các ContractDetail để đảm bảo dữ liệu trả về là chính xác nhất
+            var finalContractDetails = await _context.ContractDetails
+                .Where(cd => cd.ContractId == contract.Id && !cd.Deleted)
+                .OrderBy(cd => cd.Index)
+                .ToListAsync();
+
             // Chuyển đổi các ContractDetail thành DTO
-            var contractDetailDTOs = updatedContractDetails.Select(cd => new ContractDetailDTO
+            var contractDetailDTOs = finalContractDetails.Select(cd => new ContractDetailDTO
             {
                 WorkCode = cd.WorkCode,
                 Index = cd.Index,

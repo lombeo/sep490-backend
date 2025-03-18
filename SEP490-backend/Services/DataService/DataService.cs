@@ -1,9 +1,9 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Sep490_Backend.DTO;
 using Sep490_Backend.DTO.Admin;
-using Sep490_Backend.DTO.Common;
 using Sep490_Backend.DTO.Contract;
 using Sep490_Backend.DTO.Customer;
+using Sep490_Backend.DTO.Material;
 using Sep490_Backend.DTO.Project;
 using Sep490_Backend.DTO.SiteSurvey;
 using Sep490_Backend.Infra;
@@ -22,6 +22,7 @@ namespace Sep490_Backend.Services.DataService
         Task<List<Customer>> ListCustomer(CustomerSearchDTO model);
         Task<List<ProjectDTO>> ListProject(SearchProjectDTO model);
         Task<List<SiteSurvey>> ListSiteSurvey(SearchSiteSurveyDTO model);
+        Task<List<Material>> ListMaterial(MaterialSearchDTO model);
     }
 
     public class DataService : IDataService
@@ -216,11 +217,6 @@ namespace Sep490_Backend.Services.DataService
 
         public async Task<List<ProjectDTO>> ListProject(SearchProjectDTO model)
         {
-            if (!_helpService.IsInRole(model.ActionBy, new List<string> { RoleConstValue.BUSINESS_EMPLOYEE, RoleConstValue.EXECUTIVE_BOARD }))
-            {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
-            }
-
             var user = StaticVariable.UserMemory.FirstOrDefault(u => u.Id == model.ActionBy);
             bool isExecutiveBoard = user != null && user.Role == RoleConstValue.EXECUTIVE_BOARD;
 
@@ -278,7 +274,30 @@ namespace Sep490_Backend.Services.DataService
                             .Select(pu => pu.UserId)
                             .ToList();
                         
-                        var customer = allCustomers.FirstOrDefault(c => c.Id == project.CustomerId) ?? new Customer();
+                        var customerEntity = allCustomers.FirstOrDefault(c => c.Id == project.CustomerId);
+                        
+                        // Tạo Customer mới với Projects = null để tránh vòng lặp tham chiếu
+                        var customer = customerEntity != null ? 
+                            new Customer {
+                                Id = customerEntity.Id,
+                                CustomerName = customerEntity.CustomerName,
+                                DirectorName = customerEntity.DirectorName,
+                                Phone = customerEntity.Phone,
+                                Email = customerEntity.Email,
+                                Address = customerEntity.Address,
+                                Description = customerEntity.Description,
+                                CustomerCode = customerEntity.CustomerCode,
+                                TaxCode = customerEntity.TaxCode,
+                                Fax = customerEntity.Fax,
+                                BankAccount = customerEntity.BankAccount,
+                                BankName = customerEntity.BankName,
+                                CreatedAt = customerEntity.CreatedAt,
+                                Creator = customerEntity.Creator,
+                                UpdatedAt = customerEntity.UpdatedAt,
+                                Updater = customerEntity.Updater,
+                                Deleted = customerEntity.Deleted,
+                                Projects = null // Ngăn tham chiếu vòng lặp
+                            } : new Customer();
                         
                         userProjects.Add(new ProjectDTO
                         {
@@ -335,7 +354,30 @@ namespace Sep490_Backend.Services.DataService
                                 .Select(pu => pu.UserId)
                                 .ToList();
                             
-                            var customer = allCustomers.FirstOrDefault(c => c.Id == project.CustomerId) ?? new Customer();
+                            var customerEntity = allCustomers.FirstOrDefault(c => c.Id == project.CustomerId);
+                            
+                            // Tạo Customer mới với Projects = null để tránh vòng lặp tham chiếu
+                            var customer = customerEntity != null ? 
+                                new Customer {
+                                    Id = customerEntity.Id,
+                                    CustomerName = customerEntity.CustomerName,
+                                    DirectorName = customerEntity.DirectorName,
+                                    Phone = customerEntity.Phone,
+                                    Email = customerEntity.Email,
+                                    Address = customerEntity.Address,
+                                    Description = customerEntity.Description,
+                                    CustomerCode = customerEntity.CustomerCode,
+                                    TaxCode = customerEntity.TaxCode,
+                                    Fax = customerEntity.Fax,
+                                    BankAccount = customerEntity.BankAccount,
+                                    BankName = customerEntity.BankName,
+                                    CreatedAt = customerEntity.CreatedAt,
+                                    Creator = customerEntity.Creator,
+                                    UpdatedAt = customerEntity.UpdatedAt,
+                                    Updater = customerEntity.Updater,
+                                    Deleted = customerEntity.Deleted,
+                                    Projects = null // Ngăn tham chiếu vòng lặp
+                                } : new Customer();
                             
                             userProjects.Add(new ProjectDTO
                             {
@@ -527,7 +569,97 @@ namespace Sep490_Backend.Services.DataService
                 data = data.Skip(model.Skip).Take(model.PageSize).ToList();
             }
 
-            return data;
+            // Create a clean list without sensitive data
+            var secureData = data.Select(user => new User {
+                Id = user.Id,
+                Username = user.Username,
+                Email = user.Email,
+                Role = user.Role,
+                FullName = user.FullName,
+                Phone = user.Phone,
+                Gender = user.Gender,
+                Dob = user.Dob,
+                IsVerify = user.IsVerify,
+                TeamId = user.TeamId,
+                CreatedAt = user.CreatedAt,
+                UpdatedAt = user.UpdatedAt,
+                Creator = user.Creator,
+                Updater = user.Updater,
+                Deleted = user.Deleted
+                // RefreshTokens and PasswordHash fields are intentionally not included
+            }).ToList();
+
+            return secureData;
+        }
+
+        public async Task<List<Material>> ListMaterial(MaterialSearchDTO model)
+        {
+            // Try to get materials from cache
+            string cacheKey = RedisCacheKey.MATERIAL_CACHE_KEY;
+            var materialCacheList = await _cacheService.GetAsync<List<Material>>(cacheKey);
+
+            // If not in cache, get from database and cache it
+            if (materialCacheList == null)
+            {
+                materialCacheList = await _context.Materials
+                    .Where(m => !m.Deleted)
+                    .OrderByDescending(m => m.UpdatedAt)
+                    .ToListAsync();
+                
+                // Cache the result
+                _ = _cacheService.SetAsync(cacheKey, materialCacheList);
+            }
+
+            // Apply filters
+            var filteredList = materialCacheList;
+
+            // Apply keyword search across multiple fields
+            if (!string.IsNullOrWhiteSpace(model.Keyword))
+            {
+                var keyword = model.Keyword.ToLower().Trim();
+                filteredList = filteredList.Where(m => 
+                    (m.MaterialCode?.ToLower().Contains(keyword) == true) ||
+                    (m.MaterialName?.ToLower().Contains(keyword) == true) ||
+                    (m.Unit?.ToLower().Contains(keyword) == true) ||
+                    (m.Branch?.ToLower().Contains(keyword) == true) ||
+                    (m.MadeIn?.ToLower().Contains(keyword) == true) ||
+                    (m.ChassisNumber?.ToLower().Contains(keyword) == true) ||
+                    (m.Description?.ToLower().Contains(keyword) == true)
+                ).ToList();
+            }
+
+            // Apply specific field filters
+            if (!string.IsNullOrWhiteSpace(model.MaterialCode))
+            {
+                filteredList = filteredList.Where(m => 
+                    m.MaterialCode.ToLower().Contains(model.MaterialCode.ToLower().Trim())
+                ).ToList();
+            }
+
+            if (!string.IsNullOrWhiteSpace(model.MaterialName))
+            {
+                filteredList = filteredList.Where(m => 
+                    m.MaterialName.ToLower().Contains(model.MaterialName.ToLower().Trim())
+                ).ToList();
+            }
+
+            if (!string.IsNullOrWhiteSpace(model.Unit))
+            {
+                filteredList = filteredList.Where(m => 
+                    m.Unit != null && m.Unit.ToLower().Contains(model.Unit.ToLower().Trim())
+                ).ToList();
+            }
+
+            // Set total count for pagination
+            model.Total = filteredList.Count();
+
+            // Apply pagination
+            if (model.PageSize > 0)
+            {
+                filteredList = filteredList.Skip(model.Skip).Take(model.PageSize).ToList();
+            }
+
+            return filteredList;
         }
     }
 }

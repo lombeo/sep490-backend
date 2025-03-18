@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using System.Collections.Generic;
 
 namespace Sep490_Backend.Infra.Entities
 {
@@ -14,6 +15,22 @@ namespace Sep490_Backend.Infra.Entities
         public bool Gender { get; set; }
         public DateTime Dob { get; set; }
         public bool IsVerify { get; set; }
+        public int? TeamId { get; set; }  // Foreign key for membership in a team
+        
+        // Navigation properties
+        public virtual ICollection<RefreshToken> RefreshTokens { get; set; }
+        public virtual ICollection<ProjectUser> ProjectUsers { get; set; }
+        public virtual Vehicle Vehicle { get; set; }
+        public virtual ConstructionTeam Team { get; set; }
+        public virtual ICollection<ConstructPlanItem> QAItems { get; set; }
+        public virtual ICollection<ConstructPlanItemDetail> ResourceAllocations { get; set; }
+        public virtual ICollection<ConstructionPlan> ReviewedPlans { get; set; }
+        public virtual ICollection<SiteSurvey> ConductedSurveys { get; set; }
+        public virtual ICollection<SiteSurvey> ApprovedSurveys { get; set; }
+        public virtual ICollection<ResourceMobilizationReqs> RequestedMobilizations { get; set; }
+        public virtual ICollection<ResourceMobilizationReqs> ApprovedMobilizations { get; set; }
+        public virtual ICollection<ResourceAllocationReqs> RequestedAllocations { get; set; }
+        public virtual ICollection<ResourceAllocationReqs> ApprovedAllocations { get; set; }
     }
 
     public static class UserAuthenConfiguration
@@ -39,6 +56,124 @@ namespace Sep490_Backend.Infra.Entities
                       .HasColumnType("timestamp without time zone");
                 entity.Property(e => e.Creator);
                 entity.Property(e => e.Updater);
+
+                // Relationships
+                entity.HasMany(e => e.RefreshTokens)
+                      .WithOne()
+                      .HasForeignKey(e => e.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasMany(e => e.ProjectUsers)
+                      .WithOne()
+                      .HasForeignKey(e => e.UserId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.Vehicle)
+                      .WithOne(v => v.User)
+                      .HasForeignKey<Vehicle>(v => v.Driver)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                // Single Construction Team relationship
+                entity.HasOne(e => e.Team)
+                      .WithMany(ct => ct.Members)
+                      .HasForeignKey(u => u.TeamId)
+                      .IsRequired(false)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                // Property configuration for nullable foreign key
+                entity.Property(e => e.TeamId)
+                      .IsRequired(false);
+
+                // Construction Plan relationships - QAItems (many-to-many)
+                entity.HasMany(e => e.QAItems)
+                      .WithMany(cpi => cpi.QAMembers)
+                      .UsingEntity<Dictionary<string, object>>(
+                        "ConstructPlanItemQAs",
+                        j => j
+                            .HasOne<ConstructPlanItem>()
+                            .WithMany()
+                            .HasForeignKey("QAItemWorkCode")
+                            .HasConstraintName("FK_ConstructPlanItemQAs_ConstructPlanItems_QAItemWorkCode")
+                            .OnDelete(DeleteBehavior.Cascade),
+                        j => j
+                            .HasOne<User>()
+                            .WithMany()
+                            .HasForeignKey("QAMemberId")
+                            .HasConstraintName("FK_ConstructPlanItemQAs_Users_QAMemberId")
+                            .OnDelete(DeleteBehavior.Cascade),
+                        j => 
+                        {
+                            j.HasKey("QAItemWorkCode", "QAMemberId");
+                            j.ToTable("ConstructPlanItemQAs");
+                        });
+
+                // Construction Plan relationships - ReviewedPlans (many-to-many)
+                entity.HasMany(e => e.ReviewedPlans)
+                      .WithMany(cp => cp.Reviewers)
+                      .UsingEntity<Dictionary<string, object>>(
+                        "ConstructionPlanReviewers",
+                        j => j
+                            .HasOne<ConstructionPlan>()
+                            .WithMany()
+                            .HasForeignKey("ReviewedPlanId")
+                            .HasConstraintName("FK_ConstructionPlanReviewers_ConstructionPlans_ReviewedPlanId")
+                            .OnDelete(DeleteBehavior.Cascade),
+                        j => j
+                            .HasOne<User>()
+                            .WithMany()
+                            .HasForeignKey("ReviewerId")
+                            .HasConstraintName("FK_ConstructionPlanReviewers_Users_ReviewerId")
+                            .OnDelete(DeleteBehavior.Cascade),
+                        j => 
+                        {
+                            j.HasKey("ReviewedPlanId", "ReviewerId");
+                            j.ToTable("ConstructionPlanReviewers");
+                        });
+
+                // Resource relationships - ResourceAllocations (many-to-many)
+                entity.HasMany(e => e.ResourceAllocations)
+                      .WithMany(cpid => cpid.Users)
+                      .UsingEntity<Dictionary<string, object>>(
+                        "ConstructPlanItemDetailUsers",
+                        j => j
+                            .HasOne<ConstructPlanItemDetail>()
+                            .WithMany()
+                            .HasForeignKey("ResourceAllocationId")
+                            .HasConstraintName("FK_ConstructPlanItemDetailUsers_ConstructPlanItemDetails_ResourceAllocationId")
+                            .OnDelete(DeleteBehavior.Cascade),
+                        j => j
+                            .HasOne<User>()
+                            .WithMany()
+                            .HasForeignKey("UserId")
+                            .HasConstraintName("FK_ConstructPlanItemDetailUsers_Users_UserId")
+                            .OnDelete(DeleteBehavior.Cascade),
+                        j => 
+                        {
+                            j.HasKey("ResourceAllocationId", "UserId");
+                            j.ToTable("ConstructPlanItemDetailUsers");
+                        });
+
+                // Resource Mobilization relationships
+                entity.HasMany(e => e.RequestedMobilizations)
+                      .WithOne(rm => rm.Requester)
+                      .HasForeignKey(rm => rm.Creator)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasMany(e => e.ApprovedMobilizations)
+                      .WithOne(rm => rm.Approver)
+                      .HasForeignKey(rm => rm.Updater)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                // Resource Allocation relationships
+                entity.HasMany(e => e.RequestedAllocations)
+                      .WithOne(ra => ra.Requester)
+                      .HasForeignKey(ra => ra.Creator)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasMany(e => e.ApprovedAllocations)
+                      .WithOne(ra => ra.Approver)
+                      .HasForeignKey(ra => ra.Updater)
+                      .OnDelete(DeleteBehavior.Restrict);
             });
         }
     }

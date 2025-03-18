@@ -63,21 +63,12 @@ namespace Sep490_Backend.Services.SiteSurveyService
                 throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
 
-            // Kiểm tra xem người dùng có phải là người tạo Project chứa SiteSurvey này không
-            var projectCreator = await _context.ProjectUsers
-                .FirstOrDefaultAsync(pu => pu.ProjectId == data.ProjectId && pu.IsCreator && !pu.Deleted);
-            
-            if (projectCreator == null || projectCreator.UserId != actionBy)
-            {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
-            }
-
             // Xóa các file đính kèm từ Google Drive
             if (data.Attachments != null)
             {
                 try
                 {
-                    var attachments = JsonSerializer.Deserialize<List<AttachmentInfo>>(data.Attachments.RootElement.ToString());
+                    var attachments = JsonSerializer.Deserialize<List<DTO.AttachmentInfo>>(data.Attachments.RootElement.ToString());
                     if (attachments != null && attachments.Any())
                     {
                         var linksToDelete = attachments.Select(a => a.WebContentLink).ToList();
@@ -190,27 +181,12 @@ namespace Sep490_Backend.Services.SiteSurveyService
                 throw new KeyNotFoundException(Message.SiteSurveyMessage.PROJECT_NOT_FOUND);
             }
             
-            // Kiểm tra xem người dùng có phải là người tạo Project không
-            var isProjectCreator = await _context.ProjectUsers
-                .AnyAsync(pu => pu.ProjectId == model.ProjectId && pu.UserId == actionBy && pu.IsCreator && !pu.Deleted);
-                
-            if (!isProjectCreator)
-            {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
-            }
-            
             // Validation
             if (string.IsNullOrWhiteSpace(model.SiteSurveyName))
                 errors.Add(new ResponseError
                 {
                     Message = Message.CommonMessage.MISSING_PARAM,
                     Field = nameof(model.SiteSurveyName).ToCamelCase()
-                });
-            if (model.SurveyDate == DateTime.MinValue)
-                errors.Add(new ResponseError
-                {
-                    Message = Message.CommonMessage.MISSING_PARAM,
-                    Field = nameof(model.SurveyDate).ToCamelCase()
                 });
 
             if (errors.Count > 0)

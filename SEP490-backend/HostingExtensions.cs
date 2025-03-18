@@ -17,13 +17,15 @@ using Sep490_Backend.Services.EmailService;
 using Sep490_Backend.Services.AdminService;
 using Sep490_Backend.Services.OTPService;
 using Sep490_Backend.Services.HelperService;
-using Sep490_Backend.Services.SiteSurveyService;
+//using Sep490_Backend.Services.SiteSurveyService;
 using Sep490_Backend.Services.CustomerService;
 using Sep490_Backend.Services.ProjectService;
 using Sep490_Backend.Services.ContractService;
 using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.GoogleDriveService;
 using Sep490_Backend.Infra.ModelBinders;
+using Sep490_Backend.Services.SiteSurveyService;
+using Sep490_Backend.Services.MaterialService;
 
 namespace Sep490_Backend
 {
@@ -69,6 +71,7 @@ namespace Sep490_Backend
             builder.Services.AddScoped<IContractService, ContractService>();
             builder.Services.AddScoped<IDataService, DataService>();
             builder.Services.AddScoped<IGoogleDriveService, GoogleDriveService>();
+            builder.Services.AddScoped<IMaterialService, MaterialService>();
             builder.Services.AddScoped<RedisConnManager>();
             builder.Services.AddHostedService<DefaultBackgroundService>();
 

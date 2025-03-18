@@ -26,6 +26,9 @@ namespace Sep490_Backend.Infra.Entities
         public string? Comments { get; set; }
         public JsonDocument? Attachments { get; set; }
         public DateTime SurveyDate { get; set; }
+
+        // Navigation property
+        public virtual Project Project { get; set; }
     }
 
     public static class SiteSurveyConfiguration
@@ -83,6 +86,11 @@ namespace Sep490_Backend.Infra.Entities
                       .HasMaxLength(200)
                       .IsRequired();
 
+                // Relationship
+                entity.HasOne(e => e.Project)
+                      .WithMany(p => p.SiteSurveys)
+                      .HasForeignKey(e => e.ProjectId)
+                      .OnDelete(DeleteBehavior.Cascade);
             });
         }
     }
