@@ -65,7 +65,7 @@ namespace Sep490_Backend.Services.ConstructionTeamService
                 
                 if (existingTeam != null && existingTeam.Creator != actionBy)
                 {
-                    throw new UnauthorizedAccessException("Only the creator of a construction team can update it");
+                    throw new UnauthorizedAccessException(Message.ConstructionTeamMessage.ONLY_CREATOR_CAN_UPDATE);
                 }
             }
 
@@ -74,7 +74,7 @@ namespace Sep490_Backend.Services.ConstructionTeamService
             {
                 errors.Add(new ResponseError
                 {
-                    Message = Message.CommonMessage.MISSING_PARAM,
+                    Message = Message.ConstructionTeamMessage.NAME_REQUIRED,
                     Field = nameof(model.TeamName).ToCamelCase()
                 });
             }
@@ -132,7 +132,7 @@ namespace Sep490_Backend.Services.ConstructionTeamService
             {
                 errors.Add(new ResponseError
                 {
-                    Message = "Team name already exists",
+                    Message = Message.ConstructionTeamMessage.DUPLICATE_NAME,
                     Field = nameof(model.TeamName).ToCamelCase()
                 });
             }
@@ -155,7 +155,7 @@ namespace Sep490_Backend.Services.ConstructionTeamService
 
                     if (teamToUpdate == null)
                     {
-                        throw new KeyNotFoundException("Construction team not found");
+                        throw new KeyNotFoundException(Message.ConstructionTeamMessage.NOT_FOUND);
                     }
 
                     // Handle team manager change - update previous team members if manager changes
@@ -266,12 +266,12 @@ namespace Sep490_Backend.Services.ConstructionTeamService
             
             if (team == null)
             {
-                throw new KeyNotFoundException("Construction team not found");
+                throw new KeyNotFoundException(Message.ConstructionTeamMessage.NOT_FOUND);
             }
             
             if (team.Creator != actionBy)
             {
-                throw new UnauthorizedAccessException("Only the creator of a construction team can delete it");
+                throw new UnauthorizedAccessException(Message.ConstructionTeamMessage.ONLY_CREATOR_CAN_DELETE);
             }
 
             // Begin transaction
@@ -288,7 +288,7 @@ namespace Sep490_Backend.Services.ConstructionTeamService
                 // Check if the team is assigned to construction plan items
                 if (teamWithRelations.ConstructPlanItems != null && teamWithRelations.ConstructPlanItems.Any())
                 {
-                    throw new InvalidOperationException("Cannot delete team because it is assigned to construction plan items");
+                    throw new InvalidOperationException(Message.ConstructionTeamMessage.TEAM_IN_USE);
                 }
 
                 // Update all members to remove team association

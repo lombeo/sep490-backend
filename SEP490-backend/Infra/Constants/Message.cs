@@ -137,5 +137,73 @@ namespace Sep490_Backend.Infra.Constants
             public const string INVALID_FILE_CONTENT = "E-CP-005"; //Invalid file content!
             public const string INVALID_TEAM = "E-CP-006"; //Invalid construction team!
         }
+
+        public static class ResourceRequestMessage
+        {
+            // Success messages
+            public const string SAVE_SUCCESS = "S-RR-001"; // Save resource request successfully!
+            public const string DELETE_SUCCESS = "S-RR-002"; // Delete resource request successfully!
+            public const string SEARCH_SUCCESS = "S-RR-003"; // Search resource requests successfully!
+            public const string SEND_REQUEST_SUCCESS = "S-RR-004"; // Send resource request for approval successfully!
+            public const string APPROVE_SUCCESS = "S-RR-005"; // Approve resource request successfully!
+            public const string REJECT_SUCCESS = "S-RR-006"; // Reject resource request successfully!
+            public const string ADD_INVENTORY_SUCCESS = "S-RR-007"; // Add inventory item successfully!
+            public const string UPDATE_INVENTORY_SUCCESS = "S-RR-008"; // Update inventory item successfully!
+            public const string DELETE_INVENTORY_SUCCESS = "S-RR-009"; // Delete inventory item successfully!
+            
+            // Error messages
+            public const string REQUEST_NOT_FOUND = "E-RR-001"; // Resource request not found!
+            public const string ONLY_CREATOR_CAN_MODIFY = "E-RR-002"; // Only the creator can modify this request!
+            public const string ONLY_CREATOR_CAN_DELETE = "E-RR-003"; // Only the creator can delete this request!
+            public const string ONLY_CREATOR_CAN_SEND = "E-RR-004"; // Only the creator can send this request!
+            public const string ONLY_DRAFT_CAN_BE_UPDATED = "E-RR-005"; // Only draft or rejected requests can be updated!
+            public const string ONLY_DRAFT_CAN_BE_DELETED = "E-RR-006"; // Only draft or rejected requests can be deleted!
+            public const string ONLY_DRAFT_CAN_BE_SENT = "E-RR-007"; // Only draft or rejected requests can be sent for approval!
+            public const string NOT_WAITING_FOR_APPROVAL = "E-RR-008"; // This request is not waiting for approval!
+            public const string PROJECT_NOT_FOUND = "E-RR-009"; // Project not found!
+            public const string MISSING_RESOURCE_DETAILS = "E-RR-010"; // At least one resource must be specified!
+            public const string INVALID_RESOURCE_TYPE = "E-RR-011"; // Resource type must be specified!
+            public const string INVALID_QUANTITY = "E-RR-012"; // Quantity must be greater than zero!
+            public const string INVALID_REQUEST_DATE = "E-RR-013"; // Request date cannot be in the past!
+            public const string SOURCE_PROJECT_NOT_FOUND = "E-RR-014"; // Source project not found!
+            public const string DESTINATION_PROJECT_NOT_FOUND = "E-RR-015"; // Destination project not found!
+            public const string INVALID_PROJECT_SELECTION = "E-RR-016"; // Source and destination projects cannot be the same!
+            public const string INVENTORY_NOT_FOUND = "E-RR-017"; // Resource inventory not found!
+            public const string NAME_REQUIRED = "E-RR-018"; // Resource name is required!
+            public const string NEGATIVE_QUANTITY = "E-RR-019"; // Quantity cannot be negative!
+        }
+
+        public static class MaterialMessage
+        {
+            // Success messages
+            public const string SAVE_SUCCESS = "S-MTL-001"; // Save material successfully!
+            public const string DELETE_SUCCESS = "S-MTL-002"; // Delete material successfully!
+            public const string SEARCH_SUCCESS = "S-MTL-003"; // Search materials successfully!
+            public const string GET_DETAIL_SUCCESS = "S-MTL-004"; // Get material details successfully!
+            
+            // Error messages
+            public const string NOT_FOUND = "E-MTL-001"; // Material not found!
+            public const string CODE_EXISTS = "E-MTL-002"; // Material code already exists!
+            public const string MATERIAL_IN_USE = "E-MTL-003"; // Cannot delete material because it is in use in construction plans!
+            public const string CODE_REQUIRED = "E-MTL-004"; // Material code is required!
+            public const string NAME_REQUIRED = "E-MTL-005"; // Material name is required!
+        }
+
+        public static class ConstructionTeamMessage
+        {
+            // Success messages
+            public const string SAVE_SUCCESS = "S-CTM-001"; // Save construction team successfully!
+            public const string DELETE_SUCCESS = "S-CTM-002"; // Delete construction team successfully!
+            public const string SEARCH_SUCCESS = "S-CTM-003"; // Search construction teams successfully!
+            public const string GET_DETAIL_SUCCESS = "S-CTM-004"; // Get construction team details successfully!
+            
+            // Error messages
+            public const string NOT_FOUND = "E-CTM-001"; // Construction team not found!
+            public const string ONLY_CREATOR_CAN_UPDATE = "E-CTM-002"; // Only the creator of a construction team can update it!
+            public const string ONLY_CREATOR_CAN_DELETE = "E-CTM-003"; // Only the creator of a construction team can delete it!
+            public const string TEAM_IN_USE = "E-CTM-004"; // Cannot delete team because it is assigned to construction plan items!
+            public const string NAME_REQUIRED = "E-CTM-005"; // Construction team name is required!
+            public const string DUPLICATE_NAME = "E-CTM-006"; // Construction team name already exists!
+        }
     }
 }

@@ -82,7 +82,7 @@ namespace Sep490_Backend.Services.ResourceReqService
                 
                 if (existingReq != null && existingReq.Creator != actionBy)
                 {
-                    throw new UnauthorizedAccessException("Only the creator can modify a resource allocation request");
+                    throw new UnauthorizedAccessException(Message.ResourceRequestMessage.ONLY_CREATOR_CAN_MODIFY);
                 }
             }
 
@@ -90,25 +90,25 @@ namespace Sep490_Backend.Services.ResourceReqService
             var fromProject = await _context.Projects.FirstOrDefaultAsync(p => p.Id == model.FromProjectId && !p.Deleted);
             if (fromProject == null)
             {
-                errors.Add(new ResponseError { Field = "FromProjectId", Message = "Source project not found" });
+                errors.Add(new ResponseError { Field = "FromProjectId", Message = Message.ResourceRequestMessage.SOURCE_PROJECT_NOT_FOUND });
             }
 
             var toProject = await _context.Projects.FirstOrDefaultAsync(p => p.Id == model.ToProjectId && !p.Deleted);
             if (toProject == null)
             {
-                errors.Add(new ResponseError { Field = "ToProjectId", Message = "Destination project not found" });
+                errors.Add(new ResponseError { Field = "ToProjectId", Message = Message.ResourceRequestMessage.DESTINATION_PROJECT_NOT_FOUND });
             }
 
             // Cannot allocate resources from a project to itself
             if (model.FromProjectId == model.ToProjectId)
             {
-                errors.Add(new ResponseError { Field = "ToProjectId", Message = "Source and destination projects cannot be the same" });
+                errors.Add(new ResponseError { Field = "ToProjectId", Message = Message.ResourceRequestMessage.INVALID_PROJECT_SELECTION });
             }
 
             // Validate resource details
             if (model.ResourceAllocationDetails == null || !model.ResourceAllocationDetails.Any())
             {
-                errors.Add(new ResponseError { Field = "ResourceAllocationDetails", Message = "At least one resource must be specified" });
+                errors.Add(new ResponseError { Field = "ResourceAllocationDetails", Message = Message.ResourceRequestMessage.MISSING_RESOURCE_DETAILS });
             }
             else
             {
@@ -123,7 +123,7 @@ namespace Sep490_Backend.Services.ResourceReqService
                         errors.Add(new ResponseError 
                         { 
                             Field = $"ResourceAllocationDetails[{i}].ResourceType", 
-                            Message = "Resource type must be specified" 
+                            Message = Message.ResourceRequestMessage.INVALID_RESOURCE_TYPE
                         });
                     }
                     
@@ -133,7 +133,7 @@ namespace Sep490_Backend.Services.ResourceReqService
                         errors.Add(new ResponseError 
                         { 
                             Field = $"ResourceAllocationDetails[{i}].Quantity", 
-                            Message = "Quantity must be greater than zero" 
+                            Message = Message.ResourceRequestMessage.INVALID_QUANTITY
                         });
                     }
                     
@@ -161,13 +161,13 @@ namespace Sep490_Backend.Services.ResourceReqService
 
                     if (reqToUpdate == null)
                     {
-                        throw new KeyNotFoundException("Resource allocation request not found");
+                        throw new KeyNotFoundException(Message.ResourceRequestMessage.REQUEST_NOT_FOUND);
                     }
 
                     // Check if the request is in a state that can be updated
                     if (reqToUpdate.Status != RequestStatus.Draft && reqToUpdate.Status != RequestStatus.Reject)
                     {
-                        throw new ArgumentException("Only draft or rejected requests can be updated");
+                        throw new ArgumentException(Message.ResourceRequestMessage.ONLY_DRAFT_CAN_BE_UPDATED);
                     }
 
                     // Update properties
@@ -258,7 +258,7 @@ namespace Sep490_Backend.Services.ResourceReqService
                 
                 if (existingReq != null && existingReq.Creator != actionBy)
                 {
-                    throw new UnauthorizedAccessException("Only the creator can modify a resource mobilization request");
+                    throw new UnauthorizedAccessException(Message.ResourceRequestMessage.ONLY_CREATOR_CAN_MODIFY);
                 }
             }
 
@@ -266,13 +266,13 @@ namespace Sep490_Backend.Services.ResourceReqService
             var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == model.ProjectId && !p.Deleted);
             if (project == null)
             {
-                errors.Add(new ResponseError { Field = "ProjectId", Message = "Project not found" });
+                errors.Add(new ResponseError { Field = "ProjectId", Message = Message.ResourceRequestMessage.PROJECT_NOT_FOUND });
             }
 
             // Validate resource details
             if (model.ResourceMobilizationDetails == null || !model.ResourceMobilizationDetails.Any())
             {
-                errors.Add(new ResponseError { Field = "ResourceMobilizationDetails", Message = "At least one resource must be specified" });
+                errors.Add(new ResponseError { Field = "ResourceMobilizationDetails", Message = Message.ResourceRequestMessage.MISSING_RESOURCE_DETAILS });
             }
             else
             {
@@ -287,7 +287,7 @@ namespace Sep490_Backend.Services.ResourceReqService
                         errors.Add(new ResponseError 
                         { 
                             Field = $"ResourceMobilizationDetails[{i}].ResourceType", 
-                            Message = "Resource type must be specified" 
+                            Message = Message.ResourceRequestMessage.INVALID_RESOURCE_TYPE
                         });
                     }
                     
@@ -297,7 +297,7 @@ namespace Sep490_Backend.Services.ResourceReqService
                         errors.Add(new ResponseError 
                         { 
                             Field = $"ResourceMobilizationDetails[{i}].Quantity", 
-                            Message = "Quantity must be greater than zero" 
+                            Message = Message.ResourceRequestMessage.INVALID_QUANTITY
                         });
                     }
                     
@@ -309,7 +309,7 @@ namespace Sep490_Backend.Services.ResourceReqService
             // Validate request date
             if (model.RequestDate < DateTime.Today)
             {
-                errors.Add(new ResponseError { Field = "RequestDate", Message = "Request date cannot be in the past" });
+                errors.Add(new ResponseError { Field = "RequestDate", Message = Message.ResourceRequestMessage.INVALID_REQUEST_DATE });
             }
 
             // If there are validation errors, throw exception
@@ -331,13 +331,13 @@ namespace Sep490_Backend.Services.ResourceReqService
 
                     if (reqToUpdate == null)
                     {
-                        throw new KeyNotFoundException("Resource mobilization request not found");
+                        throw new KeyNotFoundException(Message.ResourceRequestMessage.REQUEST_NOT_FOUND);
                     }
 
                     // Check if the request is in a state that can be updated
                     if (reqToUpdate.Status != RequestStatus.Draft && reqToUpdate.Status != RequestStatus.Reject)
                     {
-                        throw new ArgumentException("Only draft or rejected requests can be updated");
+                        throw new ArgumentException(Message.ResourceRequestMessage.ONLY_DRAFT_CAN_BE_UPDATED);
                     }
 
                     // Update properties
@@ -424,19 +424,19 @@ namespace Sep490_Backend.Services.ResourceReqService
 
             if (request == null)
             {
-                throw new KeyNotFoundException("Resource allocation request not found");
+                throw new KeyNotFoundException(Message.ResourceRequestMessage.REQUEST_NOT_FOUND);
             }
 
             // Verify the user is the creator
             if (request.Creator != actionBy)
             {
-                throw new UnauthorizedAccessException("Only the creator can delete a resource allocation request");
+                throw new UnauthorizedAccessException(Message.ResourceRequestMessage.ONLY_CREATOR_CAN_DELETE);
             }
 
             // Check if the request is in a state that can be deleted
             if (request.Status != RequestStatus.Draft && request.Status != RequestStatus.Reject)
             {
-                throw new InvalidOperationException("Only draft or rejected requests can be deleted");
+                throw new InvalidOperationException(Message.ResourceRequestMessage.ONLY_DRAFT_CAN_BE_DELETED);
             }
 
             // Begin transaction
@@ -486,19 +486,19 @@ namespace Sep490_Backend.Services.ResourceReqService
 
             if (request == null)
             {
-                throw new KeyNotFoundException("Resource mobilization request not found");
+                throw new KeyNotFoundException(Message.ResourceRequestMessage.REQUEST_NOT_FOUND);
             }
 
             // Verify the user is the creator
             if (request.Creator != actionBy)
             {
-                throw new UnauthorizedAccessException("Only the creator can delete a resource mobilization request");
+                throw new UnauthorizedAccessException(Message.ResourceRequestMessage.ONLY_CREATOR_CAN_DELETE);
             }
 
             // Check if the request is in a state that can be deleted
             if (request.Status != RequestStatus.Draft && request.Status != RequestStatus.Reject)
             {
-                throw new InvalidOperationException("Only draft or rejected requests can be deleted");
+                throw new InvalidOperationException(Message.ResourceRequestMessage.ONLY_DRAFT_CAN_BE_DELETED);
             }
 
             // Begin transaction
@@ -616,19 +616,19 @@ namespace Sep490_Backend.Services.ResourceReqService
 
             if (request == null)
             {
-                throw new KeyNotFoundException("Resource mobilization request not found");
+                throw new KeyNotFoundException(Message.ResourceRequestMessage.REQUEST_NOT_FOUND);
             }
 
             // Verify the user is the creator
             if (request.Creator != actionBy)
             {
-                throw new UnauthorizedAccessException("Only the creator can send a resource mobilization request");
+                throw new UnauthorizedAccessException(Message.ResourceRequestMessage.ONLY_CREATOR_CAN_SEND);
             }
 
             // Check if the request is in a state that can be sent
             if (request.Status != RequestStatus.Draft && request.Status != RequestStatus.Reject)
             {
-                throw new InvalidOperationException("Only draft or rejected requests can be sent for approval");
+                throw new InvalidOperationException(Message.ResourceRequestMessage.ONLY_DRAFT_CAN_BE_SENT);
             }
 
             // Begin transaction
@@ -683,18 +683,18 @@ namespace Sep490_Backend.Services.ResourceReqService
 
             if (request == null)
             {
-                throw new KeyNotFoundException("Resource mobilization request not found");
+                throw new KeyNotFoundException(Message.ResourceRequestMessage.REQUEST_NOT_FOUND);
             }
 
             // Check if the user has the correct role for the current state of the request
             if (isTechnicalDepartment && request.Status != RequestStatus.WaitManagerApproval)
             {
-                throw new InvalidOperationException("This request is not waiting for Technical Department approval");
+                throw new InvalidOperationException(Message.ResourceRequestMessage.NOT_WAITING_FOR_APPROVAL);
             }
 
             if (isExecutiveBoard && request.Status != RequestStatus.ManagerApproved)
             {
-                throw new InvalidOperationException("This request is not waiting for Executive Board approval");
+                throw new InvalidOperationException(Message.ResourceRequestMessage.NOT_WAITING_FOR_APPROVAL);
             }
 
             // Begin transaction
@@ -762,18 +762,18 @@ namespace Sep490_Backend.Services.ResourceReqService
 
             if (request == null)
             {
-                throw new KeyNotFoundException("Resource mobilization request not found");
+                throw new KeyNotFoundException(Message.ResourceRequestMessage.REQUEST_NOT_FOUND);
             }
 
             // Check if the request is in a state that can be rejected
             if (isTechnicalDepartment && request.Status != RequestStatus.WaitManagerApproval)
             {
-                throw new InvalidOperationException("This request is not waiting for Technical Department approval");
+                throw new InvalidOperationException(Message.ResourceRequestMessage.NOT_WAITING_FOR_APPROVAL);
             }
 
             if (isExecutiveBoard && request.Status != RequestStatus.ManagerApproved)
             {
-                throw new InvalidOperationException("This request is not waiting for Executive Board approval");
+                throw new InvalidOperationException(Message.ResourceRequestMessage.NOT_WAITING_FOR_APPROVAL);
             }
 
             // Begin transaction
@@ -884,19 +884,19 @@ namespace Sep490_Backend.Services.ResourceReqService
             // Validate resource type
             if (model.ResourceType == ResourceType.NONE)
             {
-                errors.Add(new ResponseError { Field = "ResourceType", Message = "Resource type must be specified" });
+                errors.Add(new ResponseError { Field = "ResourceType", Message = Message.ResourceRequestMessage.INVALID_RESOURCE_TYPE });
             }
 
             // Validate name
             if (string.IsNullOrWhiteSpace(model.Name))
             {
-                errors.Add(new ResponseError { Field = "Name", Message = "Resource name is required" });
+                errors.Add(new ResponseError { Field = "Name", Message = Message.ResourceRequestMessage.NAME_REQUIRED });
             }
 
             // Validate quantity
             if (model.Quantity < 0)
             {
-                errors.Add(new ResponseError { Field = "Quantity", Message = "Quantity cannot be negative" });
+                errors.Add(new ResponseError { Field = "Quantity", Message = Message.ResourceRequestMessage.NEGATIVE_QUANTITY });
             }
 
             // If there are validation errors, throw exception
@@ -960,19 +960,19 @@ namespace Sep490_Backend.Services.ResourceReqService
             // Validate resource type
             if (model.ResourceType == ResourceType.NONE)
             {
-                errors.Add(new ResponseError { Field = "ResourceType", Message = "Resource type must be specified" });
+                errors.Add(new ResponseError { Field = "ResourceType", Message = Message.ResourceRequestMessage.INVALID_RESOURCE_TYPE });
             }
 
             // Validate name
             if (string.IsNullOrWhiteSpace(model.Name))
             {
-                errors.Add(new ResponseError { Field = "Name", Message = "Resource name is required" });
+                errors.Add(new ResponseError { Field = "Name", Message = Message.ResourceRequestMessage.NAME_REQUIRED });
             }
 
             // Validate quantity
             if (model.Quantity < 0)
             {
-                errors.Add(new ResponseError { Field = "Quantity", Message = "Quantity cannot be negative" });
+                errors.Add(new ResponseError { Field = "Quantity", Message = Message.ResourceRequestMessage.NEGATIVE_QUANTITY });
             }
 
             // If there are validation errors, throw exception
@@ -992,7 +992,7 @@ namespace Sep490_Backend.Services.ResourceReqService
 
                 if (resource == null)
                 {
-                    throw new KeyNotFoundException("Resource inventory not found");
+                    throw new KeyNotFoundException(Message.ResourceRequestMessage.INVENTORY_NOT_FOUND);
                 }
 
                 // Update properties
@@ -1041,7 +1041,7 @@ namespace Sep490_Backend.Services.ResourceReqService
 
             if (resource == null)
             {
-                throw new KeyNotFoundException("Resource inventory not found");
+                throw new KeyNotFoundException(Message.ResourceRequestMessage.INVENTORY_NOT_FOUND);
             }
 
             // Begin transaction
@@ -1146,19 +1146,19 @@ namespace Sep490_Backend.Services.ResourceReqService
 
             if (request == null)
             {
-                throw new KeyNotFoundException("Resource allocation request not found");
+                throw new KeyNotFoundException(Message.ResourceRequestMessage.REQUEST_NOT_FOUND);
             }
 
             // Verify the user is the creator
             if (request.Creator != actionBy)
             {
-                throw new UnauthorizedAccessException("Only the creator can send a resource allocation request");
+                throw new UnauthorizedAccessException(Message.ResourceRequestMessage.ONLY_CREATOR_CAN_SEND);
             }
 
             // Check if the request is in a state that can be sent
             if (request.Status != RequestStatus.Draft && request.Status != RequestStatus.Reject)
             {
-                throw new InvalidOperationException("Only draft or rejected requests can be sent for approval");
+                throw new InvalidOperationException(Message.ResourceRequestMessage.ONLY_DRAFT_CAN_BE_SENT);
             }
 
             // Begin transaction
@@ -1213,18 +1213,18 @@ namespace Sep490_Backend.Services.ResourceReqService
 
             if (request == null)
             {
-                throw new KeyNotFoundException("Resource allocation request not found");
+                throw new KeyNotFoundException(Message.ResourceRequestMessage.REQUEST_NOT_FOUND);
             }
 
             // Check if the user has the correct role for the current state of the request
             if (isTechnicalDepartment && request.Status != RequestStatus.WaitManagerApproval)
             {
-                throw new InvalidOperationException("This request is not waiting for Technical Department approval");
+                throw new InvalidOperationException(Message.ResourceRequestMessage.NOT_WAITING_FOR_APPROVAL);
             }
 
             if (isExecutiveBoard && request.Status != RequestStatus.ManagerApproved)
             {
-                throw new InvalidOperationException("This request is not waiting for Executive Board approval");
+                throw new InvalidOperationException(Message.ResourceRequestMessage.NOT_WAITING_FOR_APPROVAL);
             }
 
             // Begin transaction
@@ -1292,18 +1292,18 @@ namespace Sep490_Backend.Services.ResourceReqService
 
             if (request == null)
             {
-                throw new KeyNotFoundException("Resource allocation request not found");
+                throw new KeyNotFoundException(Message.ResourceRequestMessage.REQUEST_NOT_FOUND);
             }
 
             // Check if the request is in a state that can be rejected
             if (isTechnicalDepartment && request.Status != RequestStatus.WaitManagerApproval)
             {
-                throw new InvalidOperationException("This request is not waiting for Technical Department approval");
+                throw new InvalidOperationException(Message.ResourceRequestMessage.NOT_WAITING_FOR_APPROVAL);
             }
 
             if (isExecutiveBoard && request.Status != RequestStatus.ManagerApproved)
             {
-                throw new InvalidOperationException("This request is not waiting for Executive Board approval");
+                throw new InvalidOperationException(Message.ResourceRequestMessage.NOT_WAITING_FOR_APPROVAL);
             }
 
             // Begin transaction

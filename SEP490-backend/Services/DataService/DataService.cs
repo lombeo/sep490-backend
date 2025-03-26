@@ -6,6 +6,7 @@ using Sep490_Backend.DTO.Customer;
 using Sep490_Backend.DTO.Material;
 using Sep490_Backend.DTO.Project;
 using Sep490_Backend.DTO.SiteSurvey;
+using Sep490_Backend.DTO.ConstructionTeam;
 using Sep490_Backend.Infra;
 using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Infra.Entities;
@@ -23,6 +24,7 @@ namespace Sep490_Backend.Services.DataService
         Task<List<ProjectDTO>> ListProject(SearchProjectDTO model);
         Task<List<SiteSurvey>> ListSiteSurvey(SearchSiteSurveyDTO model);
         Task<List<Material>> ListMaterial(MaterialSearchDTO model);
+        Task<List<ConstructionTeam>> ListConstructionTeam(ConstructionTeamSearchDTO model);
     }
 
     public class DataService : IDataService
@@ -648,6 +650,65 @@ namespace Sep490_Backend.Services.DataService
                 filteredList = filteredList.Where(m => 
                     m.Unit != null && m.Unit.ToLower().Contains(model.Unit.ToLower().Trim())
                 ).ToList();
+            }
+
+            // Set total count for pagination
+            model.Total = filteredList.Count();
+
+            // Apply pagination
+            if (model.PageSize > 0)
+            {
+                filteredList = filteredList.Skip(model.Skip).Take(model.PageSize).ToList();
+            }
+
+            return filteredList;
+        }
+
+        public async Task<List<ConstructionTeam>> ListConstructionTeam(ConstructionTeamSearchDTO model)
+        {
+            // Check authorization - only Construction Manager, Technical Manager, and Executive Board can view teams
+            if (!_helpService.IsInRole(model.ActionBy, new List<string> { 
+                RoleConstValue.CONSTRUCTION_MANAGER, 
+                RoleConstValue.TECHNICAL_MANAGER, 
+                RoleConstValue.EXECUTIVE_BOARD 
+            }))
+            {
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+            }
+
+            // Try to get teams from cache
+            string cacheKey = RedisCacheKey.CONSTRUCTION_TEAM_CACHE_KEY;
+            var teamsCacheList = await _cacheService.GetAsync<List<ConstructionTeam>>(cacheKey);
+
+            // If not in cache, get from database and cache it
+            if (teamsCacheList == null)
+            {
+                teamsCacheList = await _context.ConstructionTeams
+                    .Include(t => t.Manager)
+                    .Include(t => t.Members)
+                    .Where(t => !t.Deleted)
+                    .OrderByDescending(t => t.UpdatedAt)
+                    .ToListAsync();
+                
+                // Cache the result
+                _ = _cacheService.SetAsync(cacheKey, teamsCacheList);
+            }
+
+            // Apply filters
+            var filteredList = teamsCacheList;
+
+            // Filter by team name
+            if (!string.IsNullOrWhiteSpace(model.TeamName))
+            {
+                filteredList = filteredList.Where(t => 
+                    t.TeamName.ToLower().Contains(model.TeamName.ToLower().Trim())
+                ).ToList();
+            }
+
+            // Filter by team manager
+            if (model.TeamManager.HasValue && model.TeamManager.Value > 0)
+            {
+                filteredList = filteredList.Where(t => t.TeamManager == model.TeamManager.Value).ToList();
             }
 
             // Set total count for pagination
