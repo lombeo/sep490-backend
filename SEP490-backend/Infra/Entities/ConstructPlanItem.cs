@@ -18,6 +18,7 @@ namespace Sep490_Backend.Infra.Entities
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
         public List<int>? QA { get; set; } //UserId
+        public Dictionary<string, string> ItemRelations { get; set; } //workcode, enum
 
         // Navigation properties
         public virtual ConstructionPlan ConstructionPlan { get; set; }
@@ -26,6 +27,7 @@ namespace Sep490_Backend.Infra.Entities
         public virtual ICollection<ConstructPlanItem> ChildItems { get; set; }
         public virtual ICollection<ConstructPlanItemDetail> ConstructPlanItemDetails { get; set; }
         public virtual ICollection<User> QAMembers { get; set; }
+
     }
 
     public static class ConstructPlanItemConfiguration

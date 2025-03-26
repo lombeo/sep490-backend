@@ -11,8 +11,9 @@
             "Technical Manager",
             "Quality Assurance",
             "Executive Board",
-            "Head of Construction Team",
-            "Resource Manager"
+            "Resource Manager",
+            "Construction Manager",
+            "Team Leader"
         };
         public const string ADMIN = "Administrator";
         public const string USER = "User";
@@ -21,7 +22,8 @@
         public const string TECHNICAL_MANAGER = "Technical Manager";
         public const string QUALITY_ASSURANCE = "Quality Assurance";
         public const string EXECUTIVE_BOARD = "Executive Board";
-        public const string HEAD_OF_CONSTRUCTION_TEAM = "Head of Construction Team";
         public const string RESOURCE_MANAGER = "Resource Manager";
+        public const string CONSTRUCTION_MANAGER = "Construction Manager";
+        public const string TEAM_LEADER = "Team Leader";
     }
 }

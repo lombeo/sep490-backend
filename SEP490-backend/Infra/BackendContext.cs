@@ -33,6 +33,7 @@ namespace Sep490_Backend.Infra
         public virtual DbSet<ConstructPlanItemDetail> ConstructPlanItemDetails { get; set; }
         public virtual DbSet<ResourceAllocationReqs> ResourceAllocationReqs { get; set; }
         public virtual DbSet<ResourceMobilizationReqs> ResourceMobilizationReqs { get; set; }
+        public virtual DbSet<ResourceInventory> ResourceInventory { get; set; }
         public virtual DbSet<Material> Materials { get; set; }
 
 
@@ -56,6 +57,7 @@ namespace Sep490_Backend.Infra
             ConstructPlanItemDetailConfiguration.Config(modelBuilder);
             ResourceAllocationReqsConfiguration.Config(modelBuilder);
             ResourceMobilizationReqsConfiguration.Config(modelBuilder);
+            ResourceInventoryConfiguration.Config(modelBuilder);
             MaterialConfiguration.Config(modelBuilder);
             //OnModelCreatingPartial(modelBuilder);
         }
