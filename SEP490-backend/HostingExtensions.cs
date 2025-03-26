@@ -26,6 +26,9 @@ using Sep490_Backend.Services.GoogleDriveService;
 using Sep490_Backend.Infra.ModelBinders;
 using Sep490_Backend.Services.SiteSurveyService;
 using Sep490_Backend.Services.MaterialService;
+using Sep490_Backend.Services.ConstructionTeamService;
+using Sep490_Backend.Services.ResourceReqService;
+using Sep490_Backend.Services.ConstructionPlanService;
 
 namespace Sep490_Backend
 {
@@ -72,6 +75,9 @@ namespace Sep490_Backend
             builder.Services.AddScoped<IDataService, DataService>();
             builder.Services.AddScoped<IGoogleDriveService, GoogleDriveService>();
             builder.Services.AddScoped<IMaterialService, MaterialService>();
+            builder.Services.AddScoped<IConstructionTeamService, ConstructionTeamService>();
+            builder.Services.AddScoped<IResourceReqService, ResourceReqService>();
+            builder.Services.AddScoped<IConstructionPlanService, ConstructionPlanService>();
             builder.Services.AddScoped<RedisConnManager>();
             builder.Services.AddHostedService<DefaultBackgroundService>();
 

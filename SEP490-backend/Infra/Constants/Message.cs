@@ -115,5 +115,27 @@ namespace Sep490_Backend.Infra.Constants
             //Error
             public const string CONTRACT_CODE_EXIST = "E-CTR-001"; //Contract code has already exist
         }
+
+        public static class ConstructionPlanMessage
+        {
+            //Success
+            public const string SEARCH_SUCCESS = "S-CP-001"; //Search list construction plan successfully!
+            public const string DELETE_SUCCESS = "S-CP-002"; //Delete construction plan successfully!
+            public const string CREATE_SUCCESS = "S-CP-003"; //Create construction plan successfully!
+            public const string UPDATE_SUCCESS = "S-CP-004"; //Update construction plan successfully!
+            public const string GET_DETAIL_SUCCESS = "S-CP-005"; //Get detail construction plan successfully!
+            public const string APPROVE_SUCCESS = "S-CP-006"; //Approve construction plan successfully!
+            public const string REJECT_SUCCESS = "S-CP-007"; //Reject construction plan successfully!
+            public const string IMPORT_SUCCESS = "S-CP-008"; //Import construction plan successfully!
+            public const string ASSIGN_TEAM_SUCCESS = "S-CP-009"; //Assign team to construction plan successfully!
+            
+            //Error
+            public const string NOT_FOUND = "E-CP-001"; //Construction plan not found!
+            public const string PLAN_NAME_EXIST = "E-CP-002"; //Construction plan name already exists!
+            public const string INVALID_PROJECT = "E-CP-003"; //Invalid project!
+            public const string INVALID_FILE_FORMAT = "E-CP-004"; //Invalid file format!
+            public const string INVALID_FILE_CONTENT = "E-CP-005"; //Invalid file content!
+            public const string INVALID_TEAM = "E-CP-006"; //Invalid construction team!
+        }
     }
 }
