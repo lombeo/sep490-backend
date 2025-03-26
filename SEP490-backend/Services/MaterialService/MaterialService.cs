@@ -58,7 +58,7 @@ namespace Sep490_Backend.Services.MaterialService
             {
                 errors.Add(new ResponseError
                 {
-                    Message = Message.CommonMessage.MISSING_PARAM,
+                    Message = Message.MaterialMessage.CODE_REQUIRED,
                     Field = nameof(model.MaterialCode).ToCamelCase()
                 });
             }
@@ -67,7 +67,7 @@ namespace Sep490_Backend.Services.MaterialService
             {
                 errors.Add(new ResponseError
                 {
-                    Message = Message.CommonMessage.MISSING_PARAM,
+                    Message = Message.MaterialMessage.NAME_REQUIRED,
                     Field = nameof(model.MaterialName).ToCamelCase()
                 });
             }
@@ -80,7 +80,7 @@ namespace Sep490_Backend.Services.MaterialService
             {
                 errors.Add(new ResponseError
                 {
-                    Message = "Material code already exists",
+                    Message = Message.MaterialMessage.CODE_EXISTS,
                     Field = nameof(model.MaterialCode).ToCamelCase()
                 });
             }
@@ -97,7 +97,7 @@ namespace Sep490_Backend.Services.MaterialService
 
                 if (materialToUpdate == null)
                 {
-                    throw new KeyNotFoundException("Material not found");
+                    throw new KeyNotFoundException(Message.MaterialMessage.NOT_FOUND);
                 }
 
                 // Update properties
@@ -184,13 +184,13 @@ namespace Sep490_Backend.Services.MaterialService
 
             if (material == null)
             {
-                throw new KeyNotFoundException("Material not found");
+                throw new KeyNotFoundException(Message.MaterialMessage.NOT_FOUND);
             }
 
             // Check if the material is in use in construction plans
             if (material.ConstructPlanItemDetails != null && material.ConstructPlanItemDetails.Any())
             {
-                throw new InvalidOperationException("Cannot delete material because it is in use in construction plans");
+                throw new InvalidOperationException(Message.MaterialMessage.MATERIAL_IN_USE);
             }
 
             // Perform soft delete
