@@ -9,6 +9,7 @@ using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Infra.Enums;
 using Sep490_Backend.Infra.Helps;
 using Sep490_Backend.Services.CacheService;
+using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.HelperService;
 using System.Text.RegularExpressions;
 
@@ -32,135 +33,24 @@ namespace Sep490_Backend.Services.ConstructionPlanService
         private readonly BackendContext _context;
         private readonly ICacheService _cacheService;
         private readonly IHelperService _helperService;
+        private readonly IDataService _dataService;
 
         public ConstructionPlanService(
             BackendContext context,
             ICacheService cacheService,
-            IHelperService helperService)
+            IHelperService helperService,
+            IDataService dataService)
         {
             _context = context;
             _cacheService = cacheService;
             _helperService = helperService;
+            _dataService = dataService;
         }
 
         public async Task<List<ConstructionPlanDTO>> Search(ConstructionPlanQuery query)
         {
-            // Check if user is authorized to perform this action
-            if (!_helperService.IsInRole(query.ActionBy, new List<string> 
-            { 
-                RoleConstValue.CONSTRUCTION_MANAGER, 
-                RoleConstValue.TECHNICAL_MANAGER, 
-                RoleConstValue.RESOURCE_MANAGER,
-                RoleConstValue.EXECUTIVE_BOARD 
-            }))
-            {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
-            }
-
-            // Create base query
-            var constructionPlans = _context.ConstructionPlans
-                .Include(cp => cp.Project)
-                .Include(cp => cp.Reviewers)
-                .Where(cp => !cp.Deleted);
-
-            // Apply filters
-            if (!string.IsNullOrEmpty(query.PlanName))
-            {
-                constructionPlans = constructionPlans.Where(cp => cp.PlanName.Contains(query.PlanName));
-            }
-
-            if (query.ProjectId.HasValue)
-            {
-                constructionPlans = constructionPlans.Where(cp => cp.ProjectId == query.ProjectId.Value);
-            }
-
-            if (query.FromDate.HasValue)
-            {
-                var fromDate = query.FromDate.Value.Date;
-                constructionPlans = constructionPlans.Where(cp => cp.CreatedAt >= fromDate);
-            }
-
-            if (query.ToDate.HasValue)
-            {
-                var toDate = query.ToDate.Value.Date.AddDays(1).AddTicks(-1);
-                constructionPlans = constructionPlans.Where(cp => cp.CreatedAt <= toDate);
-            }
-
-            if (query.IsApproved.HasValue)
-            {
-                if (query.IsApproved.Value)
-                {
-                    constructionPlans = constructionPlans.Where(cp => cp.Reviewer != null && cp.Reviewer.Count > 0 && cp.Reviewer.All(r => r.Value == true));
-                }
-                else
-                {
-                    constructionPlans = constructionPlans.Where(cp => cp.Reviewer == null || cp.Reviewer.Count == 0 || cp.Reviewer.Any(r => r.Value == false));
-                }
-            }
-
-            // Order by creation date
-            constructionPlans = constructionPlans.OrderByDescending(cp => cp.CreatedAt);
-
-            // Apply pagination
-            var totalCount = await constructionPlans.CountAsync();
-            
-            // Set pagination values
-            query.Total = totalCount;
-            int pageSize = query.PageSize == 0 ? 10 : query.PageSize;
-            int skip = (query.PageIndex - 1) * pageSize;
-            
-            // Get results
-            var entities = await constructionPlans
-                .Skip(skip)
-                .Take(pageSize)
-                .ToListAsync();
-
-            // Map to DTOs
-            var result = new List<ConstructionPlanDTO>();
-            foreach (var entity in entities)
-            {
-                var creator = await _context.Users.FirstOrDefaultAsync(u => u.Id == entity.Creator);
-                
-                var dto = new ConstructionPlanDTO
-                {
-                    Id = entity.Id,
-                    PlanName = entity.PlanName,
-                    Reviewer = entity.Reviewer,
-                    ProjectId = entity.ProjectId,
-                    ProjectName = entity.Project?.ProjectName ?? "",
-                    CreatedAt = entity.CreatedAt ?? DateTime.UtcNow,
-                    UpdatedAt = entity.UpdatedAt ?? DateTime.UtcNow,
-                    CreatedBy = entity.Creator,
-                    CreatedByName = creator?.FullName ?? "",
-                    UpdatedBy = entity.Updater,
-                    IsApproved = entity.Reviewer != null && entity.Reviewer.Count > 0 && entity.Reviewer.All(r => r.Value == true)
-                };
-
-                // Add reviewers
-                if (entity.Reviewers != null && entity.Reviewers.Any())
-                {
-                    foreach (var reviewer in entity.Reviewers)
-                    {
-                        bool isApproved = false;
-                        if (entity.Reviewer != null && entity.Reviewer.ContainsKey(reviewer.Id))
-                        {
-                            isApproved = entity.Reviewer[reviewer.Id];
-                        }
-
-                        dto.Reviewers.Add(new ReviewerDTO
-                        {
-                            Id = reviewer.Id,
-                            Name = reviewer.FullName,
-                            Email = reviewer.Email,
-                            IsApproved = isApproved
-                        });
-                    }
-                }
-
-                result.Add(dto);
-            }
-
-            return result;
+            // Delegate to DataService for optimized caching and standardized approach
+            return await _dataService.ListConstructionPlan(query);
         }
 
         public async Task<ConstructionPlanDTO> Create(SaveConstructionPlanDTO model, int actionBy)
@@ -352,7 +242,16 @@ namespace Sep490_Backend.Services.ConstructionPlanService
             }
 
             // Clear cache
-            await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_CACHE_KEY);
+            await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY);
+            // Clear user-specific caches
+            var users = await _context.Users
+                .Where(u => !u.Deleted)
+                .Select(u => u.Id)
+                .ToListAsync();
+            foreach (var userId in users)
+            {
+                await _cacheService.DeleteAsync(string.Format(RedisCacheKey.CONSTRUCTION_PLAN_BY_USER_CACHE_KEY, userId));
+            }
 
             // Return the created plan
             return await GetById(constructionPlan.Id, actionBy);
@@ -554,7 +453,16 @@ namespace Sep490_Backend.Services.ConstructionPlanService
             }
 
             // Clear cache
-            await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_CACHE_KEY);
+            await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY);
+            // Clear user-specific caches
+            var users = await _context.Users
+                .Where(u => !u.Deleted)
+                .Select(u => u.Id)
+                .ToListAsync();
+            foreach (var userId in users)
+            {
+                await _cacheService.DeleteAsync(string.Format(RedisCacheKey.CONSTRUCTION_PLAN_BY_USER_CACHE_KEY, userId));
+            }
 
             // Return the updated plan
             return await GetById(constructionPlan.Id, actionBy);
@@ -1006,7 +914,16 @@ namespace Sep490_Backend.Services.ConstructionPlanService
             await _context.SaveChangesAsync();
 
             // Clear cache
-            await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_CACHE_KEY);
+            await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY);
+            // Clear user-specific caches
+            var users = await _context.Users
+                .Where(u => !u.Deleted)
+                .Select(u => u.Id)
+                .ToListAsync();
+            foreach (var userId in users)
+            {
+                await _cacheService.DeleteAsync(string.Format(RedisCacheKey.CONSTRUCTION_PLAN_BY_USER_CACHE_KEY, userId));
+            }
 
             return true;
         }
@@ -1052,7 +969,16 @@ namespace Sep490_Backend.Services.ConstructionPlanService
             await _context.SaveChangesAsync();
 
             // Clear cache
-            await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_CACHE_KEY);
+            await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY);
+            // Clear user-specific caches
+            var users = await _context.Users
+                .Where(u => !u.Deleted)
+                .Select(u => u.Id)
+                .ToListAsync();
+            foreach (var userId in users)
+            {
+                await _cacheService.DeleteAsync(string.Format(RedisCacheKey.CONSTRUCTION_PLAN_BY_USER_CACHE_KEY, userId));
+            }
 
             return true;
         }
@@ -1100,7 +1026,16 @@ namespace Sep490_Backend.Services.ConstructionPlanService
             await _context.SaveChangesAsync();
 
             // Clear cache
-            await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_CACHE_KEY);
+            await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY);
+            // Clear user-specific caches
+            var users = await _context.Users
+                .Where(u => !u.Deleted)
+                .Select(u => u.Id)
+                .ToListAsync();
+            foreach (var userId in users)
+            {
+                await _cacheService.DeleteAsync(string.Format(RedisCacheKey.CONSTRUCTION_PLAN_BY_USER_CACHE_KEY, userId));
+            }
 
             return true;
         }
@@ -1139,7 +1074,16 @@ namespace Sep490_Backend.Services.ConstructionPlanService
             await _context.SaveChangesAsync();
 
             // Clear cache
-            await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_CACHE_KEY);
+            await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY);
+            // Clear user-specific caches
+            var users = await _context.Users
+                .Where(u => !u.Deleted)
+                .Select(u => u.Id)
+                .ToListAsync();
+            foreach (var userId in users)
+            {
+                await _cacheService.DeleteAsync(string.Format(RedisCacheKey.CONSTRUCTION_PLAN_BY_USER_CACHE_KEY, userId));
+            }
 
             return true;
         }
@@ -1316,7 +1260,7 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                 await _context.SaveChangesAsync();
                 
                 // Clear cache
-                await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_CACHE_KEY);
+                await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY);
 
                 // Return the created plan
                 return await GetById(constructionPlan.Id, actionBy);

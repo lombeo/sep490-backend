@@ -7,6 +7,7 @@ using Sep490_Backend.DTO.Material;
 using Sep490_Backend.DTO.Project;
 using Sep490_Backend.DTO.SiteSurvey;
 using Sep490_Backend.DTO.ConstructionTeam;
+using Sep490_Backend.DTO.ConstructionPlan;
 using Sep490_Backend.Infra;
 using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Infra.Entities;
@@ -25,6 +26,7 @@ namespace Sep490_Backend.Services.DataService
         Task<List<SiteSurvey>> ListSiteSurvey(SearchSiteSurveyDTO model);
         Task<List<Material>> ListMaterial(MaterialSearchDTO model);
         Task<List<ConstructionTeam>> ListConstructionTeam(ConstructionTeamSearchDTO model);
+        Task<List<ConstructionPlanDTO>> ListConstructionPlan(ConstructionPlanQuery model);
     }
 
     public class DataService : IDataService
@@ -721,6 +723,156 @@ namespace Sep490_Backend.Services.DataService
             }
 
             return filteredList;
+        }
+
+        public async Task<List<ConstructionPlanDTO>> ListConstructionPlan(ConstructionPlanQuery model)
+        {
+            // Check if user is authorized to perform this action
+            if (!_helpService.IsInRole(model.ActionBy, new List<string> 
+            { 
+                RoleConstValue.CONSTRUCTION_MANAGER, 
+                RoleConstValue.TECHNICAL_MANAGER, 
+                RoleConstValue.RESOURCE_MANAGER,
+                RoleConstValue.EXECUTIVE_BOARD 
+            }))
+            {
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+            }
+
+            var user = StaticVariable.UserMemory.FirstOrDefault(u => u.Id == model.ActionBy);
+            bool isExecutiveBoard = user != null && user.Role == RoleConstValue.EXECUTIVE_BOARD;
+
+            // Define cache keys
+            string generalCacheKey = RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY;
+            string userCacheKey = string.Format(RedisCacheKey.CONSTRUCTION_PLAN_BY_USER_CACHE_KEY, model.ActionBy);
+            
+            // Try to get from user-specific cache first
+            var userCache = await _cacheService.GetAsync<List<ConstructionPlanDTO>>(userCacheKey);
+            if (userCache != null)
+            {
+                var filteredData = ApplyConstructionPlanFilters(userCache, model);
+                model.Total = filteredData.Count();
+                
+                if (model.PageSize > 0)
+                {
+                    int pageSize = model.PageSize == 0 ? 10 : model.PageSize;
+                    int skip = (model.PageIndex - 1) * pageSize;
+                    filteredData = filteredData.Skip(skip).Take(pageSize).ToList();
+                }
+                
+                return filteredData;
+            }
+
+            // If not in user cache, try general cache
+            var generalCache = await _cacheService.GetAsync<List<ConstructionPlanDTO>>(generalCacheKey);
+            
+            if (generalCache != null)
+            {
+                // Create user-specific cache with shorter expiration
+                _ = _cacheService.SetAsync(userCacheKey, generalCache, TimeSpan.FromMinutes(30));
+                
+                var filteredData = ApplyConstructionPlanFilters(generalCache, model);
+                model.Total = filteredData.Count();
+                
+                if (model.PageSize > 0)
+                {
+                    int pageSize = model.PageSize == 0 ? 10 : model.PageSize;
+                    int skip = (model.PageIndex - 1) * pageSize;
+                    filteredData = filteredData.Skip(skip).Take(pageSize).ToList();
+                }
+                
+                return filteredData;
+            }
+
+            // If not in cache, get from database
+            var constructionPlans = await _context.ConstructionPlans
+                .Include(cp => cp.Project)
+                .Include(cp => cp.Reviewers)
+                .Where(cp => !cp.Deleted)
+                .OrderByDescending(cp => cp.CreatedAt)
+                .ToListAsync();
+
+            // Convert to DTOs
+            var constructionPlanDTOs = new List<ConstructionPlanDTO>();
+            foreach (var plan in constructionPlans)
+            {
+                var creator = await _context.Users.FirstOrDefaultAsync(u => u.Id == plan.Creator);
+                
+                var dto = new ConstructionPlanDTO
+                {
+                    Id = plan.Id,
+                    PlanName = plan.PlanName,
+                    Reviewer = plan.Reviewer,
+                    ProjectId = plan.ProjectId,
+                    ProjectName = plan.Project?.ProjectName ?? "",
+                    CreatedAt = plan.CreatedAt ?? DateTime.UtcNow,
+                    UpdatedAt = plan.UpdatedAt ?? DateTime.UtcNow,
+                    CreatedBy = plan.Creator,
+                    CreatedByName = creator?.FullName ?? "",
+                    UpdatedBy = plan.Updater,
+                    IsApproved = plan.Reviewer != null && plan.Reviewer.Count > 0 && plan.Reviewer.All(r => r.Value == true)
+                };
+                
+                constructionPlanDTOs.Add(dto);
+            }
+
+            // Cache the results
+            _ = _cacheService.SetAsync(generalCacheKey, constructionPlanDTOs, TimeSpan.FromHours(1));
+            _ = _cacheService.SetAsync(userCacheKey, constructionPlanDTOs, TimeSpan.FromMinutes(30));
+
+            // Apply filters and pagination
+            var result = ApplyConstructionPlanFilters(constructionPlanDTOs, model);
+            model.Total = result.Count();
+            
+            if (model.PageSize > 0)
+            {
+                int pageSize = model.PageSize == 0 ? 10 : model.PageSize;
+                int skip = (model.PageIndex - 1) * pageSize;
+                result = result.Skip(skip).Take(pageSize).ToList();
+            }
+            
+            return result;
+        }
+        
+        private List<ConstructionPlanDTO> ApplyConstructionPlanFilters(List<ConstructionPlanDTO> data, ConstructionPlanQuery query)
+        {
+            var result = data;
+            
+            if (!string.IsNullOrEmpty(query.PlanName))
+            {
+                result = result.Where(cp => cp.PlanName.Contains(query.PlanName)).ToList();
+            }
+
+            if (query.ProjectId.HasValue)
+            {
+                result = result.Where(cp => cp.ProjectId == query.ProjectId.Value).ToList();
+            }
+
+            if (query.FromDate.HasValue)
+            {
+                var fromDate = query.FromDate.Value.Date;
+                result = result.Where(cp => cp.CreatedAt >= fromDate).ToList();
+            }
+
+            if (query.ToDate.HasValue)
+            {
+                var toDate = query.ToDate.Value.Date.AddDays(1).AddTicks(-1);
+                result = result.Where(cp => cp.CreatedAt <= toDate).ToList();
+            }
+
+            if (query.IsApproved.HasValue)
+            {
+                if (query.IsApproved.Value)
+                {
+                    result = result.Where(cp => cp.IsApproved).ToList();
+                }
+                else
+                {
+                    result = result.Where(cp => !cp.IsApproved).ToList();
+                }
+            }
+            
+            return result;
         }
     }
 }

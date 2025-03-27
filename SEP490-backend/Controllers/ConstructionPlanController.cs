@@ -19,11 +19,14 @@ namespace Sep490_Backend.Controllers
             _constructionPlanService = constructionPlanService;
         }
 
-        [HttpGet("search")]
+        [HttpPost]
+        [Route("search")]
         public async Task<ResponseDTO<List<ConstructionPlanDTO>>> Search([FromQuery] ConstructionPlanQuery query)
         {
             query.ActionBy = UserId;
-            return await HandleException(_constructionPlanService.Search(query), Message.ConstructionPlanMessage.SEARCH_SUCCESS);
+            var response = await HandleException(_constructionPlanService.Search(query), Message.ConstructionPlanMessage.SEARCH_SUCCESS);
+            response.Meta = new ResponseMeta() { Total = query.Total, Index = query.PageIndex, PageSize = query.PageSize };
+            return response;
         }
 
         [HttpGet("detail/{id}")]
