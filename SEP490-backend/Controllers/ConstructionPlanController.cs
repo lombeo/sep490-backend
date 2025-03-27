@@ -7,7 +7,7 @@ using Sep490_Backend.Services.ConstructionPlanService;
 
 namespace Sep490_Backend.Controllers
 {
-    [Route("api/[controller]")]
+    [Route(RouteApiConstant.BASE_PATH + "/plans")]
     [ApiController]
     [Authorize]
     public class ConstructionPlanController : BaseAPIController
@@ -19,26 +19,26 @@ namespace Sep490_Backend.Controllers
             _constructionPlanService = constructionPlanService;
         }
 
-        [HttpGet]
+        [HttpGet("search")]
         public async Task<ResponseDTO<List<ConstructionPlanDTO>>> Search([FromQuery] ConstructionPlanQuery query)
         {
             query.ActionBy = UserId;
             return await HandleException(_constructionPlanService.Search(query), Message.ConstructionPlanMessage.SEARCH_SUCCESS);
         }
 
-        [HttpGet("{id}")]
+        [HttpGet("detail/{id}")]
         public async Task<ResponseDTO<ConstructionPlanDTO>> GetById(int id)
         {
             return await HandleException(_constructionPlanService.GetById(id, UserId), Message.ConstructionPlanMessage.GET_DETAIL_SUCCESS);
         }
 
-        [HttpPost]
+        [HttpPost("create")]
         public async Task<ResponseDTO<ConstructionPlanDTO>> Create([FromBody] SaveConstructionPlanDTO model)
         {
             return await HandleException(_constructionPlanService.Create(model, UserId), Message.ConstructionPlanMessage.CREATE_SUCCESS);
         }
 
-        [HttpPut]
+        [HttpPut("update")]
         public async Task<ResponseDTO<ConstructionPlanDTO>> Update([FromBody] SaveConstructionPlanDTO model)
         {
             return await HandleException(_constructionPlanService.Update(model, UserId), Message.ConstructionPlanMessage.UPDATE_SUCCESS);
