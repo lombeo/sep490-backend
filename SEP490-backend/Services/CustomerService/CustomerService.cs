@@ -31,15 +31,24 @@ namespace Sep490_Backend.Services.CustomerService
         private readonly IHelperService _helperService;
         private readonly ICacheService _cacheService;
         private readonly IDataService _dataService;
+        private readonly ILogger<CustomerService> _logger;
+        private readonly TimeSpan DEFAULT_CACHE_DURATION = TimeSpan.FromMinutes(15);
 
-
-        public CustomerService(BackendContext context, IAuthenService authenService, IEmailService emailService, IHelperService helperService, ICacheService cacheService, IDataService dataService)
+        public CustomerService(
+            BackendContext context, 
+            IAuthenService authenService, 
+            IEmailService emailService, 
+            IHelperService helperService, 
+            ICacheService cacheService, 
+            IDataService dataService,
+            ILogger<CustomerService> logger)
         {
             _context = context;
             _authenService = authenService;
             _helperService = helperService;
             _cacheService = cacheService;
             _dataService = dataService;
+            _logger = logger;
         }
 
         public async Task<Customer> GetDetailCustomer(int customerId, int actionBy)
@@ -48,9 +57,34 @@ namespace Sep490_Backend.Services.CustomerService
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
+            
+            // Define cache key for this specific customer
+            string cacheKey = $"{RedisCacheKey.CUSTOMER_CACHE_KEY}:{customerId}";
+            
+            // Try to get from cache first
+            var cachedCustomer = await _cacheService.GetAsync<Customer>(cacheKey, true);
+            
+            if (cachedCustomer != null)
+            {
+                _logger.LogInformation($"Cache hit for customer ID {customerId}");
+                return cachedCustomer;
+            }
+            
+            _logger.LogInformation($"Cache miss for customer ID {customerId}, fetching from database");
+            
+            // If not in cache, get from database
             var customer = await _context.Customers
                 .Where(t => t.Id == customerId && !t.Deleted)
                 .FirstOrDefaultAsync();
+                
+            if (customer == null)
+            {
+                throw new KeyNotFoundException(Message.CustomerMessage.CUSTOMER_NOT_FOUND);
+            }
+            
+            // Cache the result
+            await _cacheService.SetAsync(cacheKey, customer, DEFAULT_CACHE_DURATION, true);
+            
             return customer;
         }
 
@@ -70,7 +104,12 @@ namespace Sep490_Backend.Services.CustomerService
             _context.Update(customer);
 
             await _context.SaveChangesAsync();
-            _ = _cacheService.DeleteAsync(RedisCacheKey.CUSTOMER_CACHE_KEY);
+            
+            // Invalidate customer-specific cache
+            await _cacheService.DeleteAsync($"{RedisCacheKey.CUSTOMER_CACHE_KEY}:{customerId}");
+            
+            // Invalidate general customer cache
+            await _cacheService.DeleteAsync(RedisCacheKey.CUSTOMER_CACHE_KEY);
 
             return true;
         }
@@ -170,7 +209,9 @@ namespace Sep490_Backend.Services.CustomerService
             };
             await _context.AddAsync(customer);
             await _context.SaveChangesAsync();
-            _ = _cacheService.DeleteAsync(RedisCacheKey.CUSTOMER_CACHE_KEY);
+            
+            // Invalidate general customer cache
+            await _cacheService.DeleteAsync(RedisCacheKey.CUSTOMER_CACHE_KEY);
 
             return customer;
         }
@@ -202,15 +243,9 @@ namespace Sep490_Backend.Services.CustomerService
                     Field = nameof(model.TaxCode).ToCamelCase()
                 });
 
-            if (!string.IsNullOrWhiteSpace(model.Email) && !Regex.IsMatch(model.Email, PatternConst.EMAIL_PATTERN))
-                errors.Add(new ResponseError
-                {
-                    Message = Message.AuthenMessage.INVALID_EMAIL,
-                    Field = nameof(model.Email).ToCamelCase()
-                });
-
+            //Check unique except itself
             var data = await _dataService.ListCustomer(new CustomerSearchDTO() { ActionBy = actionBy, PageSize = int.MaxValue });
-            if (data.FirstOrDefault(t => t.CustomerCode == model.CustomerCode) != null)
+            if (data.FirstOrDefault(t => t.CustomerCode == model.CustomerCode && t.Id != model.Id) != null)
             {
                 errors.Add(new ResponseError
                 {
@@ -218,7 +253,7 @@ namespace Sep490_Backend.Services.CustomerService
                     Field = nameof(model.CustomerCode).ToCamelCase()
                 });
             }
-            if (data.FirstOrDefault(t => t.TaxCode == model.TaxCode) != null)
+            if (data.FirstOrDefault(t => t.TaxCode == model.TaxCode && t.Id != model.Id) != null)
             {
                 errors.Add(new ResponseError
                 {
@@ -226,7 +261,7 @@ namespace Sep490_Backend.Services.CustomerService
                     Field = nameof(model.TaxCode).ToCamelCase()
                 });
             }
-            if (!string.IsNullOrWhiteSpace(model.Fax) && data.FirstOrDefault(t => t.Fax == model.Fax) != null)
+            if (!string.IsNullOrWhiteSpace(model.Fax) && data.FirstOrDefault(t => t.Fax == model.Fax && t.Id != model.Id) != null)
             {
                 errors.Add(new ResponseError
                 {
@@ -234,7 +269,7 @@ namespace Sep490_Backend.Services.CustomerService
                     Field = nameof(model.Fax).ToCamelCase()
                 });
             }
-            if (!string.IsNullOrWhiteSpace(model.BankAccount) && data.FirstOrDefault(t => t.BankAccount == model.BankAccount) != null)
+            if (!string.IsNullOrWhiteSpace(model.BankAccount) && data.FirstOrDefault(t => t.BankAccount == model.BankAccount && t.Id != model.Id) != null)
             {
                 errors.Add(new ResponseError
                 {
@@ -242,7 +277,17 @@ namespace Sep490_Backend.Services.CustomerService
                     Field = nameof(model.BankAccount).ToCamelCase()
                 });
             }
-            if (!string.IsNullOrWhiteSpace(model.Email) && data.FirstOrDefault(t => t.Email == model.Email) != null)
+            if (!string.IsNullOrWhiteSpace(model.Email) && !Regex.IsMatch(model.Email, PatternConst.EMAIL_PATTERN))
+            {
+                errors.Add(new ResponseError
+                {
+                    Message = Message.AuthenMessage.INVALID_EMAIL,
+                    Field = nameof(model.Email).ToCamelCase()
+                });
+            }
+
+
+            if (!string.IsNullOrWhiteSpace(model.Email) && data.FirstOrDefault(t => t.Email == model.Email && t.Id != model.Id) != null)
             {
                 errors.Add(new ResponseError
                 {
@@ -251,26 +296,30 @@ namespace Sep490_Backend.Services.CustomerService
                 });
             }
 
-            // Throw aggregated errors
             if (errors.Count > 0)
                 throw new ValidationException(errors);
 
-            existCustomer.CustomerCode = model.CustomerCode ?? existCustomer.CustomerCode;
-            existCustomer.CustomerName = model.CustomerName ?? existCustomer.CustomerName;
-            existCustomer.Phone = model.Phone ?? existCustomer.Phone;
-            existCustomer.TaxCode = model.TaxCode ?? existCustomer.TaxCode;
-            existCustomer.Fax = model.Fax ?? existCustomer.Fax;
-            existCustomer.Email = model.Email ?? existCustomer.Email;
-            existCustomer.DirectorName = model.DirectorName ?? existCustomer.DirectorName;
-            existCustomer.Description = model.Description ?? existCustomer.Description;
-            existCustomer.BankAccount = model.BankAccount ?? existCustomer.BankAccount;
-            existCustomer.BankName = model.BankName ?? existCustomer.BankName;
-            existCustomer.UpdatedAt = DateTime.Now;
+            existCustomer.CustomerCode = model.CustomerCode;
+            existCustomer.CustomerName = model.CustomerName ?? "";
+            existCustomer.Email = model.Email ?? "";
+            existCustomer.Phone = model.Phone ?? "";
+            existCustomer.TaxCode = model.TaxCode;
+            existCustomer.Fax = model.Fax ?? "";
+            existCustomer.Address = model.Address ?? "";
+            existCustomer.DirectorName = model.DirectorName ?? "";
+            existCustomer.Description = model.Description ?? "";
+            existCustomer.BankAccount = model.BankAccount ?? "";
+            existCustomer.BankName = model.BankName ?? "";
             existCustomer.Updater = actionBy;
-
             _context.Update(existCustomer);
-            _context.SaveChanges();
-            _ = _cacheService.DeleteAsync(RedisCacheKey.CUSTOMER_CACHE_KEY);
+            await _context.SaveChangesAsync();
+            
+            // Invalidate customer-specific cache
+            await _cacheService.DeleteAsync($"{RedisCacheKey.CUSTOMER_CACHE_KEY}:{model.Id}");
+            
+            // Invalidate general customer cache
+            await _cacheService.DeleteAsync(RedisCacheKey.CUSTOMER_CACHE_KEY);
+
             return existCustomer;
         }
     }

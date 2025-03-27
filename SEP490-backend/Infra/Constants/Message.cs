@@ -205,5 +205,34 @@ namespace Sep490_Backend.Infra.Constants
             public const string NAME_REQUIRED = "E-CTM-005"; // Construction team name is required!
             public const string DUPLICATE_NAME = "E-CTM-006"; // Construction team name already exists!
         }
+
+        public static class VehicleMessage
+        {
+            // Success messages
+            public const string CREATE_SUCCESS = "S-VEH-001"; // Create vehicle successfully!
+            public const string UPDATE_SUCCESS = "S-VEH-002"; // Update vehicle successfully!
+            public const string DELETE_SUCCESS = "S-VEH-003"; // Delete vehicle successfully!
+            public const string SEARCH_SUCCESS = "S-VEH-004"; // Search vehicles successfully!
+            public const string GET_DETAIL_SUCCESS = "S-VEH-005"; // Get vehicle details successfully!
+            
+            // Error messages
+            public const string NOT_FOUND = "E-VEH-001"; // Vehicle not found!
+            public const string LICENSE_PLATE_EXISTS = "E-VEH-002"; // License plate already exists!
+            public const string VEHICLE_IN_USE = "E-VEH-003"; // Cannot delete vehicle because it is in use in construction plans!
+        }
+
+        public static class ActionLogMessage
+        {
+            // Success messages
+            public const string CREATE_SUCCESS = "S-LOG-001"; // Create action log successfully!
+            public const string UPDATE_SUCCESS = "S-LOG-002"; // Update action log successfully!
+            public const string DELETE_SUCCESS = "S-LOG-003"; // Delete action log successfully!
+            public const string SEARCH_SUCCESS = "S-LOG-004"; // Search action logs successfully!
+            public const string GET_DETAIL_SUCCESS = "S-LOG-005"; // Get action log details successfully!
+            public const string CACHE_INVALIDATED = "S-LOG-006"; // Action log cache invalidated successfully!
+            
+            // Error messages
+            public const string NOT_FOUND = "E-LOG-001"; // Action log not found!
+        }
     }
 }

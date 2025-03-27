@@ -533,9 +533,23 @@ namespace Sep490_Backend.Services.ResourceReqService
         /// </summary>
         private async Task InvalidateResourceAllocationReqCache(int reqId, int fromProjectId, int toProjectId)
         {
+            // Invalidate specific request cache
             await _cacheService.DeleteAsync(string.Format(RedisCacheKey.ALLOCATION_REQ_CACHE_KEY, reqId));
+            
+            // Invalidate project-specific request caches
             await _cacheService.DeleteAsync(string.Format(RedisCacheKey.ALLOCATION_REQ_BY_PROJECT_CACHE_KEY, fromProjectId));
             await _cacheService.DeleteAsync(string.Format(RedisCacheKey.ALLOCATION_REQ_BY_PROJECT_CACHE_KEY, toProjectId));
+            
+            // Invalidate list caches - since we don't know which page or filter was affected
+            await _cacheService.DeleteAsync(RedisCacheKey.ALLOCATION_REQS_LIST_CACHE_KEY);
+            await _cacheService.DeleteAsync(string.Format(RedisCacheKey.ALLOCATION_REQS_BY_FROM_PROJECT_LIST_CACHE_KEY, fromProjectId));
+            await _cacheService.DeleteAsync(string.Format(RedisCacheKey.ALLOCATION_REQS_BY_TO_PROJECT_LIST_CACHE_KEY, toProjectId));
+            
+            // Delete all status-based caches using pattern
+            foreach (RequestStatus status in Enum.GetValues(typeof(RequestStatus)))
+            {
+                await _cacheService.DeleteAsync(string.Format(RedisCacheKey.ALLOCATION_REQS_BY_STATUS_LIST_CACHE_KEY, status));
+            }
         }
 
         /// <summary>
@@ -543,8 +557,21 @@ namespace Sep490_Backend.Services.ResourceReqService
         /// </summary>
         private async Task InvalidateResourceMobilizationReqCache(int reqId, int projectId)
         {
+            // Invalidate specific request cache
             await _cacheService.DeleteAsync(string.Format(RedisCacheKey.MOBILIZATION_REQ_CACHE_KEY, reqId));
+            
+            // Invalidate project-specific request caches
             await _cacheService.DeleteAsync(string.Format(RedisCacheKey.MOBILIZATION_REQ_BY_PROJECT_CACHE_KEY, projectId));
+            
+            // Invalidate list caches - since we don't know which page or filter was affected
+            await _cacheService.DeleteAsync(RedisCacheKey.MOBILIZATION_REQS_LIST_CACHE_KEY);
+            await _cacheService.DeleteAsync(string.Format(RedisCacheKey.MOBILIZATION_REQS_BY_PROJECT_LIST_CACHE_KEY, projectId));
+            
+            // Delete all status-based caches using pattern
+            foreach (RequestStatus status in Enum.GetValues(typeof(RequestStatus)))
+            {
+                await _cacheService.DeleteAsync(string.Format(RedisCacheKey.MOBILIZATION_REQS_BY_STATUS_LIST_CACHE_KEY, status));
+            }
         }
 
         #region Resource Mobilization Methods
@@ -565,6 +592,34 @@ namespace Sep490_Backend.Services.ResourceReqService
                 !_helperService.IsInRole(query.ActionBy, RoleConstValue.EXECUTIVE_BOARD))
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+            }
+
+            // Build cache key based on parameters
+            string cacheKey;
+            if (projectId > 0 && status.HasValue)
+            {
+                cacheKey = $"{RedisCacheKey.MOBILIZATION_REQS_BY_PROJECT_LIST_CACHE_KEY}:{status.Value}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+                cacheKey = string.Format(cacheKey, projectId);
+            }
+            else if (projectId > 0)
+            {
+                cacheKey = string.Format(RedisCacheKey.MOBILIZATION_REQS_BY_PROJECT_LIST_CACHE_KEY, projectId) + $":PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+            }
+            else if (status.HasValue)
+            {
+                cacheKey = string.Format(RedisCacheKey.MOBILIZATION_REQS_BY_STATUS_LIST_CACHE_KEY, status.Value) + $":PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+            }
+            else
+            {
+                cacheKey = $"{RedisCacheKey.MOBILIZATION_REQS_LIST_CACHE_KEY}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+            }
+
+            // Try to get from cache first
+            var cachedResult = await _cacheService.GetAsync<(int Total, List<ResourceMobilizationReqs> Items)>(cacheKey);
+            if (cachedResult.Items != null)
+            {
+                query.Total = cachedResult.Total;
+                return cachedResult.Items;
             }
 
             // Start with base query
@@ -592,6 +647,9 @@ namespace Sep490_Backend.Services.ResourceReqService
                 .Skip(query.Skip)
                 .Take(query.PageSize)
                 .ToListAsync();
+
+            // Cache the result for 15 minutes
+            await _cacheService.SetAsync(cacheKey, (query.Total, items), TimeSpan.FromMinutes(15));
 
             return items;
         }
@@ -829,6 +887,25 @@ namespace Sep490_Backend.Services.ResourceReqService
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
 
+            // Build cache key based on parameters
+            string cacheKey;
+            if (type.HasValue && type.Value != ResourceType.NONE)
+            {
+                cacheKey = string.Format(RedisCacheKey.RESOURCE_INVENTORY_BY_TYPE_CACHE_KEY, type.Value) + $":PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+            }
+            else
+            {
+                cacheKey = $"{RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+            }
+
+            // Try to get from cache first
+            var cachedResult = await _cacheService.GetAsync<(int Total, List<ResourceInventoryDTO> Items)>(cacheKey);
+            if (cachedResult.Items != null)
+            {
+                query.Total = cachedResult.Total;
+                return cachedResult.Items;
+            }
+
             // Start with base query
             var dbQuery = _context.ResourceInventory
                 .Where(r => !r.Deleted);
@@ -861,6 +938,9 @@ namespace Sep490_Backend.Services.ResourceReqService
                     UpdatedAt = r.UpdatedAt
                 })
                 .ToListAsync();
+
+            // Cache the result for 15 minutes
+            await _cacheService.SetAsync(cacheKey, (query.Total, items), TimeSpan.FromMinutes(15));
 
             return items;
         }
@@ -931,6 +1011,9 @@ namespace Sep490_Backend.Services.ResourceReqService
                 await _context.SaveChangesAsync();
                 
                 await transaction.CommitAsync();
+                
+                // Invalidate cache
+                await InvalidateResourceInventoryCache(newResource.Id, newResource.ResourceType);
 
                 return newResource;
             }
@@ -995,6 +1078,9 @@ namespace Sep490_Backend.Services.ResourceReqService
                     throw new KeyNotFoundException(Message.ResourceRequestMessage.INVENTORY_NOT_FOUND);
                 }
 
+                // Store old resource type for cache invalidation
+                var oldResourceType = resource.ResourceType;
+
                 // Update properties
                 resource.Name = model.Name;
                 resource.Description = model.Description;
@@ -1011,6 +1097,13 @@ namespace Sep490_Backend.Services.ResourceReqService
                 await _context.SaveChangesAsync();
                 
                 await transaction.CommitAsync();
+                
+                // Invalidate cache for both old and new resource type
+                await InvalidateResourceInventoryCache(resource.Id, resource.ResourceType);
+                if (oldResourceType != resource.ResourceType)
+                {
+                    await _cacheService.DeleteAsync(string.Format(RedisCacheKey.RESOURCE_INVENTORY_BY_TYPE_CACHE_KEY, oldResourceType));
+                }
 
                 return resource;
             }
@@ -1058,6 +1151,9 @@ namespace Sep490_Backend.Services.ResourceReqService
                 await _context.SaveChangesAsync();
                 
                 await transaction.CommitAsync();
+                
+                // Invalidate cache
+                await InvalidateResourceInventoryCache(resource.Id, resource.ResourceType);
 
                 return true;
             }
@@ -1066,6 +1162,13 @@ namespace Sep490_Backend.Services.ResourceReqService
                 await transaction.RollbackAsync();
                 throw;
             }
+        }
+
+        private async Task InvalidateResourceInventoryCache(int resourceId, ResourceType resourceType)
+        {
+            await _cacheService.DeleteAsync(string.Format(RedisCacheKey.RESOURCE_INVENTORY_BY_ID_CACHE_KEY, resourceId));
+            await _cacheService.DeleteAsync(string.Format(RedisCacheKey.RESOURCE_INVENTORY_BY_TYPE_CACHE_KEY, resourceType));
+            await _cacheService.DeleteAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
         }
 
         #endregion
@@ -1089,6 +1192,36 @@ namespace Sep490_Backend.Services.ResourceReqService
                 !_helperService.IsInRole(query.ActionBy, RoleConstValue.EXECUTIVE_BOARD))
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+            }
+
+            // Build cache key based on parameters
+            string cacheKey = $"{RedisCacheKey.ALLOCATION_REQS_LIST_CACHE_KEY}";
+            
+            if (fromProjectId.HasValue)
+            {
+                cacheKey = string.Format(RedisCacheKey.ALLOCATION_REQS_BY_FROM_PROJECT_LIST_CACHE_KEY, fromProjectId.Value);
+            }
+            
+            if (toProjectId.HasValue)
+            {
+                cacheKey = cacheKey == $"{RedisCacheKey.ALLOCATION_REQS_LIST_CACHE_KEY}" ? 
+                    string.Format(RedisCacheKey.ALLOCATION_REQS_BY_TO_PROJECT_LIST_CACHE_KEY, toProjectId.Value) :
+                    $"{cacheKey}:TO:{toProjectId.Value}";
+            }
+            
+            if (status.HasValue)
+            {
+                cacheKey = $"{cacheKey}:STATUS:{status.Value}";
+            }
+            
+            cacheKey = $"{cacheKey}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+
+            // Try to get from cache first
+            var cachedResult = await _cacheService.GetAsync<(int Total, List<ResourceAllocationReqs> Items)>(cacheKey);
+            if (cachedResult.Items != null)
+            {
+                query.Total = cachedResult.Total;
+                return cachedResult.Items;
             }
 
             // Start with base query
@@ -1122,6 +1255,9 @@ namespace Sep490_Backend.Services.ResourceReqService
                 .Skip(query.Skip)
                 .Take(query.PageSize)
                 .ToListAsync();
+
+            // Cache the result for 15 minutes
+            await _cacheService.SetAsync(cacheKey, (query.Total, items), TimeSpan.FromMinutes(15));
 
             return items;
         }

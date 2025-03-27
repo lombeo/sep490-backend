@@ -34,12 +34,15 @@ namespace Sep490_Backend.Services.DataService
         private readonly BackendContext _context;
         private readonly IHelperService _helpService;
         private readonly ICacheService _cacheService;
+        private readonly ILogger<DataService> _logger;
+        private readonly TimeSpan DEFAULT_CACHE_DURATION = TimeSpan.FromMinutes(15);
 
-        public DataService(BackendContext context, IHelperService helpService, ICacheService cacheService)
+        public DataService(BackendContext context, IHelperService helpService, ICacheService cacheService, ILogger<DataService> logger)
         {
             _context = context;
             _helpService = helpService;
             _cacheService = cacheService;
+            _logger = logger;
         }
 
         public async Task<List<ContractDTO>> ListContract(SearchContractDTO model)
@@ -598,72 +601,57 @@ namespace Sep490_Backend.Services.DataService
 
         public async Task<List<Material>> ListMaterial(MaterialSearchDTO model)
         {
-            // Try to get materials from cache
-            string cacheKey = RedisCacheKey.MATERIAL_CACHE_KEY;
-            var materialCacheList = await _cacheService.GetAsync<List<Material>>(cacheKey);
-
-            // If not in cache, get from database and cache it
-            if (materialCacheList == null)
+            if (!_helpService.IsInRole(model.ActionBy, RoleConstValue.RESOURCE_MANAGER))
             {
-                materialCacheList = await _context.Materials
-                    .Where(m => !m.Deleted)
-                    .OrderByDescending(m => m.UpdatedAt)
-                    .ToListAsync();
-                
-                // Cache the result
-                _ = _cacheService.SetAsync(cacheKey, materialCacheList);
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
+
+            // Create cache key based on search parameters
+            string cacheKey = GetMaterialSearchCacheKey(model);
+            
+            // Try to get from cache first
+            var cachedMaterials = await _cacheService.GetAsync<List<Material>>(cacheKey);
+            
+            if (cachedMaterials != null)
+            {
+                _logger.LogInformation($"Cache hit for materials search: {cacheKey}");
+                return cachedMaterials;
+            }
+            
+            _logger.LogInformation($"Cache miss for materials search: {cacheKey}, fetching from database");
+
+            var query = _context.Materials.Where(t => !t.Deleted).AsQueryable();
 
             // Apply filters
-            var filteredList = materialCacheList;
-
-            // Apply keyword search across multiple fields
-            if (!string.IsNullOrWhiteSpace(model.Keyword))
+            if (!string.IsNullOrEmpty(model.MaterialCode))
             {
-                var keyword = model.Keyword.ToLower().Trim();
-                filteredList = filteredList.Where(m => 
-                    (m.MaterialCode?.ToLower().Contains(keyword) == true) ||
-                    (m.MaterialName?.ToLower().Contains(keyword) == true) ||
-                    (m.Unit?.ToLower().Contains(keyword) == true) ||
-                    (m.Branch?.ToLower().Contains(keyword) == true) ||
-                    (m.MadeIn?.ToLower().Contains(keyword) == true) ||
-                    (m.ChassisNumber?.ToLower().Contains(keyword) == true) ||
-                    (m.Description?.ToLower().Contains(keyword) == true)
-                ).ToList();
+                query = query.Where(t => t.MaterialCode.ToLower().Contains(model.MaterialCode.ToLower()));
             }
 
-            // Apply specific field filters
-            if (!string.IsNullOrWhiteSpace(model.MaterialCode))
+            if (!string.IsNullOrEmpty(model.MaterialName))
             {
-                filteredList = filteredList.Where(m => 
-                    m.MaterialCode.ToLower().Contains(model.MaterialCode.ToLower().Trim())
-                ).ToList();
+                query = query.Where(t => t.MaterialName.ToLower().Contains(model.MaterialName.ToLower()));
             }
 
-            if (!string.IsNullOrWhiteSpace(model.MaterialName))
-            {
-                filteredList = filteredList.Where(m => 
-                    m.MaterialName.ToLower().Contains(model.MaterialName.ToLower().Trim())
-                ).ToList();
-            }
+            // Count total before pagination
+            model.Total = await query.CountAsync();
 
-            if (!string.IsNullOrWhiteSpace(model.Unit))
-            {
-                filteredList = filteredList.Where(m => 
-                    m.Unit != null && m.Unit.ToLower().Contains(model.Unit.ToLower().Trim())
-                ).ToList();
-            }
+            // Apply sorting and pagination
+            var materials = await query
+                .OrderByDescending(t => t.UpdatedAt)
+                .Skip(model.Skip)
+                .Take(model.PageSize)
+                .ToListAsync();
 
-            // Set total count for pagination
-            model.Total = filteredList.Count();
-
-            // Apply pagination
-            if (model.PageSize > 0)
-            {
-                filteredList = filteredList.Skip(model.Skip).Take(model.PageSize).ToList();
-            }
-
-            return filteredList;
+            // Cache the result
+            await _cacheService.SetAsync(cacheKey, materials, DEFAULT_CACHE_DURATION);
+            
+            return materials;
+        }
+        
+        private string GetMaterialSearchCacheKey(MaterialSearchDTO model)
+        {
+            return $"{RedisCacheKey.MATERIAL_CACHE_KEY}_CODE_{model.MaterialCode ?? "all"}_NAME_{model.MaterialName ?? "all"}_PAGE_{model.PageIndex}_SIZE_{model.PageSize}";
         }
 
         public async Task<List<ConstructionTeam>> ListConstructionTeam(ConstructionTeamSearchDTO model)

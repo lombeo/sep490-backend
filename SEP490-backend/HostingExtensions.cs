@@ -29,6 +29,8 @@ using Sep490_Backend.Services.MaterialService;
 using Sep490_Backend.Services.ConstructionTeamService;
 using Sep490_Backend.Services.ResourceReqService;
 using Sep490_Backend.Services.ConstructionPlanService;
+using Sep490_Backend.Services.VehicleService;
+using Sep490_Backend.Services.ActionLogService;
 
 namespace Sep490_Backend
 {
@@ -51,14 +53,38 @@ namespace Sep490_Backend
             {
                 options.EnableDetailedErrors = true;
             });
+            
+            // Add response caching services
+            builder.Services.AddResponseCaching(options =>
+            {
+                // Limit cache size to 100 MB
+                options.MaximumBodySize = 100 * 1024 * 1024;
+                options.UseCaseSensitivePaths = false;
+            });
+            
             builder.Services.AddControllers(options =>
             {
                 options.ModelBinderProviders.Insert(0, new Infra.ModelBinders.ContractDetailModelBinderProvider());
+                
+                // Add cache profiles for different scenarios
+                options.CacheProfiles.Add("Default", new Microsoft.AspNetCore.Mvc.CacheProfile
+                {
+                    Duration = 60 // 1 minute
+                });
+                options.CacheProfiles.Add("Short", new Microsoft.AspNetCore.Mvc.CacheProfile
+                {
+                    Duration = 30 // 30 seconds
+                });
+                options.CacheProfiles.Add("Long", new Microsoft.AspNetCore.Mvc.CacheProfile
+                {
+                    Duration = 300 // 5 minutes
+                });
             })
             .AddJsonOptions(options =>
             {
                 options.JsonSerializerOptions.Converters.Add(new Sep490_Backend.Infra.Helps.ReviewerDictionaryConverter());
             });
+            
             builder.Services.AddDistributedRedisCache(options =>
             {
                 var connectionString = StaticVariable.RedisConfig.ConnectionString;
@@ -82,6 +108,8 @@ namespace Sep490_Backend
             builder.Services.AddScoped<IConstructionTeamService, ConstructionTeamService>();
             builder.Services.AddScoped<IResourceReqService, ResourceReqService>();
             builder.Services.AddScoped<IConstructionPlanService, ConstructionPlanService>();
+            builder.Services.AddScoped<IVehicleService, VehicleService>();
+            builder.Services.AddScoped<IActionLogService, ActionLogService>();
             builder.Services.AddScoped<RedisConnManager>();
             builder.Services.AddHostedService<DefaultBackgroundService>();
 
@@ -177,6 +205,73 @@ namespace Sep490_Backend
 
             app.UseSwagger();
             app.UseSwaggerUI();
+
+            // Add response caching middleware
+            app.UseResponseCaching();
+            
+            // Add cache control headers middleware
+            app.Use(async (context, next) =>
+            {
+                // For GET and HEAD requests, add cache control headers
+                if (context.Request.Method == "GET" || context.Request.Method == "HEAD")
+                {
+                    // For Vehicle API endpoints, set cache headers
+                    if (context.Request.Path.StartsWithSegments("/sep490/vehicle"))
+                    {
+                        // Skip caching for authenticated endpoints that modify data
+                        if (!context.Request.Path.ToString().Contains("/create") && 
+                            !context.Request.Path.ToString().Contains("/update") && 
+                            !context.Request.Path.ToString().Contains("/delete"))
+                        {
+                            context.Response.GetTypedHeaders().CacheControl = new Microsoft.Net.Http.Headers.CacheControlHeaderValue
+                            {
+                                Public = true,
+                                MaxAge = TimeSpan.FromSeconds(60),
+                                MustRevalidate = true
+                            };
+                        }
+                        else
+                        {
+                            // Ensure write operations aren't cached
+                            context.Response.GetTypedHeaders().CacheControl = new Microsoft.Net.Http.Headers.CacheControlHeaderValue
+                            {
+                                NoStore = true,
+                                NoCache = true,
+                                MustRevalidate = true
+                            };
+                        }
+                    }
+                    // For ActionLog API endpoints, set cache headers
+                    else if (context.Request.Path.StartsWithSegments("/sep490/actionlog"))
+                    {
+                        // Skip caching for authenticated endpoints that modify data
+                        if (!context.Request.Path.ToString().Contains("/create") && 
+                            !context.Request.Path.ToString().Contains("/update") && 
+                            !context.Request.Path.ToString().Contains("/delete") &&
+                            !context.Request.Path.ToString().Contains("/invalidate-cache"))
+                        {
+                            context.Response.GetTypedHeaders().CacheControl = new Microsoft.Net.Http.Headers.CacheControlHeaderValue
+                            {
+                                Public = true,
+                                MaxAge = TimeSpan.FromSeconds(60),
+                                MustRevalidate = true
+                            };
+                        }
+                        else
+                        {
+                            // Ensure write operations aren't cached
+                            context.Response.GetTypedHeaders().CacheControl = new Microsoft.Net.Http.Headers.CacheControlHeaderValue
+                            {
+                                NoStore = true,
+                                NoCache = true,
+                                MustRevalidate = true
+                            };
+                        }
+                    }
+                }
+                
+                await next();
+            });
 
             app.UseRouting();
             app.UseCors("AllowAll");
