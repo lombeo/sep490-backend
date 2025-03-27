@@ -2,6 +2,17 @@
 {
     public enum ActionLogType
     {
-        None, ConstructionPlan, 
+        None, 
+        ConstructionPlan,
+        UserActivity,
+        SystemEvent,
+        ProjectUpdate,
+        ContractChange,
+        ResourceAllocation,
+        MaterialUpdate,
+        VehicleOperation,
+        TeamActivity,
+        CustomerInteraction,
+        SiteSurvey
     }
 }

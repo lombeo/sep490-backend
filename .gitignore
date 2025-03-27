@@ -399,6 +399,4 @@ FodyWeavers.xsd
 
 .env
 
-.cursorignore
-
-.cursor
+.cursor*

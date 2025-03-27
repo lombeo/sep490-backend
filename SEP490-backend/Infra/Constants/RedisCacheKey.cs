@@ -18,5 +18,22 @@
         public const string ALLOCATION_REQ_BY_PROJECT_CACHE_KEY = "RESOURCE_ALLOCATION_REQ:PROJECT:{0}"; // Pattern: RESOURCE_ALLOCATION_REQ:PROJECT:projectId
         public const string MOBILIZATION_REQ_CACHE_KEY = "RESOURCE_MOBILIZATION_REQ:{0}"; // Pattern: RESOURCE_MOBILIZATION_REQ:reqId
         public const string MOBILIZATION_REQ_BY_PROJECT_CACHE_KEY = "RESOURCE_MOBILIZATION_REQ:PROJECT:{0}"; // Pattern: RESOURCE_MOBILIZATION_REQ:PROJECT:projectId
+        public const string RESOURCE_INVENTORY_CACHE_KEY = "RESOURCE_INVENTORY"; // Cache key for all inventory resources
+        public const string RESOURCE_INVENTORY_BY_TYPE_CACHE_KEY = "RESOURCE_INVENTORY:TYPE:{0}"; // Pattern: RESOURCE_INVENTORY:TYPE:resourceType
+        public const string RESOURCE_INVENTORY_BY_ID_CACHE_KEY = "RESOURCE_INVENTORY:{0}"; // Pattern: RESOURCE_INVENTORY:resourceId
+        public const string MOBILIZATION_REQS_LIST_CACHE_KEY = "RESOURCE_MOBILIZATION_REQS:LIST"; // Cache key for mobilization request lists
+        public const string MOBILIZATION_REQS_BY_PROJECT_LIST_CACHE_KEY = "RESOURCE_MOBILIZATION_REQS:PROJECT:{0}:LIST"; // Pattern: RESOURCE_MOBILIZATION_REQS:PROJECT:projectId:LIST
+        public const string MOBILIZATION_REQS_BY_STATUS_LIST_CACHE_KEY = "RESOURCE_MOBILIZATION_REQS:STATUS:{0}:LIST"; // Pattern: RESOURCE_MOBILIZATION_REQS:STATUS:status:LIST
+        public const string ALLOCATION_REQS_LIST_CACHE_KEY = "RESOURCE_ALLOCATION_REQS:LIST"; // Cache key for allocation request lists
+        public const string ALLOCATION_REQS_BY_FROM_PROJECT_LIST_CACHE_KEY = "RESOURCE_ALLOCATION_REQS:FROM:{0}:LIST"; // Pattern: RESOURCE_ALLOCATION_REQS:FROM:projectId:LIST
+        public const string ALLOCATION_REQS_BY_TO_PROJECT_LIST_CACHE_KEY = "RESOURCE_ALLOCATION_REQS:TO:{0}:LIST"; // Pattern: RESOURCE_ALLOCATION_REQS:TO:projectId:LIST
+        public const string ALLOCATION_REQS_BY_STATUS_LIST_CACHE_KEY = "RESOURCE_ALLOCATION_REQS:STATUS:{0}:LIST"; // Pattern: RESOURCE_ALLOCATION_REQS:STATUS:status:LIST
+        public const string VEHICLE_CACHE_KEY = "VEHICLE"; // Cache key for all vehicles
+        public const string VEHICLE_BY_ID_CACHE_KEY = "VEHICLE:{0}"; // Pattern: VEHICLE:vehicleId
+        public const string VEHICLE_SEARCH_CACHE_KEY = "VEHICLE:SEARCH"; // Cache key for vehicle search results
+        
+        // Action Log Cache Keys
+        public const string ACTION_LOG_ALL_CACHE_KEY = "ACTION_LOG:ALL"; // Cache key for all action logs
+        public const string ACTION_LOG_BY_ID_CACHE_KEY = "ACTION_LOG:{0}"; // Pattern: ACTION_LOG:logId
     }
 }
