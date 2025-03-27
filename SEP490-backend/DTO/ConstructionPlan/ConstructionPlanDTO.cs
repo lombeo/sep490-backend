@@ -1,5 +1,8 @@
 using Newtonsoft.Json;
 using Sep490_Backend.Infra.Entities;
+using Sep490_Backend.Infra.Helps;
+using System.Text.Json.Serialization;
+using JsonConverter = System.Text.Json.Serialization.JsonConverterAttribute;
 
 namespace Sep490_Backend.DTO.ConstructionPlan
 {
@@ -7,6 +10,8 @@ namespace Sep490_Backend.DTO.ConstructionPlan
     {
         public int Id { get; set; }
         public string PlanName { get; set; }
+        
+        [JsonConverter(typeof(ReviewerDictionaryConverter))]
         public Dictionary<int, bool>? Reviewer { get; set; }
         public int ProjectId { get; set; }
         public string ProjectName { get; set; }

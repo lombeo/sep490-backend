@@ -1,5 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Sep490_Backend.Infra.Enums;
+using Sep490_Backend.Infra.Helps;
+using System.Text.Json.Serialization;
 
 namespace Sep490_Backend.Infra.Entities
 {
@@ -7,6 +9,8 @@ namespace Sep490_Backend.Infra.Entities
     {
         public int Id { get; set; }
         public string PlanName { get; set; }
+        
+        [JsonConverter(typeof(ReviewerDictionaryConverter))]
         public Dictionary<int, bool>? Reviewer { get; set; } //UserId, isApproved
         public int ProjectId { get; set; }
 
@@ -30,7 +34,8 @@ namespace Sep490_Backend.Infra.Entities
                     .HasMaxLength(200);
 
                 entity.Property(e => e.Reviewer)
-                    .HasColumnType("jsonb");
+                    .HasColumnType("jsonb")
+                    .HasConversion(new ReviewerDictionaryValueConverter());
 
                 entity.Property(e => e.ProjectId)
                     .IsRequired();

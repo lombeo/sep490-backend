@@ -54,6 +54,10 @@ namespace Sep490_Backend
             builder.Services.AddControllers(options =>
             {
                 options.ModelBinderProviders.Insert(0, new Infra.ModelBinders.ContractDetailModelBinderProvider());
+            })
+            .AddJsonOptions(options =>
+            {
+                options.JsonSerializerOptions.Converters.Add(new Sep490_Backend.Infra.Helps.ReviewerDictionaryConverter());
             });
             builder.Services.AddDistributedRedisCache(options =>
             {
