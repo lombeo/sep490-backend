@@ -19,8 +19,7 @@ namespace Sep490_Backend.Controllers
             _constructionPlanService = constructionPlanService;
         }
 
-        [HttpPost]
-        [Route("search")]
+        [HttpGet("search")]
         public async Task<ResponseDTO<List<ConstructionPlanDTO>>> Search([FromQuery] ConstructionPlanQuery query)
         {
             query.ActionBy = UserId;
