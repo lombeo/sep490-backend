@@ -30,10 +30,10 @@ namespace Sep490_Backend.Services.ContractService
         private readonly IHelperService _helpService;
         private readonly IGoogleDriveService _googleDriveService;
 
-        // Định nghĩa các key cache cho Contract
-        private const string CONTRACT_BY_PROJECT_CACHE_KEY = "CONTRACT:PROJECT:{0}"; // Pattern: CONTRACT:PROJECT:projectId
-        private const string CONTRACT_BY_USER_CACHE_KEY = "CONTRACT:USER:{0}"; // Pattern: CONTRACT:USER:userId
-        private const string CONTRACT_DETAIL_BY_USER_CACHE_KEY = "CONTRACT_DETAIL:USER:{0}"; // Pattern: CONTRACT_DETAIL:USER:userId
+        // Remove the local cache key constants and use the ones from RedisCacheKey class
+        // private const string CONTRACT_BY_PROJECT_CACHE_KEY = "CONTRACT:PROJECT:{0}"; // Pattern: CONTRACT:PROJECT:projectId
+        // private const string CONTRACT_BY_USER_CACHE_KEY = "CONTRACT:USER:{0}"; // Pattern: CONTRACT:USER:userId
+        // private const string CONTRACT_DETAIL_BY_USER_CACHE_KEY = "CONTRACT_DETAIL:USER:{0}"; // Pattern: CONTRACT_DETAIL:USER:userId
 
         public ContractService(BackendContext context, ICacheService cacheService, IDataService dataService, IHelperService helpService, IGoogleDriveService googleDriveService)
         {
@@ -42,6 +42,15 @@ namespace Sep490_Backend.Services.ContractService
             _dataService = dataService;
             _helpService = helpService;
             _googleDriveService = googleDriveService;
+        }
+
+        // Helper method to clear tracking for specific entities
+        private void ClearEntityTracking<T>(IEnumerable<T> entities) where T : class
+        {
+            foreach (var entity in entities)
+            {
+                _context.Entry(entity).State = EntityState.Detached;
+            }
         }
 
         public async Task<int> Delete(int id, int actionBy)
@@ -97,7 +106,7 @@ namespace Sep490_Backend.Services.ContractService
             });
             
             // Xóa cache theo project
-            string projectCacheKey = string.Format(CONTRACT_BY_PROJECT_CACHE_KEY, data.ProjectId);
+            string projectCacheKey = string.Format(RedisCacheKey.CONTRACT_BY_PROJECT_CACHE_KEY, data.ProjectId);
             _ = _cacheService.DeleteAsync(projectCacheKey);
             
             // Xóa cache của người dùng liên quan đến project
@@ -107,8 +116,8 @@ namespace Sep490_Backend.Services.ContractService
                 
             foreach (var pu in projectUsers)
             {
-                string userContractCacheKey = string.Format(CONTRACT_BY_USER_CACHE_KEY, pu.UserId);
-                string userContractDetailCacheKey = string.Format(CONTRACT_DETAIL_BY_USER_CACHE_KEY, pu.UserId);
+                string userContractCacheKey = string.Format(RedisCacheKey.CONTRACT_BY_USER_CACHE_KEY, pu.UserId);
+                string userContractDetailCacheKey = string.Format(RedisCacheKey.CONTRACT_DETAIL_BY_USER_CACHE_KEY, pu.UserId);
                 _ = _cacheService.DeleteAsync(userContractCacheKey);
                 _ = _cacheService.DeleteAsync(userContractDetailCacheKey);
             }
@@ -128,7 +137,7 @@ namespace Sep490_Backend.Services.ContractService
             bool isExecutiveBoard = user != null && user.Role == RoleConstValue.EXECUTIVE_BOARD;
             
             // Kiểm tra trong cache của người dùng trước
-            string userContractCacheKey = string.Format(CONTRACT_BY_USER_CACHE_KEY, actionBy);
+            string userContractCacheKey = string.Format(RedisCacheKey.CONTRACT_BY_USER_CACHE_KEY, actionBy);
             var userContracts = await _cacheService.GetAsync<List<ContractDTO>>(userContractCacheKey);
             
             if (userContracts != null)
@@ -164,7 +173,7 @@ namespace Sep490_Backend.Services.ContractService
             // Si es Executive Board, permitir acceso sin restricciones
             if (!isExecutiveBoard)
             {
-                // Kiểm tra quyền truy cập
+                // Kiểm tra quyền truy cập - Allow all users associated with the project
                 var hasAccess = await _context.ProjectUsers
                     .AnyAsync(pu => pu.ProjectId == contract.ProjectId && pu.UserId == actionBy && !pu.Deleted);
                     
@@ -242,6 +251,9 @@ namespace Sep490_Backend.Services.ContractService
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
+
+            // Clear tracking context to start with a clean state
+            _context.ChangeTracker.Clear();
 
             // Kiểm tra Project tồn tại
             var projectList = await _dataService.ListProject(new SearchProjectDTO
@@ -408,6 +420,12 @@ namespace Sep490_Backend.Services.ContractService
                     .Where(cd => cd.ContractId == contract.Id && !cd.Deleted)
                     .ToListAsync();
 
+                // Detach all existing contract details to avoid tracking conflicts
+                foreach (var detail in existingContractDetails)
+                {
+                    _context.Entry(detail).State = EntityState.Detached;
+                }
+
                 // Tạo dictionary để theo dõi WorkCodes đã được xử lý
                 var processedWorkCodes = new HashSet<string>();
                 
@@ -459,6 +477,20 @@ namespace Sep490_Backend.Services.ContractService
                             continue;
                         }
                         
+                        // Kiểm tra xem WorkCode này đã có trong Context chưa để tránh duplicate tracking
+                        if (!string.IsNullOrEmpty(detailDto.WorkCode))
+                        {
+                            var tracked = _context.ChangeTracker.Entries<ContractDetail>()
+                                .FirstOrDefault(e => e.Entity.WorkCode == detailDto.WorkCode);
+                                
+                            if (tracked != null)
+                            {
+                                // Entity đã được track, đánh dấu là đã xử lý
+                                processedWorkCodes.Add(detailDto.WorkCode);
+                                continue;
+                            }
+                        }
+                        
                         // Tạo entity từ DTO
                         var contractDetail = new ContractDetail
                         {
@@ -493,7 +525,7 @@ namespace Sep490_Backend.Services.ContractService
                             contractDetail.CreatedAt = DateTime.UtcNow;
                             contractDetail.Creator = model.ActionBy;
                             
-                            await _context.AddAsync(contractDetail);
+                            await _context.ContractDetails.AddAsync(contractDetail);
                             
                             // Lưu mapping của index và workcode để sử dụng cho các hạng mục con
                             indexToWorkCode[detailDto.Index] = contractDetail.WorkCode;
@@ -510,7 +542,8 @@ namespace Sep490_Backend.Services.ContractService
                                 contractDetail.CreatedAt = existingDetail.CreatedAt;
                                 contractDetail.Creator = existingDetail.Creator;
 
-                                _context.Update(contractDetail);
+                                // Sử dụng Entry để cập nhật trạng thái thay vì Update trực tiếp
+                                _context.Entry(contractDetail).State = EntityState.Modified;
                                 
                                 // Cập nhật mapping
                                 indexToWorkCode[detailDto.Index] = contractDetail.WorkCode;
@@ -523,7 +556,14 @@ namespace Sep490_Backend.Services.ContractService
                                 contractDetail.CreatedAt = DateTime.UtcNow;
                                 contractDetail.Creator = model.ActionBy;
                                 
-                                await _context.AddAsync(contractDetail);
+                                // Kiểm tra xem entity có đang được track hay không
+                                var trackedEntry = _context.ChangeTracker.Entries<ContractDetail>()
+                                    .FirstOrDefault(e => e.Entity.WorkCode == contractDetail.WorkCode);
+                                    
+                                if (trackedEntry == null)
+                                {
+                                    await _context.ContractDetails.AddAsync(contractDetail);
+                                }
                                 
                                 // Cập nhật mapping
                                 indexToWorkCode[detailDto.Index] = contractDetail.WorkCode;
@@ -536,7 +576,34 @@ namespace Sep490_Backend.Services.ContractService
                     }
                     
                     // Lưu thay đổi sau mỗi cấp để đảm bảo parent đã tồn tại trước khi thêm child
-                    await _context.SaveChangesAsync();
+                    try 
+                    {
+                        await _context.SaveChangesAsync();
+                    }
+                    catch (DbUpdateException ex)
+                    {
+                        // Try to recover from tracking errors
+                        if (ex.InnerException != null && ex.InnerException.Message.Contains("tracked because another instance"))
+                        {
+                            Console.WriteLine("Detected tracking conflict, attempting to recover...");
+                            
+                            // Get all tracked entities of ContractDetail type
+                            var trackedEntities = _context.ChangeTracker.Entries<ContractDetail>()
+                                .Where(e => e.State != EntityState.Detached)
+                                .Select(e => e.Entity)
+                                .ToList();
+                                
+                            // Clear tracking
+                            ClearEntityTracking(trackedEntities);
+                            
+                            // Try save again
+                            await _context.SaveChangesAsync();
+                        }
+                        else
+                        {
+                            throw;
+                        }
+                    }
                 }
                 
                 // Commit transaction khi tất cả thay đổi đã thành công
@@ -547,7 +614,7 @@ namespace Sep490_Backend.Services.ContractService
                 _ = _cacheService.DeleteAsync(RedisCacheKey.CONTRACT_DETAIL_CACHE_KEY);
                 
                 // Xóa cache theo project
-                string projectCacheKey = string.Format(CONTRACT_BY_PROJECT_CACHE_KEY, model.ProjectId);
+                string projectCacheKey = string.Format(RedisCacheKey.CONTRACT_BY_PROJECT_CACHE_KEY, model.ProjectId);
                 _ = _cacheService.DeleteAsync(projectCacheKey);
                 
                 // Xóa cache của người dùng liên quan đến project
@@ -557,8 +624,8 @@ namespace Sep490_Backend.Services.ContractService
                     
                 foreach (var pu in projectUsers)
                 {
-                    string userContractCacheKey = string.Format(CONTRACT_BY_USER_CACHE_KEY, pu.UserId);
-                    string userContractDetailCacheKey = string.Format(CONTRACT_DETAIL_BY_USER_CACHE_KEY, pu.UserId);
+                    string userContractCacheKey = string.Format(RedisCacheKey.CONTRACT_BY_USER_CACHE_KEY, pu.UserId);
+                    string userContractDetailCacheKey = string.Format(RedisCacheKey.CONTRACT_DETAIL_BY_USER_CACHE_KEY, pu.UserId);
                     _ = _cacheService.DeleteAsync(userContractCacheKey);
                     _ = _cacheService.DeleteAsync(userContractDetailCacheKey);
                 }
@@ -611,10 +678,24 @@ namespace Sep490_Backend.Services.ContractService
                     ContractDetails = contractDetailDTOs
                 };
             }
-            catch (Exception)
+            catch (DbUpdateException ex)
+            {
+                // Xử lý lỗi cập nhật database
+                await transaction.RollbackAsync();
+                
+                // Kiểm tra nếu lỗi là do tracking conflict
+                if (ex.InnerException != null && ex.InnerException.Message.Contains("tracked because another instance"))
+                {
+                    throw new InvalidOperationException("Có xung đột trong quá trình cập nhật dữ liệu. Vui lòng thử lại sau.", ex);
+                }
+                
+                throw;
+            }
+            catch (Exception ex)
             {
                 // Có lỗi xảy ra, rollback tất cả thay đổi
                 await transaction.RollbackAsync();
+                Console.WriteLine($"Save contract error: {ex.Message}");
                 throw; // Re-throw để xử lý exception ở tầng cao hơn
             }
         }

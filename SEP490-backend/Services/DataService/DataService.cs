@@ -52,9 +52,13 @@ namespace Sep490_Backend.Services.DataService
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
 
+            // Check if user is Executive Board member
+            var user = StaticVariable.UserMemory.FirstOrDefault(u => u.Id == model.ActionBy);
+            bool isExecutiveBoard = user != null && user.Role == RoleConstValue.EXECUTIVE_BOARD;
+
             // Xác định các key cache
             string generalCacheKey = RedisCacheKey.CONTRACT_CACHE_KEY;
-            string userCacheKey = string.Format("CONTRACT:USER:{0}", model.ActionBy);
+            string userCacheKey = string.Format(RedisCacheKey.CONTRACT_BY_USER_CACHE_KEY, model.ActionBy);
             
             // Thử lấy từ cache của user trước
             var userCache = await _cacheService.GetAsync<List<ContractDTO>>(userCacheKey);
@@ -75,14 +79,29 @@ namespace Sep490_Backend.Services.DataService
             var data = await _cacheService.GetAsync<List<ContractDTO>>(generalCacheKey);
             if (data == null)
             {
-                // Lấy danh sách Project mà người dùng có quyền truy cập
-                var project = await ListProject(new SearchProjectDTO()
+                // Get the list of all projects if the user is an Executive Board member
+                // Otherwise, get the list of projects the user has access to
+                List<ProjectDTO> projects;
+                if (isExecutiveBoard)
                 {
-                    ActionBy = model.ActionBy,
-                    PageSize = int.MaxValue
-                });
+                    // Executive Board members can see all projects
+                    projects = await ListProject(new SearchProjectDTO()
+                    {
+                        ActionBy = model.ActionBy,
+                        PageSize = int.MaxValue
+                    });
+                }
+                else 
+                {
+                    // For regular users, get all projects they're associated with
+                    projects = await ListProject(new SearchProjectDTO()
+                    {
+                        ActionBy = model.ActionBy,
+                        PageSize = int.MaxValue
+                    });
+                }
                 
-                var projectIds = project.Select(p => p.Id).ToList();
+                var projectIds = projects.Select(p => p.Id).ToList();
                 
                 // Lấy danh sách Contract thuộc các Project mà người dùng có quyền truy cập
                 var contracts = await _context.Contracts
@@ -99,7 +118,7 @@ namespace Sep490_Backend.Services.DataService
                     Id = t.Id,
                     ContractCode = t.ContractCode,
                     ContractName = t.ContractName,
-                    Project = project.FirstOrDefault(p => p.Id == t.ProjectId) ?? new ProjectDTO(),
+                    Project = projects.FirstOrDefault(p => p.Id == t.ProjectId) ?? new ProjectDTO(),
                     StartDate = t.StartDate,
                     EndDate = t.EndDate,
                     EstimatedDays = t.EstimatedDays,
@@ -139,9 +158,9 @@ namespace Sep490_Backend.Services.DataService
                 // Lưu vào cache chung
                 _ = _cacheService.SetAsync(generalCacheKey, data, TimeSpan.FromMinutes(30));
             }
-            else
+            else if (!isExecutiveBoard)
             {
-                // Nếu có trong cache chung, lọc theo quyền truy cập của người dùng
+                // Nếu user không phải Executive Board, lọc theo quyền truy cập của người dùng
                 var projectIds = await _context.ProjectUsers
                     .Where(pu => pu.UserId == model.ActionBy && !pu.Deleted)
                     .Select(pu => pu.ProjectId)
