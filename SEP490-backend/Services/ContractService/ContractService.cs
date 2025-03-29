@@ -127,11 +127,6 @@ namespace Sep490_Backend.Services.ContractService
 
         public async Task<ContractDTO> Detail(int projectId, int actionBy)
         {
-            if (!_helpService.IsInRole(actionBy, new List<string> { RoleConstValue.BUSINESS_EMPLOYEE, RoleConstValue.EXECUTIVE_BOARD }))
-            {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
-            }
-            
             // Verificar si el usuario es Executive Board
             var user = StaticVariable.UserMemory.FirstOrDefault(u => u.Id == actionBy);
             bool isExecutiveBoard = user != null && user.Role == RoleConstValue.EXECUTIVE_BOARD;
