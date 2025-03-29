@@ -19,7 +19,7 @@ namespace Sep490_Backend.Services.SiteSurveyService
     {
         Task<SiteSurvey> SaveSiteSurvey(SaveSiteSurveyDTO model, int actionBy);
         Task<int> DeleteSiteSurvey(int id, int actionBy);
-        Task<SiteSurvey> GetSiteSurveyDetail(int id, int actionBy);
+        Task<SiteSurvey> GetSiteSurveyDetail(int projectId, int actionBy);
     }
 
     public class SiteSurveyService : ISiteSurveyService
@@ -111,21 +111,33 @@ namespace Sep490_Backend.Services.SiteSurveyService
             return data.Id;
         }
 
-        public async Task<SiteSurvey> GetSiteSurveyDetail(int id, int actionBy)
+        public async Task<SiteSurvey> GetSiteSurveyDetail(int projectId, int actionBy)
         {
-            // Kiểm tra vai trò người dùng
-            if (!_helpService.IsInRole(actionBy, new List<string> { RoleConstValue.TECHNICAL_MANAGER, RoleConstValue.EXECUTIVE_BOARD }))
+            // Kiểm tra xem người dùng có phải là thành viên của project không
+            var hasAccess = await _context.ProjectUsers
+                .AnyAsync(pu => pu.ProjectId == projectId && pu.UserId == actionBy && !pu.Deleted);
+                
+            if (!hasAccess)
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
 
-            // Kiểm tra cache theo user trước
+            // Kiểm tra cache theo project trước
+            string projectCacheKey = string.Format(SITE_SURVEY_BY_PROJECT_CACHE_KEY, projectId);
+            var projectSurvey = await _cacheService.GetAsync<SiteSurvey>(projectCacheKey);
+            
+            if (projectSurvey != null)
+            {
+                return projectSurvey;
+            }
+
+            // Kiểm tra cache theo user
             string userCacheKey = string.Format(SITE_SURVEY_BY_USER_CACHE_KEY, actionBy);
             var userSurveys = await _cacheService.GetAsync<List<SiteSurvey>>(userCacheKey);
             
             if (userSurveys != null)
             {
-                var surveyFromCache = userSurveys.FirstOrDefault(s => s.Id == id);
+                var surveyFromCache = userSurveys.FirstOrDefault(s => s.ProjectId == projectId);
                 if (surveyFromCache != null)
                 {
                     return surveyFromCache;
@@ -133,22 +145,15 @@ namespace Sep490_Backend.Services.SiteSurveyService
             }
 
             // Nếu không có trong cache, tìm trong database
-            var survey = await _context.SiteSurveys.FirstOrDefaultAsync(s => s.Id == id && !s.Deleted);
+            var survey = await _context.SiteSurveys.FirstOrDefaultAsync(s => s.ProjectId == projectId && !s.Deleted);
             if (survey == null)
             {
                 throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
 
-            // Kiểm tra quyền truy cập (người dùng phải là thành viên của project chứa site survey này)
-            var hasAccess = await _context.ProjectUsers
-                .AnyAsync(pu => pu.ProjectId == survey.ProjectId && pu.UserId == actionBy && !pu.Deleted);
-                
-            if (!hasAccess)
-            {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
-            }
-
-            // Cập nhật cache nếu cần
+            // Cập nhật cache
+            _ = _cacheService.SetAsync(projectCacheKey, survey, TimeSpan.FromMinutes(30));
+            
             if (userSurveys != null)
             {
                 userSurveys.Add(survey);
