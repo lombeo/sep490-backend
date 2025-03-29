@@ -18,8 +18,8 @@ namespace Sep490_Backend.Services.ContractService
     public interface IContractService
     {
         Task<ContractDTO> Save(SaveContractDTO model);
-        Task<int> Delete(int id, int actionBy);
-        Task<ContractDTO> Detail(int id, int actionBy);
+        Task<int> Delete(int projectId, int actionBy);
+        Task<ContractDTO> Detail(int projectId, int actionBy);
     }
 
     public class ContractService : IContractService
@@ -53,7 +53,7 @@ namespace Sep490_Backend.Services.ContractService
             }
         }
 
-        public async Task<int> Delete(int id, int actionBy)
+        public async Task<int> Delete(int projectId, int actionBy)
         {
             // Kiểm tra vai trò người dùng
             if (!_helpService.IsInRole(actionBy, new List<string> { RoleConstValue.BUSINESS_EMPLOYEE, RoleConstValue.EXECUTIVE_BOARD }))
@@ -61,8 +61,8 @@ namespace Sep490_Backend.Services.ContractService
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
             
-            // Tìm Contract cần xóa
-            var data = await _context.Contracts.FirstOrDefaultAsync(t => t.Id == id && !t.Deleted);
+            // Tìm Contract cần xóa theo ProjectId
+            var data = await _context.Contracts.FirstOrDefaultAsync(t => t.ProjectId == projectId && !t.Deleted);
             if (data == null)
             {
                 throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
@@ -70,7 +70,7 @@ namespace Sep490_Backend.Services.ContractService
 
             // Kiểm tra xem người dùng có phải là người tạo Project chứa Contract này không
             var projectCreator = await _context.ProjectUsers
-                .FirstOrDefaultAsync(pu => pu.ProjectId == data.ProjectId && pu.IsCreator && !pu.Deleted);
+                .FirstOrDefaultAsync(pu => pu.ProjectId == projectId && pu.IsCreator && !pu.Deleted);
                 
             if (projectCreator == null || projectCreator.UserId != actionBy)
             {
@@ -85,7 +85,7 @@ namespace Sep490_Backend.Services.ContractService
             
             // Xóa mềm tất cả ContractDetail liên quan
             var contractDetail = await _context.ContractDetails
-                .Where(t => !t.Deleted && t.ContractId == id)
+                .Where(t => !t.Deleted && t.ContractId == data.Id)
                 .ToListAsync();
                 
             foreach (var item in contractDetail)
@@ -106,12 +106,12 @@ namespace Sep490_Backend.Services.ContractService
             });
             
             // Xóa cache theo project
-            string projectCacheKey = string.Format(RedisCacheKey.CONTRACT_BY_PROJECT_CACHE_KEY, data.ProjectId);
+            string projectCacheKey = string.Format(RedisCacheKey.CONTRACT_BY_PROJECT_CACHE_KEY, projectId);
             _ = _cacheService.DeleteAsync(projectCacheKey);
             
             // Xóa cache của người dùng liên quan đến project
             var projectUsers = await _context.ProjectUsers
-                .Where(pu => pu.ProjectId == data.ProjectId && !pu.Deleted)
+                .Where(pu => pu.ProjectId == projectId && !pu.Deleted)
                 .ToListAsync();
                 
             foreach (var pu in projectUsers)
@@ -125,7 +125,7 @@ namespace Sep490_Backend.Services.ContractService
             return data.Id;
         }
 
-        public async Task<ContractDTO> Detail(int id, int actionBy)
+        public async Task<ContractDTO> Detail(int projectId, int actionBy)
         {
             if (!_helpService.IsInRole(actionBy, new List<string> { RoleConstValue.BUSINESS_EMPLOYEE, RoleConstValue.EXECUTIVE_BOARD }))
             {
@@ -142,8 +142,8 @@ namespace Sep490_Backend.Services.ContractService
             
             if (userContracts != null)
             {
-                // Tìm contract trong cache
-                var contractFromCache = userContracts.FirstOrDefault(c => c.Id == id);
+                // Tìm contract trong cache theo ProjectId thay vì Id
+                var contractFromCache = userContracts.FirstOrDefault(c => c.Project.Id == projectId);
                 if (contractFromCache != null)
                 {
                     return contractFromCache;
@@ -151,7 +151,7 @@ namespace Sep490_Backend.Services.ContractService
             }
             
             // Nếu không có trong cache, tìm trong database
-            var contract = await _context.Contracts.FirstOrDefaultAsync(c => c.Id == id && !c.Deleted);
+            var contract = await _context.Contracts.FirstOrDefaultAsync(c => c.ProjectId == projectId && !c.Deleted);
             if (contract == null)
             {
                 throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
@@ -164,7 +164,7 @@ namespace Sep490_Backend.Services.ContractService
                 PageSize = int.MaxValue
             });
             
-            var project = projectList.FirstOrDefault(p => p.Id == contract.ProjectId);
+            var project = projectList.FirstOrDefault(p => p.Id == projectId);
             if (project == null)
             {
                 throw new KeyNotFoundException(Message.SiteSurveyMessage.PROJECT_NOT_FOUND);
@@ -175,7 +175,7 @@ namespace Sep490_Backend.Services.ContractService
             {
                 // Kiểm tra quyền truy cập - Allow all users associated with the project
                 var hasAccess = await _context.ProjectUsers
-                    .AnyAsync(pu => pu.ProjectId == contract.ProjectId && pu.UserId == actionBy && !pu.Deleted);
+                    .AnyAsync(pu => pu.ProjectId == projectId && pu.UserId == actionBy && !pu.Deleted);
                     
                 if (!hasAccess)
                 {
@@ -185,7 +185,7 @@ namespace Sep490_Backend.Services.ContractService
             
             // Lấy danh sách ContractDetail
             var contractDetails = await _context.ContractDetails
-                .Where(cd => cd.ContractId == id && !cd.Deleted)
+                .Where(cd => cd.ContractId == contract.Id && !cd.Deleted)
                 .Select(cd => new ContractDetailDTO
                 {
                     WorkCode = cd.WorkCode,
@@ -280,6 +280,18 @@ namespace Sep490_Backend.Services.ContractService
             if(model.StartDate > model.EndDate)
             {
                 throw new ArgumentException(Message.ProjectMessage.INVALID_DATE);
+            }
+            
+            // Check if project already has a contract (for new contract creation)
+            if (model.Id == 0)
+            {
+                var existingContract = await _context.Contracts
+                    .FirstOrDefaultAsync(c => c.ProjectId == model.ProjectId && !c.Deleted);
+                
+                if (existingContract != null)
+                {
+                    throw new InvalidOperationException(Message.ContractMessage.PROJECT_ALREADY_HAS_CONTRACT);
+                }
             }
 
             // Handle file attachments
@@ -630,53 +642,8 @@ namespace Sep490_Backend.Services.ContractService
                     _ = _cacheService.DeleteAsync(userContractDetailCacheKey);
                 }
 
-                // Tải lại tất cả các ContractDetail để đảm bảo dữ liệu trả về là chính xác nhất
-                var finalContractDetails = await _context.ContractDetails
-                    .Where(cd => cd.ContractId == contract.Id && !cd.Deleted)
-                    .OrderBy(cd => cd.Index)
-                    .ToListAsync();
-
-                // Chuyển đổi các ContractDetail thành DTO
-                var contractDetailDTOs = finalContractDetails.Select(cd => new ContractDetailDTO
-                {
-                    WorkCode = cd.WorkCode,
-                    Index = cd.Index,
-                    ContractId = cd.ContractId,
-                    ParentIndex = cd.ParentIndex,
-                    WorkName = cd.WorkName,
-                    Unit = cd.Unit,
-                    Quantity = cd.Quantity,
-                    UnitPrice = cd.UnitPrice,
-                    Total = cd.Total,
-                    CreatedAt = cd.CreatedAt,
-                    Creator = cd.Creator,
-                    UpdatedAt = cd.UpdatedAt,
-                    Updater = cd.Updater,
-                    Deleted = cd.Deleted
-                }).ToList();
-
-                return new ContractDTO
-                {
-                    Id = contract.Id,
-                    ContractCode = contract.ContractCode,
-                    ContractName = contract.ContractName,
-                    Project = project,
-                    StartDate = contract.StartDate,
-                    EndDate = contract.EndDate,
-                    EstimatedDays = contract.EstimatedDays,
-                    Status = contract.Status,
-                    Tax = contract.Tax,
-                    SignDate = contract.SignDate,
-                    Attachments = contract.Attachments != null ? 
-                        System.Text.Json.JsonSerializer.Deserialize<List<AttachmentInfo>>(contract.Attachments.RootElement.ToString()) 
-                        : null,
-                    UpdatedAt = contract.UpdatedAt,
-                    Updater = contract.Updater,
-                    CreatedAt = contract.CreatedAt,
-                    Creator = contract.Creator,
-                    Deleted = contract.Deleted,
-                    ContractDetails = contractDetailDTOs
-                };
+                // Return the Contract DTO
+                return await Detail(model.ProjectId, model.ActionBy);
             }
             catch (DbUpdateException ex)
             {

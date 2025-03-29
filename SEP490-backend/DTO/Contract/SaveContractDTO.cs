@@ -18,9 +18,22 @@ namespace Sep490_Backend.DTO.Contract
         public ContractStatusEnum Status { get; set; }
         public decimal Tax { get; set; }
         public DateTime SignDate { get; set; }
+        public int ActionBy { get; set; }
         public List<IFormFile>? Attachments { get; set; }
         
         [ModelBinder(BinderType = typeof(ContractDetailModelBinder))]
         public List<SaveContractDetailDTO> ContractDetails { get; set; } = new List<SaveContractDetailDTO>();
+    }
+
+    public class ContractDetailSave
+    {
+        public string WorkCode { get; set; }
+        public string Index { get; set; }
+        public string ParentIndex { get; set; }
+        public string WorkName { get; set; }
+        public string Unit { get; set; }
+        public decimal Quantity { get; set; }
+        public decimal UnitPrice { get; set; }
+        public bool IsDelete { get; set; }
     }
 }

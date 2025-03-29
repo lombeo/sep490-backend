@@ -47,6 +47,11 @@ namespace Sep490_Backend.Services.DataService
 
         public async Task<List<ContractDTO>> ListContract(SearchContractDTO model)
         {
+            if (!_helpService.IsInRole(model.ActionBy, new List<string> { RoleConstValue.BUSINESS_EMPLOYEE, RoleConstValue.EXECUTIVE_BOARD }))
+            {
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+            }
+
             // Check if user is Executive Board member
             var user = StaticVariable.UserMemory.FirstOrDefault(u => u.Id == model.ActionBy);
             bool isExecutiveBoard = user != null && user.Role == RoleConstValue.EXECUTIVE_BOARD;
@@ -99,13 +104,15 @@ namespace Sep490_Backend.Services.DataService
                 var projectIds = projects.Select(p => p.Id).ToList();
                 
                 // Lấy danh sách Contract thuộc các Project mà người dùng có quyền truy cập
+                // Now with one-to-one relationship, each project has at most one contract
                 var contracts = await _context.Contracts
                     .Where(t => !t.Deleted && projectIds.Contains(t.ProjectId))
                     .ToListAsync();
                 
                 // Lấy tất cả ContractDetail không bị xóa
+                var allContractIds = contracts.Select(c => c.Id).ToList();
                 var allContractDetails = await _context.Set<ContractDetail>()
-                    .Where(cd => !cd.Deleted && contracts.Select(c => c.Id).Contains(cd.ContractId))
+                    .Where(cd => !cd.Deleted && allContractIds.Contains(cd.ContractId))
                     .ToListAsync();
                 
                 data = contracts.Select(t => new ContractDTO
@@ -671,7 +678,8 @@ namespace Sep490_Backend.Services.DataService
         public async Task<List<ConstructionTeam>> ListConstructionTeam(ConstructionTeamSearchDTO model)
         {
             // Check authorization - only Construction Manager, Technical Manager, and Executive Board can view teams
-            if (!_helpService.IsInRole(model.ActionBy, new List<string> { 
+            if (!_helpService.IsInRole(model.ActionBy, new List<string> 
+            { 
                 RoleConstValue.CONSTRUCTION_MANAGER, 
                 RoleConstValue.TECHNICAL_MANAGER, 
                 RoleConstValue.EXECUTIVE_BOARD 
