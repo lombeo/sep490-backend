@@ -47,11 +47,6 @@ namespace Sep490_Backend.Services.DataService
 
         public async Task<List<ContractDTO>> ListContract(SearchContractDTO model)
         {
-            if (!_helpService.IsInRole(model.ActionBy, new List<string> { RoleConstValue.BUSINESS_EMPLOYEE, RoleConstValue.EXECUTIVE_BOARD }))
-            {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
-            }
-
             // Check if user is Executive Board member
             var user = StaticVariable.UserMemory.FirstOrDefault(u => u.Id == model.ActionBy);
             bool isExecutiveBoard = user != null && user.Role == RoleConstValue.EXECUTIVE_BOARD;
