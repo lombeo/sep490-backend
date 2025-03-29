@@ -180,11 +180,6 @@ namespace Sep490_Backend.Services.ProjectService
 
         public async Task<ProjectDTO> Detail(int id, int actionBy)
         {
-            if (!_helperService.IsInRole(actionBy, new List<string> { RoleConstValue.BUSINESS_EMPLOYEE, RoleConstValue.EXECUTIVE_BOARD }))
-            {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
-            }
-            
             // Kiểm tra trong cache của người dùng trước
             string userProjectCacheKey = string.Format(RedisCacheKey.PROJECT_BY_USER_CACHE_KEY, actionBy);
             var userProjects = await _cacheService.GetAsync<List<ProjectDTO>>(userProjectCacheKey);
