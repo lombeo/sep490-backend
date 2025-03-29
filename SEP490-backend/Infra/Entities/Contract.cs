@@ -64,11 +64,15 @@ namespace Sep490_Backend.Infra.Entities
                 entity.Property(e => e.Attachments)
                       .HasColumnType("jsonb");
 
-                // Relationships
-                entity.HasOne(e => e.Project)
-                      .WithMany(p => p.Contracts)
-                      .HasForeignKey(e => e.ProjectId)
-                      .OnDelete(DeleteBehavior.Restrict);
+                // Create a unique index on ProjectId where Deleted = false
+                // This enforces the one-to-one relationship at the database level
+                entity.HasIndex(e => e.ProjectId)
+                      .HasFilter("\"Deleted\" = false")
+                      .IsUnique()
+                      .HasDatabaseName("IX_Contracts_ProjectId_Unique");
+
+                // Relationships are defined in ProjectConfiguration, not here
+                // This avoids duplication of relationship definitions
 
                 entity.HasMany(e => e.ContractDetails)
                       .WithOne(cd => cd.Contract)

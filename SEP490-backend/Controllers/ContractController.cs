@@ -32,10 +32,10 @@ namespace Sep490_Backend.Controllers
             return result;
         }
 
-        [HttpDelete("delete-contract/{id}")]
-        public async Task<ResponseDTO<int>> DeleteContract(int id)
+        [HttpDelete("delete-contract/{projectId}")]
+        public async Task<ResponseDTO<int>> DeleteContract(int projectId)
         {
-            return await HandleException(_contractService.Delete(id, UserId), Message.ContractMessage.DELETE_SUCCESS);
+            return await HandleException(_contractService.Delete(projectId, UserId), Message.ContractMessage.DELETE_SUCCESS);
         }
 
         [HttpPost("save-contract")]
@@ -45,10 +45,10 @@ namespace Sep490_Backend.Controllers
             return await HandleException(_contractService.Save(model), Message.ContractMessage.SAVE_SUCCESS);
         }
 
-        [HttpGet("detail/{id}")]
-        public async Task<ResponseDTO<ContractDTO>> DetailContract(int id)
+        [HttpGet("detail/{projectId}")]
+        public async Task<ResponseDTO<ContractDTO>> DetailContract(int projectId)
         {
-            var result = await HandleException(_contractService.Detail(id, UserId), Message.ContractMessage.SEARCH_SUCCESS);
+            var result = await HandleException(_contractService.Detail(projectId, UserId), Message.ContractMessage.SEARCH_SUCCESS);
             return result;
         }
     }
