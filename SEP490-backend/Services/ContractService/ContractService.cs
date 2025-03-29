@@ -347,235 +347,276 @@ namespace Sep490_Backend.Services.ContractService
                 }
             }
 
-            Contract contract;
+            // Sử dụng transaction để đảm bảo tính toàn vẹn, nếu có lỗi sẽ rollback toàn bộ thay đổi
+            using var transaction = await _context.Database.BeginTransactionAsync();
             
-            if (model.Id != 0)
+            try
             {
-                // Update existing contract - fetch it directly and update its properties
-                contract = await _context.Contracts.FirstOrDefaultAsync(t => t.Id == model.Id && !t.Deleted);
+                Contract contract;
                 
-                // Update properties on the tracked entity instead of creating a new one
-                contract.ProjectId = model.ProjectId;
-                contract.ContractCode = model.ContractCode;
-                contract.ContractName = model.ContractName;
-                contract.StartDate = model.StartDate;
-                contract.EndDate = model.EndDate;
-                contract.EstimatedDays = model.EstimatedDays;
-                contract.Status = model.Status;
-                contract.Tax = model.Tax;
-                contract.SignDate = model.SignDate;
-                contract.Attachments = attachmentInfos.Any() ? 
-                    JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(attachmentInfos)) : null;
-                contract.UpdatedAt = DateTime.UtcNow;
-                contract.Updater = model.ActionBy;
-                
-                _context.Update(contract);
-            }
-            else
-            {
-                // Create new contract
-                contract = new Contract()
+                if (model.Id != 0)
                 {
-                    ContractCode = model.ContractCode,
-                    ContractName = model.ContractName,
-                    ProjectId = model.ProjectId,
-                    StartDate = model.StartDate,
-                    EndDate = model.EndDate,
-                    EstimatedDays = model.EstimatedDays,
-                    Status = model.Status,
-                    Tax = model.Tax,
-                    SignDate = model.SignDate,
-                    Attachments = attachmentInfos.Any() ? 
-                        JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(attachmentInfos)) : null,
-                    CreatedAt = DateTime.UtcNow,
-                    Creator = model.ActionBy,
-                    UpdatedAt = DateTime.UtcNow,
-                    Updater = model.ActionBy,
-                    Deleted = false
-                };
-
-                await _context.AddAsync(contract);
-                await _context.SaveChangesAsync(); // Save to get the ID
-            }
-
-            // Lấy tất cả các ContractDetail của Contract này
-            var existingContractDetails = await _context.ContractDetails
-                .Where(cd => cd.ContractId == contract.Id && !cd.Deleted)
-                .ToListAsync();
-
-            // Tạo dictionary để theo dõi WorkCodes đã được xử lý
-            var processedWorkCodes = new HashSet<string>();
-            
-            // Xử lý danh sách ContractDetail
-            List<ContractDetail> updatedContractDetails = new List<ContractDetail>();
-            
-            // Xử lý các item bị xóa trước
-            foreach (var detailDto in model.ContractDetails.Where(d => d.IsDelete && !string.IsNullOrEmpty(d.WorkCode)))
-            {
-                var detailToDelete = existingContractDetails.FirstOrDefault(cd => cd.WorkCode == detailDto.WorkCode);
-                if (detailToDelete != null)
-                {
-                    detailToDelete.Deleted = true;
-                    detailToDelete.UpdatedAt = DateTime.UtcNow;
-                    detailToDelete.Updater = model.ActionBy;
-                    _context.Update(detailToDelete);
-                    processedWorkCodes.Add(detailDto.WorkCode);
-                }
-            }
-            
-            // Xử lý các chi tiết theo cấp bậc - sắp xếp theo index để đảm bảo thứ tự xử lý
-            // Sắp xếp các ContractDetails theo thứ tự từ parent đến child
-            var sortedDetails = model.ContractDetails
-                .Where(d => !d.IsDelete)
-                .OrderBy(d => d.Index.Length) // Sắp xếp theo độ dài của index (1 trước, sau đó 1.1, 1.1.1)
-                .ThenBy(d => d.Index) // Sau đó sắp xếp theo thứ tự của index
-                .ToList();
-                
-            // Dictionary để lưu trữ ánh xạ giữa Index và WorkCode mới tạo ra
-            var indexToWorkCode = new Dictionary<string, string>();
-            int nextCodeCounter = 1;
-
-            foreach (var detailDto in sortedDetails)
-            {
-                // Bỏ qua nếu đã được xử lý
-                if (processedWorkCodes.Contains(detailDto.WorkCode))
-                {
-                    continue;
-                }
-                
-                // Tạo entity từ DTO
-                var contractDetail = new ContractDetail
-                {
-                    ContractId = contract.Id,
-                    Index = detailDto.Index,
-                    ParentIndex = detailDto.ParentIndex,
-                    WorkName = detailDto.WorkName,
-                    Unit = detailDto.Unit,
-                    Quantity = detailDto.Quantity,
-                    UnitPrice = detailDto.UnitPrice,
-                    Total = detailDto.Quantity * detailDto.UnitPrice,
-                    UpdatedAt = DateTime.UtcNow,
-                    Updater = model.ActionBy,
-                    Deleted = false
-                };
-
-                // Nếu WorkCode không được cung cấp, tạo mới
-                if (string.IsNullOrEmpty(detailDto.WorkCode))
-                {
-                    // Tạo WorkCode theo công thức ContractCode-số thứ tự tăng dần
-                    contractDetail.WorkCode = $"{model.ContractCode}-{nextCodeCounter++}";
-                    contractDetail.CreatedAt = DateTime.UtcNow;
-                    contractDetail.Creator = model.ActionBy;
+                    // Update existing contract - fetch it directly and update its properties
+                    contract = await _context.Contracts.FirstOrDefaultAsync(t => t.Id == model.Id && !t.Deleted);
                     
-                    await _context.AddAsync(contractDetail);
+                    // Update properties on the tracked entity instead of creating a new one
+                    contract.ProjectId = model.ProjectId;
+                    contract.ContractCode = model.ContractCode;
+                    contract.ContractName = model.ContractName;
+                    contract.StartDate = model.StartDate;
+                    contract.EndDate = model.EndDate;
+                    contract.EstimatedDays = model.EstimatedDays;
+                    contract.Status = model.Status;
+                    contract.Tax = model.Tax;
+                    contract.SignDate = model.SignDate;
+                    contract.Attachments = attachmentInfos.Any() ? 
+                        JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(attachmentInfos)) : null;
+                    contract.UpdatedAt = DateTime.UtcNow;
+                    contract.Updater = model.ActionBy;
                     
-                    // Lưu mapping của index và workcode để sử dụng cho các hạng mục con
-                    indexToWorkCode[detailDto.Index] = contractDetail.WorkCode;
+                    _context.Update(contract);
                 }
                 else
                 {
-                    // Kiểm tra xem WorkCode có tồn tại không
-                    var existingDetail = existingContractDetails.FirstOrDefault(cd => cd.WorkCode == detailDto.WorkCode);
-                    if (existingDetail != null)
+                    // Create new contract
+                    contract = new Contract()
                     {
-                        // Cập nhật
-                        contractDetail.WorkCode = detailDto.WorkCode;
-                        contractDetail.CreatedAt = existingDetail.CreatedAt;
-                        contractDetail.Creator = existingDetail.Creator;
+                        ContractCode = model.ContractCode,
+                        ContractName = model.ContractName,
+                        ProjectId = model.ProjectId,
+                        StartDate = model.StartDate,
+                        EndDate = model.EndDate,
+                        EstimatedDays = model.EstimatedDays,
+                        Status = model.Status,
+                        Tax = model.Tax,
+                        SignDate = model.SignDate,
+                        Attachments = attachmentInfos.Any() ? 
+                            JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(attachmentInfos)) : null,
+                        CreatedAt = DateTime.UtcNow,
+                        Creator = model.ActionBy,
+                        UpdatedAt = DateTime.UtcNow,
+                        Updater = model.ActionBy,
+                        Deleted = false
+                    };
 
-                        _context.Update(contractDetail);
-                        
-                        // Cập nhật mapping
-                        indexToWorkCode[detailDto.Index] = contractDetail.WorkCode;
-                    }
-                    else
-                    {
-                        // WorkCode không tồn tại, tạo mới với WorkCode đã cung cấp
-                        contractDetail.WorkCode = detailDto.WorkCode;
-                        contractDetail.CreatedAt = DateTime.UtcNow;
-                        contractDetail.Creator = model.ActionBy;
-                        
-                        await _context.AddAsync(contractDetail);
-                        
-                        // Cập nhật mapping
-                        indexToWorkCode[detailDto.Index] = contractDetail.WorkCode;
-                    }
+                    await _context.AddAsync(contract);
+                    await _context.SaveChangesAsync(); // Save to get the ID
                 }
 
-                updatedContractDetails.Add(contractDetail);
-                processedWorkCodes.Add(contractDetail.WorkCode);
-            }
+                // Lấy tất cả các ContractDetail của Contract này
+                var existingContractDetails = await _context.ContractDetails
+                    .Where(cd => cd.ContractId == contract.Id && !cd.Deleted)
+                    .ToListAsync();
 
-            await _context.SaveChangesAsync();
-
-            // Xóa cache liên quan
-            _ = _cacheService.DeleteAsync(RedisCacheKey.CONTRACT_CACHE_KEY);
-            _ = _cacheService.DeleteAsync(RedisCacheKey.CONTRACT_DETAIL_CACHE_KEY);
-            
-            // Xóa cache theo project
-            string projectCacheKey = string.Format(CONTRACT_BY_PROJECT_CACHE_KEY, model.ProjectId);
-            _ = _cacheService.DeleteAsync(projectCacheKey);
-            
-            // Xóa cache của người dùng liên quan đến project
-            var projectUsers = await _context.ProjectUsers
-                .Where(pu => pu.ProjectId == model.ProjectId && !pu.Deleted)
-                .ToListAsync();
+                // Tạo dictionary để theo dõi WorkCodes đã được xử lý
+                var processedWorkCodes = new HashSet<string>();
                 
-            foreach (var pu in projectUsers)
-            {
-                string userContractCacheKey = string.Format(CONTRACT_BY_USER_CACHE_KEY, pu.UserId);
-                string userContractDetailCacheKey = string.Format(CONTRACT_DETAIL_BY_USER_CACHE_KEY, pu.UserId);
-                _ = _cacheService.DeleteAsync(userContractCacheKey);
-                _ = _cacheService.DeleteAsync(userContractDetailCacheKey);
+                // Xử lý danh sách ContractDetail
+                List<ContractDetail> updatedContractDetails = new List<ContractDetail>();
+                
+                // Xử lý các item bị xóa trước
+                foreach (var detailDto in model.ContractDetails.Where(d => d.IsDelete && !string.IsNullOrEmpty(d.WorkCode)))
+                {
+                    var detailToDelete = existingContractDetails.FirstOrDefault(cd => cd.WorkCode == detailDto.WorkCode);
+                    if (detailToDelete != null)
+                    {
+                        detailToDelete.Deleted = true;
+                        detailToDelete.UpdatedAt = DateTime.UtcNow;
+                        detailToDelete.Updater = model.ActionBy;
+                        _context.Update(detailToDelete);
+                        processedWorkCodes.Add(detailDto.WorkCode);
+                    }
+                }
+                
+                // Xử lý các chi tiết theo cấp bậc - sắp xếp theo index để đảm bảo thứ tự xử lý
+                // Sắp xếp các ContractDetails theo thứ tự từ parent đến child
+                var sortedDetails = model.ContractDetails
+                    .Where(d => !d.IsDelete)
+                    .OrderBy(d => d.Index.Length) // Sắp xếp theo độ dài của index (1 trước, sau đó 1.1, 1.1.1)
+                    .ThenBy(d => d.Index) // Sau đó sắp xếp theo thứ tự của index
+                    .ToList();
+                    
+                // Dictionary để lưu trữ ánh xạ giữa Index và WorkCode mới tạo ra
+                var indexToWorkCode = new Dictionary<string, string>();
+                int nextCodeCounter = 1;
+                
+                // Dictionary lưu trữ ánh xạ từ Index string đến số index trong database
+                var parentIndices = new Dictionary<string, string>();
+
+                // Xử lý theo nhóm cấp bậc (level)
+                var detailsByLevel = sortedDetails
+                    .GroupBy(d => d.Index.Count(c => c == '.'))
+                    .OrderBy(g => g.Key)
+                    .ToList();
+
+                foreach (var levelGroup in detailsByLevel)
+                {
+                    foreach (var detailDto in levelGroup)
+                    {
+                        // Bỏ qua nếu đã được xử lý
+                        if (processedWorkCodes.Contains(detailDto.WorkCode))
+                        {
+                            continue;
+                        }
+                        
+                        // Tạo entity từ DTO
+                        var contractDetail = new ContractDetail
+                        {
+                            ContractId = contract.Id,
+                            Index = detailDto.Index,
+                            WorkName = detailDto.WorkName,
+                            Unit = detailDto.Unit,
+                            Quantity = detailDto.Quantity,
+                            UnitPrice = detailDto.UnitPrice,
+                            Total = detailDto.Quantity * detailDto.UnitPrice,
+                            UpdatedAt = DateTime.UtcNow,
+                            Updater = model.ActionBy,
+                            Deleted = false
+                        };
+                        
+                        // Xử lý ParentIndex
+                        if (string.IsNullOrEmpty(detailDto.ParentIndex))
+                        {
+                            contractDetail.ParentIndex = null;
+                        }
+                        else if (parentIndices.ContainsKey(detailDto.ParentIndex))
+                        {
+                            // Sử dụng WorkCode của parent thay vì sử dụng Index string
+                            contractDetail.ParentIndex = parentIndices[detailDto.ParentIndex];
+                        }
+                        
+                        // Nếu WorkCode không được cung cấp, tạo mới
+                        if (string.IsNullOrEmpty(detailDto.WorkCode))
+                        {
+                            // Tạo WorkCode theo công thức ContractCode-số thứ tự tăng dần
+                            contractDetail.WorkCode = $"{model.ContractCode}-{nextCodeCounter++}";
+                            contractDetail.CreatedAt = DateTime.UtcNow;
+                            contractDetail.Creator = model.ActionBy;
+                            
+                            await _context.AddAsync(contractDetail);
+                            
+                            // Lưu mapping của index và workcode để sử dụng cho các hạng mục con
+                            indexToWorkCode[detailDto.Index] = contractDetail.WorkCode;
+                            parentIndices[detailDto.Index] = contractDetail.WorkCode;
+                        }
+                        else
+                        {
+                            // Kiểm tra xem WorkCode có tồn tại không
+                            var existingDetail = existingContractDetails.FirstOrDefault(cd => cd.WorkCode == detailDto.WorkCode);
+                            if (existingDetail != null)
+                            {
+                                // Cập nhật
+                                contractDetail.WorkCode = detailDto.WorkCode;
+                                contractDetail.CreatedAt = existingDetail.CreatedAt;
+                                contractDetail.Creator = existingDetail.Creator;
+
+                                _context.Update(contractDetail);
+                                
+                                // Cập nhật mapping
+                                indexToWorkCode[detailDto.Index] = contractDetail.WorkCode;
+                                parentIndices[detailDto.Index] = contractDetail.WorkCode;
+                            }
+                            else
+                            {
+                                // WorkCode không tồn tại, tạo mới với WorkCode đã cung cấp
+                                contractDetail.WorkCode = detailDto.WorkCode;
+                                contractDetail.CreatedAt = DateTime.UtcNow;
+                                contractDetail.Creator = model.ActionBy;
+                                
+                                await _context.AddAsync(contractDetail);
+                                
+                                // Cập nhật mapping
+                                indexToWorkCode[detailDto.Index] = contractDetail.WorkCode;
+                                parentIndices[detailDto.Index] = contractDetail.WorkCode;
+                            }
+                        }
+
+                        updatedContractDetails.Add(contractDetail);
+                        processedWorkCodes.Add(contractDetail.WorkCode);
+                    }
+                    
+                    // Lưu thay đổi sau mỗi cấp để đảm bảo parent đã tồn tại trước khi thêm child
+                    await _context.SaveChangesAsync();
+                }
+                
+                // Commit transaction khi tất cả thay đổi đã thành công
+                await transaction.CommitAsync();
+
+                // Xóa cache liên quan
+                _ = _cacheService.DeleteAsync(RedisCacheKey.CONTRACT_CACHE_KEY);
+                _ = _cacheService.DeleteAsync(RedisCacheKey.CONTRACT_DETAIL_CACHE_KEY);
+                
+                // Xóa cache theo project
+                string projectCacheKey = string.Format(CONTRACT_BY_PROJECT_CACHE_KEY, model.ProjectId);
+                _ = _cacheService.DeleteAsync(projectCacheKey);
+                
+                // Xóa cache của người dùng liên quan đến project
+                var projectUsers = await _context.ProjectUsers
+                    .Where(pu => pu.ProjectId == model.ProjectId && !pu.Deleted)
+                    .ToListAsync();
+                    
+                foreach (var pu in projectUsers)
+                {
+                    string userContractCacheKey = string.Format(CONTRACT_BY_USER_CACHE_KEY, pu.UserId);
+                    string userContractDetailCacheKey = string.Format(CONTRACT_DETAIL_BY_USER_CACHE_KEY, pu.UserId);
+                    _ = _cacheService.DeleteAsync(userContractCacheKey);
+                    _ = _cacheService.DeleteAsync(userContractDetailCacheKey);
+                }
+
+                // Tải lại tất cả các ContractDetail để đảm bảo dữ liệu trả về là chính xác nhất
+                var finalContractDetails = await _context.ContractDetails
+                    .Where(cd => cd.ContractId == contract.Id && !cd.Deleted)
+                    .OrderBy(cd => cd.Index)
+                    .ToListAsync();
+
+                // Chuyển đổi các ContractDetail thành DTO
+                var contractDetailDTOs = finalContractDetails.Select(cd => new ContractDetailDTO
+                {
+                    WorkCode = cd.WorkCode,
+                    Index = cd.Index,
+                    ContractId = cd.ContractId,
+                    ParentIndex = cd.ParentIndex,
+                    WorkName = cd.WorkName,
+                    Unit = cd.Unit,
+                    Quantity = cd.Quantity,
+                    UnitPrice = cd.UnitPrice,
+                    Total = cd.Total,
+                    CreatedAt = cd.CreatedAt,
+                    Creator = cd.Creator,
+                    UpdatedAt = cd.UpdatedAt,
+                    Updater = cd.Updater,
+                    Deleted = cd.Deleted
+                }).ToList();
+
+                return new ContractDTO
+                {
+                    Id = contract.Id,
+                    ContractCode = contract.ContractCode,
+                    ContractName = contract.ContractName,
+                    Project = project,
+                    StartDate = contract.StartDate,
+                    EndDate = contract.EndDate,
+                    EstimatedDays = contract.EstimatedDays,
+                    Status = contract.Status,
+                    Tax = contract.Tax,
+                    SignDate = contract.SignDate,
+                    Attachments = contract.Attachments != null ? 
+                        System.Text.Json.JsonSerializer.Deserialize<List<AttachmentInfo>>(contract.Attachments.RootElement.ToString()) 
+                        : null,
+                    UpdatedAt = contract.UpdatedAt,
+                    Updater = contract.Updater,
+                    CreatedAt = contract.CreatedAt,
+                    Creator = contract.Creator,
+                    Deleted = contract.Deleted,
+                    ContractDetails = contractDetailDTOs
+                };
             }
-
-            // Tải lại tất cả các ContractDetail để đảm bảo dữ liệu trả về là chính xác nhất
-            var finalContractDetails = await _context.ContractDetails
-                .Where(cd => cd.ContractId == contract.Id && !cd.Deleted)
-                .OrderBy(cd => cd.Index)
-                .ToListAsync();
-
-            // Chuyển đổi các ContractDetail thành DTO
-            var contractDetailDTOs = finalContractDetails.Select(cd => new ContractDetailDTO
+            catch (Exception)
             {
-                WorkCode = cd.WorkCode,
-                Index = cd.Index,
-                ContractId = cd.ContractId,
-                ParentIndex = cd.ParentIndex,
-                WorkName = cd.WorkName,
-                Unit = cd.Unit,
-                Quantity = cd.Quantity,
-                UnitPrice = cd.UnitPrice,
-                Total = cd.Total,
-                CreatedAt = cd.CreatedAt,
-                Creator = cd.Creator,
-                UpdatedAt = cd.UpdatedAt,
-                Updater = cd.Updater,
-                Deleted = cd.Deleted
-            }).ToList();
-
-            return new ContractDTO
-            {
-                Id = contract.Id,
-                ContractCode = contract.ContractCode,
-                ContractName = contract.ContractName,
-                Project = project,
-                StartDate = contract.StartDate,
-                EndDate = contract.EndDate,
-                EstimatedDays = contract.EstimatedDays,
-                Status = contract.Status,
-                Tax = contract.Tax,
-                SignDate = contract.SignDate,
-                Attachments = contract.Attachments != null ? 
-                    System.Text.Json.JsonSerializer.Deserialize<List<AttachmentInfo>>(contract.Attachments.RootElement.ToString()) 
-                    : null,
-                UpdatedAt = contract.UpdatedAt,
-                Updater = contract.Updater,
-                CreatedAt = contract.CreatedAt,
-                Creator = contract.Creator,
-                Deleted = contract.Deleted,
-                ContractDetails = contractDetailDTOs
-            };
+                // Có lỗi xảy ra, rollback tất cả thay đổi
+                await transaction.RollbackAsync();
+                throw; // Re-throw để xử lý exception ở tầng cao hơn
+            }
         }
     }
 }

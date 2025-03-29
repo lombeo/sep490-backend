@@ -19,7 +19,7 @@ namespace Sep490_Backend.Infra.Entities
         public string? BankName { get; set; }
         
         // Navigation property
-        public virtual ICollection<Project> Projects { get; set; }
+        public virtual ICollection<Project>? Projects { get; set; }
     }
 
     public static class CustomerConfiguration
