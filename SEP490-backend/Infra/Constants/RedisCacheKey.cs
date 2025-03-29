@@ -10,6 +10,9 @@
         public const string PROJECT_BY_USER_CACHE_KEY = "PROJECT:USER:{0}"; // Pattern: PROJECT:USER:userId
         public const string CONTRACT_CACHE_KEY = "CONTRACT";
         public const string CONTRACT_DETAIL_CACHE_KEY = "CONTRACT_DETAIL";
+        public const string CONTRACT_BY_PROJECT_CACHE_KEY = "CONTRACT:PROJECT:{0}"; // Pattern: CONTRACT:PROJECT:projectId
+        public const string CONTRACT_BY_USER_CACHE_KEY = "CONTRACT:USER:{0}"; // Pattern: CONTRACT:USER:userId
+        public const string CONTRACT_DETAIL_BY_USER_CACHE_KEY = "CONTRACT_DETAIL:USER:{0}"; // Pattern: CONTRACT_DETAIL:USER:userId
         public const string MATERIAL_CACHE_KEY = "MATERIAL";
         public const string CONSTRUCTION_TEAM_CACHE_KEY = "CONSTRUCTION_TEAM";
         public const string CONSTRUCTION_PLAN_CACHE_KEY = "CONSTRUCTION_PLAN"; // Cache key for construction plans
