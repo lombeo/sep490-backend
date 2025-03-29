@@ -23,15 +23,6 @@ namespace Sep490_Backend.Controllers
             _dataService = dataService;
         }
 
-        [HttpGet("search")]
-        public async Task<ResponseDTO<List<SiteSurvey>>> Search([FromQuery] SearchSiteSurveyDTO model)
-        {
-            model.ActionBy = UserId;
-            var result = await HandleException(_dataService.ListSiteSurvey(model), Message.SiteSurveyMessage.SEARCH_SUCCESS);
-            result.Meta = new ResponseMeta() { Total = model.Total, Index = model.PageIndex, PageSize = model.PageSize };
-            return result;
-        }
-
         [HttpDelete("delete/{id}")]
         public async Task<ResponseDTO<int>> DeleteSiteSurvey(int id)
         {
@@ -47,9 +38,9 @@ namespace Sep490_Backend.Controllers
         }
 
         [HttpGet("detail")]
-        public async Task<ResponseDTO<SiteSurvey>> GetSiteSurveyDetail([FromQuery] int id)
+        public async Task<ResponseDTO<SiteSurvey>> GetSiteSurveyDetail([FromQuery] int projectId)
         {
-            var result = await HandleException(_siteSurveyService.GetSiteSurveyDetail(id, UserId), Message.SiteSurveyMessage.GET_DETAIL_SUCCESS);
+            var result = await HandleException(_siteSurveyService.GetSiteSurveyDetail(projectId, UserId), Message.SiteSurveyMessage.GET_DETAIL_SUCCESS);
             return result;
         }
     }

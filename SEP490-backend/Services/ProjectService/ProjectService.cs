@@ -297,11 +297,6 @@ namespace Sep490_Backend.Services.ProjectService
 
         public async Task<ListProjectStatusDTO> ListProjectStatus(int actionBy)
         {
-            if (!_helperService.IsInRole(actionBy, new List<string> { RoleConstValue.BUSINESS_EMPLOYEE, RoleConstValue.EXECUTIVE_BOARD }))
-            {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
-            }
-
             var data = await _dataService.ListProject(new SearchProjectDTO()
             {
                 ActionBy = actionBy,
