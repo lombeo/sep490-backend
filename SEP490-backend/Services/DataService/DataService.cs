@@ -213,29 +213,74 @@ namespace Sep490_Backend.Services.DataService
 
         public async Task<List<Customer>> ListCustomer(CustomerSearchDTO model)
         {
-            if (!_helpService.IsInRole(model.ActionBy, new List<string> { RoleConstValue.BUSINESS_EMPLOYEE, RoleConstValue.EXECUTIVE_BOARD }))
+            var user = StaticVariable.UserMemory.FirstOrDefault(u => u.Id == model.ActionBy);
+            
+            // Check if user is in allowed roles (Business Employee or Executive Board)
+            bool isInAllowedRole = _helpService.IsInRole(model.ActionBy, new List<string> { RoleConstValue.BUSINESS_EMPLOYEE, RoleConstValue.EXECUTIVE_BOARD });
+            
+            // If user is in allowed roles, allow access to all customers
+            if (isInAllowedRole)
+            {
+                string cacheKey = RedisCacheKey.CUSTOMER_CACHE_KEY;
+                var customerCacheList = await _cacheService.GetAsync<List<Customer>>(cacheKey);
+                if (customerCacheList == null)
+                {
+                    customerCacheList = await _context.Customers.Where(c => !c.Deleted).OrderByDescending(t => t.UpdatedAt).ToListAsync();
+                    _ = _cacheService.SetAsync(cacheKey, customerCacheList);
+                }
+                if (!string.IsNullOrWhiteSpace(model.Search))
+                {
+                    customerCacheList = customerCacheList.Where(t => t.CustomerName.ToLower().Trim().Contains(model.Search.ToLower().Trim())
+                    || t.CustomerCode.ToLower().Trim().Contains(model.Search.ToLower().Trim())
+                    || t.Phone.ToLower().Trim().Contains(model.Search.ToLower().Trim())).ToList();
+                }
+                model.Total = customerCacheList.Count();
+                if (model.PageSize > 0)
+                {
+                    customerCacheList = customerCacheList.Skip(model.Skip).Take(model.PageSize).ToList();
+                }
+                return customerCacheList;
+            }
+            
+            // For other users, check if they are associated with any projects
+            // Get projects the user is associated with
+            var projectUsers = await _context.ProjectUsers
+                .Where(pu => pu.UserId == model.ActionBy && !pu.Deleted)
+                .Select(pu => pu.ProjectId)
+                .ToListAsync();
+                
+            if (!projectUsers.Any())
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
-            string cacheKey = RedisCacheKey.CUSTOMER_CACHE_KEY;
-            var customerCacheList = await _cacheService.GetAsync<List<Customer>>(cacheKey);
-            if (customerCacheList == null)
-            {
-                customerCacheList = await _context.Customers.Where(c => !c.Deleted).OrderByDescending(t => t.UpdatedAt).ToListAsync();
-                _ = _cacheService.SetAsync(cacheKey, customerCacheList);
-            }
+            
+            // Get projects with their customer info
+            var projects = await _context.Projects
+                .Where(p => projectUsers.Contains(p.Id) && !p.Deleted)
+                .Select(p => p.CustomerId)
+                .Distinct()
+                .ToListAsync();
+                
+            // Get customers associated with those projects
+            var customers = await _context.Customers
+                .Where(c => projects.Contains(c.Id) && !c.Deleted)
+                .OrderByDescending(t => t.UpdatedAt)
+                .ToListAsync();
+                
             if (!string.IsNullOrWhiteSpace(model.Search))
             {
-                customerCacheList = customerCacheList.Where(t => t.CustomerName.ToLower().Trim().Contains(model.Search.ToLower().Trim())
+                customers = customers.Where(t => t.CustomerName.ToLower().Trim().Contains(model.Search.ToLower().Trim())
                 || t.CustomerCode.ToLower().Trim().Contains(model.Search.ToLower().Trim())
                 || t.Phone.ToLower().Trim().Contains(model.Search.ToLower().Trim())).ToList();
             }
-            model.Total = customerCacheList.Count();
+            
+            model.Total = customers.Count();
             if (model.PageSize > 0)
             {
-                customerCacheList = customerCacheList.Skip(model.Skip).Take(model.PageSize).ToList();
+                customers = customers.Skip(model.Skip).Take(model.PageSize).ToList();
             }
-            return customerCacheList;
+            
+            return customers;
         }
 
         public async Task<List<ProjectDTO>> ListProject(SearchProjectDTO model)

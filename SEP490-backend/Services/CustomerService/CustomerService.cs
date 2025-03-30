@@ -53,9 +53,27 @@ namespace Sep490_Backend.Services.CustomerService
 
         public async Task<Customer> GetDetailCustomer(int customerId, int actionBy)
         {
-            if (!_helperService.IsInRole(actionBy, new List<string> { RoleConstValue.BUSINESS_EMPLOYEE, RoleConstValue.EXECUTIVE_BOARD }))
+            var user = StaticVariable.UserMemory.FirstOrDefault(u => u.Id == actionBy);
+            
+            // Check if user is in allowed roles (Business Employee or Executive Board)
+            bool isInAllowedRole = _helperService.IsInRole(actionBy, new List<string> { RoleConstValue.BUSINESS_EMPLOYEE, RoleConstValue.EXECUTIVE_BOARD });
+            
+            // If user is not in allowed roles, check if they are associated with a project that has this customer
+            if (!isInAllowedRole)
             {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+                // Check if the user is associated with any projects that have this customer
+                var hasAccess = await _context.ProjectUsers
+                    .Where(pu => pu.UserId == actionBy && !pu.Deleted)
+                    .Join(_context.Projects,
+                        pu => pu.ProjectId,
+                        p => p.Id,
+                        (pu, p) => new { Project = p, ProjectUser = pu })
+                    .AnyAsync(x => x.Project.CustomerId == customerId && !x.Project.Deleted);
+                    
+                if (!hasAccess)
+                {
+                    throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+                }
             }
             
             // Define cache key for this specific customer
