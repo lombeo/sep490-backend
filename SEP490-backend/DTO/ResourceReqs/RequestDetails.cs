@@ -7,7 +7,7 @@ namespace Sep490_Backend.DTO.ResourceReqs
     {
         public string? Unit { get; set; }
         public int Quantity { get; set; }
-        public JsonDocument Object { get; set; } //Vehicle, User, Material
+        public int ResourceId { get; set; } //Vehicle, User, Material ID
         public ResourceType ResourceType { get; set; }
         public RequestDetailType Type { get; set; }
     }
