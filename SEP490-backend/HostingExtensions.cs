@@ -83,6 +83,10 @@ namespace Sep490_Backend
             .AddJsonOptions(options =>
             {
                 options.JsonSerializerOptions.Converters.Add(new Sep490_Backend.Infra.Helps.ReviewerDictionaryConverter());
+            })
+            .AddNewtonsoftJson(options =>
+            {
+                options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore;
             });
             
             builder.Services.AddDistributedRedisCache(options =>

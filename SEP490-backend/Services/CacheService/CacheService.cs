@@ -126,13 +126,22 @@ namespace Sep490_Backend.Services.CacheService
                 }
                 else
                 {
-                    await _database.SetStringAsync(key, JsonConvert.SerializeObject(value), new DistributedCacheEntryOptions() { SlidingExpiration = expirationTime });
+                    await _database.SetStringAsync(
+                        key, 
+                        JsonConvert.SerializeObject(value, new JsonSerializerSettings 
+                        { 
+                            ReferenceLoopHandling = ReferenceLoopHandling.Ignore
+                        }), 
+                        new DistributedCacheEntryOptions() { SlidingExpiration = expirationTime });
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError("SetAsync key= " + key);
-                _logger.LogError("SetAsync value = " + JsonConvert.SerializeObject(value));
+                _logger.LogError("SetAsync value = " + JsonConvert.SerializeObject(value, new JsonSerializerSettings 
+                { 
+                    ReferenceLoopHandling = ReferenceLoopHandling.Ignore 
+                }));
                 _logger.LogError(ex, ex.Message + " " + ex.StackTrace);
             }
         }

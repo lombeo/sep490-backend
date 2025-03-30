@@ -88,3 +88,38 @@ CREATE UNIQUE INDEX "IX_Contracts_ProjectId_Unique"
 ON "Contracts" ("ProjectId") 
 WHERE "Deleted" = false;
 ```
+
+# Circular Reference Handling
+
+## Issue
+The application had a circular reference issue when serializing entities with bi-directional navigation properties (e.g., ResourceMobilizationReqs -> Project -> ResourceMobilizationReqs). 
+
+This caused the following error when calling endpoints that return these entities:
+```
+Newtonsoft.Json.JsonSerializationException: Self referencing loop detected with type 'Sep490_Backend.Infra.Entities.ResourceMobilizationReqs'. Path 'Item2[0].Project.ResourceMobilizationReqs'.
+```
+
+## Solution
+The issue was fixed by configuring Newtonsoft.Json to ignore circular references during serialization:
+
+1. Added the `Microsoft.AspNetCore.Mvc.NewtonsoftJson` package (version 8.0.3)
+2. Configured JSON serialization options in `HostingExtensions.cs` to ignore circular references:
+   ```csharp
+   .AddNewtonsoftJson(options =>
+   {
+       options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore;
+   });
+   ```
+3. Updated `CacheService.SetAsync()` method to use the same settings when serializing objects for caching
+
+## Entity Structure
+The circular reference occurred because:
+- `ResourceMobilizationReqs` entity has a navigation property to `Project`
+- `Project` entity has a collection navigation property back to `ResourceMobilizationReqs`
+
+This is a common pattern in EF Core relationships but requires special handling during serialization.
+
+## Affected Endpoints
+The fix resolves issues with the following endpoints:
+- `GET /sep490/resourcereq/mobilization/list` - List resource mobilization requests
+- Any other endpoint returning entities with circular navigation properties
