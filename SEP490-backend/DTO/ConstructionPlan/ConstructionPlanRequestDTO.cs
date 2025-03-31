@@ -32,7 +32,6 @@ namespace Sep490_Backend.DTO.ConstructionPlan
         public decimal UnitPrice { get; set; }
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
-        public List<int>? QAIds { get; set; }
         public Dictionary<string, string> ItemRelations { get; set; } = new Dictionary<string, string>();
         public List<SaveConstructPlanItemDetailDTO> Details { get; set; } = new List<SaveConstructPlanItemDetailDTO>();
     }

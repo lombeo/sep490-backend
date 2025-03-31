@@ -23,8 +23,6 @@ namespace Sep490_Backend.Infra.Entities
         public virtual ConstructPlanItem ParentItem { get; set; }
         public virtual ICollection<ConstructPlanItem> ChildItems { get; set; }
         public virtual ICollection<ConstructPlanItemDetail> ConstructPlanItemDetails { get; set; }
-        public virtual ICollection<User> QAMembers { get; set; }
-
     }
 
     public static class ConstructPlanItemConfiguration
@@ -122,29 +120,6 @@ namespace Sep490_Backend.Infra.Entities
                     .WithOne(cpid => cpid.ConstructPlanItem)
                     .HasForeignKey(cpid => cpid.PlanItemId)
                     .OnDelete(DeleteBehavior.Cascade);
-
-                // Many-to-many relationship with QA members (Users)
-                entity.HasMany(e => e.QAMembers)
-                    .WithMany(u => u.QAItems)
-                    .UsingEntity<Dictionary<string, object>>(
-                        "ConstructPlanItemQAMembers",
-                        j => j
-                            .HasOne<User>()
-                            .WithMany()
-                            .HasForeignKey("UserId")
-                            .HasConstraintName("FK_ConstructPlanItemQAMembers_Users_UserId")
-                            .OnDelete(DeleteBehavior.Cascade),
-                        j => j
-                            .HasOne<ConstructPlanItem>()
-                            .WithMany()
-                            .HasForeignKey("ConstructPlanItemWorkCode")
-                            .HasConstraintName("FK_ConstructPlanItemQAMembers_ConstructPlanItems_ConstructPlanItemWorkCode")
-                            .OnDelete(DeleteBehavior.Cascade),
-                        j => 
-                        {
-                            j.HasKey("UserId", "ConstructPlanItemWorkCode");
-                            j.ToTable("ConstructPlanItemQAMembers");
-                        });
             });
         }
     }
