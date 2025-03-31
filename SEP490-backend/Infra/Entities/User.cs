@@ -85,27 +85,7 @@ namespace Sep490_Backend.Infra.Entities
                       .IsRequired(false);
 
                 // Construction Plan relationships - QAItems (many-to-many)
-                entity.HasMany(e => e.QAItems)
-                      .WithMany(cpi => cpi.QAMembers)
-                      .UsingEntity<Dictionary<string, object>>(
-                        "ConstructPlanItemQAs",
-                        j => j
-                            .HasOne<ConstructPlanItem>()
-                            .WithMany()
-                            .HasForeignKey("QAItemWorkCode")
-                            .HasConstraintName("FK_ConstructPlanItemQAs_ConstructPlanItems_QAItemWorkCode")
-                            .OnDelete(DeleteBehavior.Cascade),
-                        j => j
-                            .HasOne<User>()
-                            .WithMany()
-                            .HasForeignKey("QAMemberId")
-                            .HasConstraintName("FK_ConstructPlanItemQAs_Users_QAMemberId")
-                            .OnDelete(DeleteBehavior.Cascade),
-                        j => 
-                        {
-                            j.HasKey("QAItemWorkCode", "QAMemberId");
-                            j.ToTable("ConstructPlanItemQAs");
-                        });
+                // Removed redundant configuration as it's now defined in ConstructPlanItemConfiguration
 
                 // Construction Plan relationships - ReviewedPlans (many-to-many)
                 entity.HasMany(e => e.ReviewedPlans)
@@ -130,28 +110,13 @@ namespace Sep490_Backend.Infra.Entities
                             j.ToTable("ConstructionPlanReviewers");
                         });
 
-                // Resource relationships - ResourceAllocations (many-to-many)
-                entity.HasMany(e => e.ResourceAllocations)
-                      .WithMany(cpid => cpid.Users)
-                      .UsingEntity<Dictionary<string, object>>(
-                        "ConstructPlanItemDetailUsers",
-                        j => j
-                            .HasOne<ConstructPlanItemDetail>()
-                            .WithMany()
-                            .HasForeignKey("ResourceAllocationId")
-                            .HasConstraintName("FK_ConstructPlanItemDetailUsers_ConstructPlanItemDetails_ResourceAllocationId")
-                            .OnDelete(DeleteBehavior.Cascade),
-                        j => j
-                            .HasOne<User>()
-                            .WithMany()
-                            .HasForeignKey("UserId")
-                            .HasConstraintName("FK_ConstructPlanItemDetailUsers_Users_UserId")
-                            .OnDelete(DeleteBehavior.Cascade),
-                        j => 
-                        {
-                            j.HasKey("ResourceAllocationId", "UserId");
-                            j.ToTable("ConstructPlanItemDetailUsers");
-                        });
+                // Many-to-many relationship with User for ResourceAllocations
+                entity.HasMany(u => u.ResourceAllocations)
+                    .WithOne(d => d.User)
+                    .HasForeignKey(d => d.ResourceId)
+                    .HasConstraintName("FK_ConstructPlanItemDetails_Users_ResourceId")
+                    .HasPrincipalKey(u => u.Id)
+                    .OnDelete(DeleteBehavior.SetNull);
 
                 // Resource Mobilization relationships
                 entity.HasMany(e => e.RequestedMobilizations)

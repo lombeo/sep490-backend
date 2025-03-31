@@ -30,13 +30,11 @@ namespace Sep490_Backend.DTO.ConstructionPlan
         public string Unit { get; set; }
         public decimal Quantity { get; set; }
         public decimal UnitPrice { get; set; }
-        public decimal PlanQuantity { get; set; }
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
         public List<int>? QAIds { get; set; }
         public Dictionary<string, string> ItemRelations { get; set; } = new Dictionary<string, string>();
         public List<SaveConstructPlanItemDetailDTO> Details { get; set; } = new List<SaveConstructPlanItemDetailDTO>();
-        public List<int> TeamIds { get; set; } = new List<int>();
     }
 
     public class SaveConstructPlanItemDetailDTO
@@ -47,7 +45,7 @@ namespace Sep490_Backend.DTO.ConstructionPlan
         public int Quantity { get; set; }
         public string? Unit { get; set; }
         public decimal UnitPrice { get; set; }
-        public List<int> ResourceIds { get; set; } = new List<int>();
+        public int? ResourceId { get; set; }
     }
 
     public class ApproveConstructionPlanDTO : BaseRequest

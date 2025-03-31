@@ -14,12 +14,14 @@ namespace Sep490_Backend.Infra.Entities
         public string? Unit { get; set; }
         public decimal UnitPrice { get; set; }
         public decimal Total { get; set; }
+        public int? ResourceId { get; set; } // Single resource ID
 
         // Navigation properties
         public virtual ConstructPlanItem ConstructPlanItem { get; set; }
-        public virtual ICollection<Vehicle> Vehicles { get; set; }
-        public virtual ICollection<User> Users { get; set; }
-        public virtual ICollection<Material> Materials { get; set; }
+        public virtual Vehicle Vehicle { get; set; }
+        public virtual User User { get; set; }
+        public virtual Material Material { get; set; }
+        public virtual ConstructionTeam ConstructionTeam { get; set; } // For HUMAN resource type
     }
 
     public static class ConstructPlanItemDetailConfiguration
@@ -53,6 +55,8 @@ namespace Sep490_Backend.Infra.Entities
 
                 entity.Property(e => e.Total)
                     .HasColumnType("numeric(18,2)");
+                
+                entity.Property(e => e.ResourceId);
 
                 entity.Property(e => e.CreatedAt)
                     .HasColumnType("timestamp without time zone");
@@ -63,6 +67,7 @@ namespace Sep490_Backend.Infra.Entities
                 entity.HasIndex(e => e.PlanItemId);
                 entity.HasIndex(e => e.WorkCode);
                 entity.HasIndex(e => e.ResourceType);
+                entity.HasIndex(e => e.ResourceId);
 
                 // Relationships
                 entity.HasOne(e => e.ConstructPlanItem)
@@ -70,85 +75,41 @@ namespace Sep490_Backend.Infra.Entities
                     .HasForeignKey(e => e.PlanItemId)
                     .OnDelete(DeleteBehavior.Cascade);
 
-                // Many-to-many with Vehicle
-                entity.HasMany(e => e.Vehicles)
-                    .WithMany(v => v.ConstructPlanItemDetails)
-                    .UsingEntity<Dictionary<string, object>>(
-                        "ConstructPlanItemDetailVehicles",
-                        j => j
-                            .HasOne<Vehicle>()
-                            .WithMany()
-                            .HasForeignKey("VehicleId")
-                            .HasConstraintName("FK_ConstructPlanItemDetailVehicles_Vehicles_VehicleId")
-                            .OnDelete(DeleteBehavior.Cascade),
-                        j => j
-                            .HasOne<ConstructPlanItemDetail>()
-                            .WithMany()
-                            .HasForeignKey("ConstructPlanItemDetailId")
-                            .HasConstraintName("FK_ConstructPlanItemDetailVehicles_ConstructPlanItemDetails_ConstructPlanItemDetailId")
-                            .OnDelete(DeleteBehavior.Cascade),
-                        j => 
-                        {
-                            j.HasKey("VehicleId", "ConstructPlanItemDetailId");
-                            j.ToTable("ConstructPlanItemDetailVehicles");
-                        });
+                // One-to-one relationship with resources based on ResourceType
+                entity.HasOne(e => e.Vehicle)
+                    .WithMany()
+                    .HasForeignKey(e => e.ResourceId)
+                    .HasConstraintName("FK_ConstructPlanItemDetails_Vehicles_ResourceId")
+                    .OnDelete(DeleteBehavior.SetNull);
 
-                // Many-to-many with User
-                entity.HasMany(e => e.Users)
-                    .WithMany(u => u.ResourceAllocations)
-                    .UsingEntity<Dictionary<string, object>>(
-                        "ConstructPlanItemDetailUsers",
-                        j => j
-                            .HasOne<User>()
-                            .WithMany()
-                            .HasForeignKey("UserId")
-                            .HasConstraintName("FK_ConstructPlanItemDetailUsers_Users_UserId")
-                            .OnDelete(DeleteBehavior.Cascade),
-                        j => j
-                            .HasOne<ConstructPlanItemDetail>()
-                            .WithMany()
-                            .HasForeignKey("ResourceAllocationId")
-                            .HasConstraintName("FK_ConstructPlanItemDetailUsers_ConstructPlanItemDetails_ResourceAllocationId")
-                            .OnDelete(DeleteBehavior.Cascade),
-                        j => 
-                        {
-                            j.HasKey("UserId", "ResourceAllocationId");
-                            j.ToTable("ConstructPlanItemDetailUsers");
-                        });
+                entity.HasOne(e => e.User)
+                    .WithMany()
+                    .HasForeignKey(e => e.ResourceId)
+                    .HasConstraintName("FK_ConstructPlanItemDetails_Users_ResourceId")
+                    .OnDelete(DeleteBehavior.SetNull);
 
-                // Many-to-many with Material
-                entity.HasMany(e => e.Materials)
-                    .WithMany(m => m.ConstructPlanItemDetails)
-                    .UsingEntity<Dictionary<string, object>>(
-                        "ConstructPlanItemDetailMaterials",
-                        j => j
-                            .HasOne<Material>()
-                            .WithMany()
-                            .HasForeignKey("MaterialId")
-                            .HasConstraintName("FK_ConstructPlanItemDetailMaterials_Materials_MaterialId")
-                            .OnDelete(DeleteBehavior.Cascade),
-                        j => j
-                            .HasOne<ConstructPlanItemDetail>()
-                            .WithMany()
-                            .HasForeignKey("ConstructPlanItemDetailId")
-                            .HasConstraintName("FK_ConstructPlanItemDetailMaterials_ConstructPlanItemDetails_ConstructPlanItemDetailId")
-                            .OnDelete(DeleteBehavior.Cascade),
-                        j => 
-                        {
-                            j.HasKey("MaterialId", "ConstructPlanItemDetailId");
-                            j.ToTable("ConstructPlanItemDetailMaterials");
-                        });
+                entity.HasOne(e => e.Material)
+                    .WithMany()
+                    .HasForeignKey(e => e.ResourceId)
+                    .HasConstraintName("FK_ConstructPlanItemDetails_Materials_ResourceId")
+                    .OnDelete(DeleteBehavior.SetNull);
+                    
+                entity.HasOne(e => e.ConstructionTeam)
+                    .WithMany()
+                    .HasForeignKey(e => e.ResourceId)
+                    .HasConstraintName("FK_ConstructPlanItemDetails_ConstructionTeams_ResourceId")
+                    .OnDelete(DeleteBehavior.SetNull);
             });
 
-            // Add query filters for resource type
+            // Add query filters based on resource type
             modelBuilder.Entity<ConstructPlanItemDetail>()
-                .HasQueryFilter(e => e.ResourceType == ResourceType.MACHINE || e.Vehicles.Any());
+                .HasQueryFilter(e => e.ResourceType == ResourceType.MACHINE && e.Vehicle != null);
 
             modelBuilder.Entity<ConstructPlanItemDetail>()
-                .HasQueryFilter(e => e.ResourceType == ResourceType.HUMAN || e.Users.Any());
+                .HasQueryFilter(e => (e.ResourceType == ResourceType.HUMAN && e.ConstructionTeam != null) || e.User != null);
 
             modelBuilder.Entity<ConstructPlanItemDetail>()
-                .HasQueryFilter(e => e.ResourceType == ResourceType.MATERIAL || e.Materials.Any());
+                .HasQueryFilter(e => e.ResourceType == ResourceType.MATERIAL && e.Material != null);
         }
     }
 }

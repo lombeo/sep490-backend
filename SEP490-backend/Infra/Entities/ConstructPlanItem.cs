@@ -13,12 +13,9 @@ namespace Sep490_Backend.Infra.Entities
         public decimal Quantity { get; set; }
         public decimal UnitPrice { get; set; }
         public decimal TotalPrice { get; set; }
-        public decimal PlanQuantity { get; set; }
-        public decimal PlanTotalPrice { get; set; }
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
-        public List<int>? QA { get; set; } //UserId
-        public Dictionary<string, string> ItemRelations { get; set; } //workcode, enum
+        public Dictionary<string, string> ItemRelations { get; set; } //index, enum
 
         // Navigation properties
         public virtual ConstructionPlan ConstructionPlan { get; set; }
@@ -66,12 +63,6 @@ namespace Sep490_Backend.Infra.Entities
                 entity.Property(e => e.TotalPrice)
                     .HasColumnType("numeric(18,2)");
 
-                entity.Property(e => e.PlanQuantity)
-                    .HasColumnType("numeric(18,2)");
-
-                entity.Property(e => e.PlanTotalPrice)
-                    .HasColumnType("numeric(18,2)");
-
                 entity.Property(e => e.StartDate)
                     .IsRequired()
                     .HasColumnType("timestamp without time zone");
@@ -79,9 +70,6 @@ namespace Sep490_Backend.Infra.Entities
                 entity.Property(e => e.EndDate)
                     .IsRequired()
                     .HasColumnType("timestamp without time zone");
-
-                entity.Property(e => e.QA)
-                    .HasColumnType("integer[]");
 
                 entity.Property(e => e.CreatedAt)
                     .HasColumnType("timestamp without time zone");
@@ -122,42 +110,40 @@ namespace Sep490_Backend.Infra.Entities
                             j.ToTable("ConstructionTeamPlanItems");
                         });
 
-                entity.HasOne(e => e.ParentItem)
-                    .WithMany(e => e.ChildItems)
-                    .HasForeignKey(e => e.ParentIndex)
-                    .OnDelete(DeleteBehavior.Restrict);
-
+                // One-to-many relationship with child items
                 entity.HasMany(e => e.ChildItems)
                     .WithOne(e => e.ParentItem)
                     .HasForeignKey(e => e.ParentIndex)
+                    .HasPrincipalKey(e => e.Index)
                     .OnDelete(DeleteBehavior.Restrict);
 
+                // One-to-many relationship with details
                 entity.HasMany(e => e.ConstructPlanItemDetails)
                     .WithOne(cpid => cpid.ConstructPlanItem)
                     .HasForeignKey(cpid => cpid.PlanItemId)
                     .OnDelete(DeleteBehavior.Cascade);
 
-                // Many-to-many relationship with User for QA
+                // Many-to-many relationship with QA members (Users)
                 entity.HasMany(e => e.QAMembers)
                     .WithMany(u => u.QAItems)
                     .UsingEntity<Dictionary<string, object>>(
-                        "ConstructPlanItemQAs",
+                        "ConstructPlanItemQAMembers",
                         j => j
                             .HasOne<User>()
                             .WithMany()
-                            .HasForeignKey("QAMemberId")
-                            .HasConstraintName("FK_ConstructPlanItemQAs_Users_QAMemberId")
+                            .HasForeignKey("UserId")
+                            .HasConstraintName("FK_ConstructPlanItemQAMembers_Users_UserId")
                             .OnDelete(DeleteBehavior.Cascade),
                         j => j
                             .HasOne<ConstructPlanItem>()
                             .WithMany()
-                            .HasForeignKey("QAItemWorkCode")
-                            .HasConstraintName("FK_ConstructPlanItemQAs_ConstructPlanItems_QAItemWorkCode")
+                            .HasForeignKey("ConstructPlanItemWorkCode")
+                            .HasConstraintName("FK_ConstructPlanItemQAMembers_ConstructPlanItems_ConstructPlanItemWorkCode")
                             .OnDelete(DeleteBehavior.Cascade),
                         j => 
                         {
-                            j.HasKey("QAItemWorkCode", "QAMemberId");
-                            j.ToTable("ConstructPlanItemQAs");
+                            j.HasKey("UserId", "ConstructPlanItemWorkCode");
+                            j.ToTable("ConstructPlanItemQAMembers");
                         });
             });
         }

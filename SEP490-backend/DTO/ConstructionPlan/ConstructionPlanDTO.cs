@@ -36,11 +36,8 @@ namespace Sep490_Backend.DTO.ConstructionPlan
         public decimal Quantity { get; set; }
         public decimal UnitPrice { get; set; }
         public decimal TotalPrice { get; set; }
-        public decimal PlanQuantity { get; set; }
-        public decimal PlanTotalPrice { get; set; }
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
-        public List<int>? QA { get; set; }
         public Dictionary<string, string> ItemRelations { get; set; }
         public List<ConstructPlanItemDetailDTO> Details { get; set; } = new List<ConstructPlanItemDetailDTO>();
         public List<ConstructionTeamDTO> Teams { get; set; } = new List<ConstructionTeamDTO>();
@@ -54,9 +51,25 @@ namespace Sep490_Backend.DTO.ConstructionPlan
         public string WorkCode { get; set; }
         public string ResourceType { get; set; }
         public int Quantity { get; set; }
-        public string? Unit { get; set; }
+        public string Unit { get; set; }
         public decimal UnitPrice { get; set; }
         public decimal Total { get; set; }
+        public int? ResourceId { get; set; }
+        public ResourceDTO Resource { get; set; }
+    }
+
+    public class QAMemberDTO
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public string Email { get; set; }
+    }
+
+    public class ResourceDTO
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public string Type { get; set; }
     }
 
     public class ReviewerDTO
@@ -67,19 +80,12 @@ namespace Sep490_Backend.DTO.ConstructionPlan
         public bool IsApproved { get; set; }
     }
 
-    public class QAMemberDTO
-    {
-        public int Id { get; set; }
-        public string Name { get; set; }
-        public string Email { get; set; }
-    }
-
     public class ConstructionTeamDTO
     {
         public int Id { get; set; }
         public string TeamName { get; set; }
         public int TeamManager { get; set; }
         public string TeamManagerName { get; set; }
-        public string? Description { get; set; }
+        public string Description { get; set; }
     }
 } 
