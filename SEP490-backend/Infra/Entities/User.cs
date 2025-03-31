@@ -22,7 +22,6 @@ namespace Sep490_Backend.Infra.Entities
         public virtual ICollection<ProjectUser> ProjectUsers { get; set; }
         public virtual Vehicle Vehicle { get; set; }
         public virtual ConstructionTeam Team { get; set; }
-        public virtual ICollection<ConstructPlanItem> QAItems { get; set; }
         public virtual ICollection<ConstructPlanItemDetail> ResourceAllocations { get; set; }
         public virtual ICollection<ConstructionPlan> ReviewedPlans { get; set; }
         public virtual ICollection<SiteSurvey> ConductedSurveys { get; set; }
@@ -83,9 +82,6 @@ namespace Sep490_Backend.Infra.Entities
                 // Property configuration for nullable foreign key
                 entity.Property(e => e.TeamId)
                       .IsRequired(false);
-
-                // Construction Plan relationships - QAItems (many-to-many)
-                // Removed redundant configuration as it's now defined in ConstructPlanItemConfiguration
 
                 // Construction Plan relationships - ReviewedPlans (many-to-many)
                 entity.HasMany(e => e.ReviewedPlans)

@@ -137,20 +137,6 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                     // Save to ensure the plan item exists before adding details
                     await _context.SaveChangesAsync();
 
-                    // Add QA members
-                    if (itemDto.QAIds != null && itemDto.QAIds.Any())
-                    {
-                        planItem.QAMembers = new List<User>();
-                        foreach (var qaId in itemDto.QAIds)
-                        {
-                            var qaMember = await _context.Users.FirstOrDefaultAsync(u => u.Id == qaId && !u.Deleted);
-                            if (qaMember != null)
-                            {
-                                planItem.QAMembers.Add(qaMember);
-                            }
-                        }
-                    }
-
                     // Add details if provided
                     if (itemDto.Details != null && itemDto.Details.Any())
                     {
@@ -443,9 +429,6 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                     // Save to ensure the plan item exists before updating details
                     await _context.SaveChangesAsync();
                     
-                    // Update QA members
-                    await UpdateQAMembers(planItem, itemDto.QAIds, actionBy);
-                    
                     // Update details
                     await UpdateItemDetails(planItem, itemDto.Details, actionBy);
                 }
@@ -468,38 +451,6 @@ namespace Sep490_Backend.Services.ConstructionPlanService
 
             // Return the updated plan
             return await GetById(constructionPlan.Id, actionBy);
-        }
-
-        private async Task UpdateQAMembers(ConstructPlanItem planItem, List<int>? qaIds, int actionBy)
-        {
-            // Load existing QA members if not already loaded
-            if (planItem.QAMembers == null)
-            {
-                await _context.Entry(planItem)
-                    .Collection(pi => pi.QAMembers)
-                    .LoadAsync();
-                
-                if (planItem.QAMembers == null)
-                {
-                    planItem.QAMembers = new List<User>();
-                }
-            }
-            
-            // Clear existing QA members
-            planItem.QAMembers.Clear();
-            
-            // Add new QA members
-            if (qaIds != null && qaIds.Any())
-            {
-                foreach (var qaId in qaIds)
-                {
-                    var qaMember = await _context.Users.FirstOrDefaultAsync(u => u.Id == qaId && !u.Deleted);
-                    if (qaMember != null)
-                    {
-                        planItem.QAMembers.Add(qaMember);
-                    }
-                }
-            }
         }
 
         private async Task UpdateItemDetails(ConstructPlanItem planItem, List<SaveConstructPlanItemDetailDTO>? details, int actionBy)
@@ -659,7 +610,6 @@ namespace Sep490_Backend.Services.ConstructionPlanService
             // Get plan items
             var planItems = await _context.ConstructPlanItems
                 .Include(pi => pi.ConstructionTeams)
-                .Include(pi => pi.QAMembers)
                 .Where(pi => pi.PlanId == id && !pi.Deleted)
                 .ToListAsync();
 
@@ -680,20 +630,6 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                     EndDate = planItem.EndDate,
                     ItemRelations = planItem.ItemRelations ?? new Dictionary<string, string>()
                 };
-
-                // Add QA members
-                if (planItem.QAMembers != null && planItem.QAMembers.Any())
-                {
-                    foreach (var qaMember in planItem.QAMembers)
-                    {
-                        planItemDto.QAMembers.Add(new QAMemberDTO
-                        {
-                            Id = qaMember.Id,
-                            Name = qaMember.FullName,
-                            Email = qaMember.Email
-                        });
-                    }
-                }
 
                 // Add teams
                 if (planItem.ConstructionTeams != null && planItem.ConstructionTeams.Any())

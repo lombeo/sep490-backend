@@ -41,7 +41,6 @@ namespace Sep490_Backend.DTO.ConstructionPlan
         public Dictionary<string, string> ItemRelations { get; set; }
         public List<ConstructPlanItemDetailDTO> Details { get; set; } = new List<ConstructPlanItemDetailDTO>();
         public List<ConstructionTeamDTO> Teams { get; set; } = new List<ConstructionTeamDTO>();
-        public List<QAMemberDTO> QAMembers { get; set; } = new List<QAMemberDTO>();
     }
 
     public class ConstructPlanItemDetailDTO
@@ -56,13 +55,6 @@ namespace Sep490_Backend.DTO.ConstructionPlan
         public decimal Total { get; set; }
         public int? ResourceId { get; set; }
         public ResourceDTO Resource { get; set; }
-    }
-
-    public class QAMemberDTO
-    {
-        public int Id { get; set; }
-        public string Name { get; set; }
-        public string Email { get; set; }
     }
 
     public class ResourceDTO
