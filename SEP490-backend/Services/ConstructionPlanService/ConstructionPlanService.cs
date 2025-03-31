@@ -125,12 +125,9 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                         Quantity = itemDto.Quantity,
                         UnitPrice = itemDto.UnitPrice,
                         TotalPrice = itemDto.Quantity * itemDto.UnitPrice,
-                        PlanQuantity = itemDto.PlanQuantity,
-                        PlanTotalPrice = itemDto.PlanQuantity * itemDto.UnitPrice,
                         StartDate = itemDto.StartDate,
                         EndDate = itemDto.EndDate,
-                        QA = itemDto.QAIds?.ToList() ?? new List<int>(),
-                        ItemRelations = itemDto.ItemRelations ?? new Dictionary<string, string>(),
+                        ItemRelations = ConvertItemRelationsToIndex(itemDto.ItemRelations) ?? new Dictionary<string, string>(),
                         Creator = actionBy
                     };
 
@@ -154,20 +151,6 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                         }
                     }
 
-                    // Add teams if provided
-                    if (itemDto.TeamIds != null && itemDto.TeamIds.Any())
-                    {
-                        planItem.ConstructionTeams = new List<ConstructionTeam>();
-                        foreach (var teamId in itemDto.TeamIds)
-                        {
-                            var team = await _context.ConstructionTeams.FirstOrDefaultAsync(t => t.Id == teamId && !t.Deleted);
-                            if (team != null)
-                            {
-                                planItem.ConstructionTeams.Add(team);
-                            }
-                        }
-                    }
-
                     // Add details if provided
                     if (itemDto.Details != null && itemDto.Details.Any())
                     {
@@ -182,6 +165,7 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                                 Unit = detailDto.Unit,
                                 UnitPrice = detailDto.UnitPrice,
                                 Total = detailDto.Quantity * detailDto.UnitPrice,
+                                ResourceId = detailDto.ResourceId,
                                 Creator = actionBy
                             };
 
@@ -191,47 +175,10 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                             // Save to ensure the detail exists before adding resources
                             await _context.SaveChangesAsync();
 
-                            // Add resources based on type
-                            if (detailDto.ResourceIds != null && detailDto.ResourceIds.Any())
+                            // Set resource based on type if ResourceId is provided
+                            if (detailDto.ResourceId.HasValue)
                             {
-                                switch (detailDto.ResourceType)
-                                {
-                                    case ResourceType.HUMAN:
-                                        detail.Users = new List<User>();
-                                        foreach (var userId in detailDto.ResourceIds)
-                                        {
-                                            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId && !u.Deleted);
-                                            if (user != null)
-                                            {
-                                                detail.Users.Add(user);
-                                            }
-                                        }
-                                        break;
-
-                                    case ResourceType.MACHINE:
-                                        detail.Vehicles = new List<Vehicle>();
-                                        foreach (var vehicleId in detailDto.ResourceIds)
-                                        {
-                                            var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.Id == vehicleId && !v.Deleted);
-                                            if (vehicle != null)
-                                            {
-                                                detail.Vehicles.Add(vehicle);
-                                            }
-                                        }
-                                        break;
-
-                                    case ResourceType.MATERIAL:
-                                        detail.Materials = new List<Material>();
-                                        foreach (var materialId in detailDto.ResourceIds)
-                                        {
-                                            var material = await _context.Materials.FirstOrDefaultAsync(m => m.Id == materialId && !m.Deleted);
-                                            if (material != null)
-                                            {
-                                                detail.Materials.Add(material);
-                                            }
-                                        }
-                                        break;
-                                }
+                                await SetDetailResource(detail, detailDto.ResourceType, detailDto.ResourceId.Value);
                             }
                         }
                     }
@@ -255,6 +202,70 @@ namespace Sep490_Backend.Services.ConstructionPlanService
 
             // Return the created plan
             return await GetById(constructionPlan.Id, actionBy);
+        }
+
+        private async Task SetDetailResource(ConstructPlanItemDetail detail, ResourceType resourceType, int resourceId)
+        {
+            // ResourceId đã được thiết lập trong model, chỉ cần cập nhật các trường tham chiếu
+            // để đảm bảo tương thích với truy vấn
+            switch (resourceType)
+            {
+                case ResourceType.HUMAN:
+                    // Đảm bảo rằng detail.ConstructionTeam được thiết lập cho loại HUMAN
+                    var team = await _context.ConstructionTeams.FirstOrDefaultAsync(t => t.Id == resourceId && !t.Deleted);
+                    if (team != null)
+                    {
+                        detail.ConstructionTeam = team;
+                        // Đảm bảo các tham chiếu khác là null
+                        detail.Vehicle = null;
+                        detail.Material = null;
+                        detail.User = null;
+                    }
+                    break;
+
+                case ResourceType.MACHINE:
+                    var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.Id == resourceId && !v.Deleted);
+                    if (vehicle != null)
+                    {
+                        detail.Vehicle = vehicle;
+                        // Đảm bảo các tham chiếu khác là null
+                        detail.ConstructionTeam = null;
+                        detail.Material = null;
+                        detail.User = null;
+                    }
+                    break;
+
+                case ResourceType.MATERIAL:
+                    var material = await _context.Materials.FirstOrDefaultAsync(m => m.Id == resourceId && !m.Deleted);
+                    if (material != null)
+                    {
+                        detail.Material = material;
+                        // Đảm bảo các tham chiếu khác là null
+                        detail.ConstructionTeam = null;
+                        detail.Vehicle = null;
+                        detail.User = null;
+                    }
+                    break;
+            }
+        }
+        
+        private Dictionary<string, string> ConvertItemRelationsToIndex(Dictionary<string, string> workCodeRelations)
+        {
+            if (workCodeRelations == null || !workCodeRelations.Any())
+            {
+                return new Dictionary<string, string>();
+            }
+            
+            var indexRelations = new Dictionary<string, string>();
+            
+            foreach (var relation in workCodeRelations)
+            {
+                // Convert workCode to index
+                // In this implementation, we simply use the index directly
+                indexRelations[relation.Key] = relation.Value;
+            }
+            
+            return indexRelations;
         }
 
         public async Task<ConstructionPlanDTO> Update(SaveConstructionPlanDTO model, int actionBy)
@@ -399,12 +410,9 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                         planItem.Quantity = itemDto.Quantity;
                         planItem.UnitPrice = itemDto.UnitPrice;
                         planItem.TotalPrice = itemDto.Quantity * itemDto.UnitPrice;
-                        planItem.PlanQuantity = itemDto.PlanQuantity;
-                        planItem.PlanTotalPrice = itemDto.PlanQuantity * itemDto.UnitPrice;
                         planItem.StartDate = itemDto.StartDate;
                         planItem.EndDate = itemDto.EndDate;
-                        planItem.QA = itemDto.QAIds?.ToList() ?? new List<int>();
-                        planItem.ItemRelations = itemDto.ItemRelations ?? new Dictionary<string, string>();
+                        planItem.ItemRelations = ConvertItemRelationsToIndex(itemDto.ItemRelations) ?? new Dictionary<string, string>();
                         planItem.Updater = actionBy;
                         
                         _context.ConstructPlanItems.Update(planItem);
@@ -423,12 +431,9 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                             Quantity = itemDto.Quantity,
                             UnitPrice = itemDto.UnitPrice,
                             TotalPrice = itemDto.Quantity * itemDto.UnitPrice,
-                            PlanQuantity = itemDto.PlanQuantity,
-                            PlanTotalPrice = itemDto.PlanQuantity * itemDto.UnitPrice,
                             StartDate = itemDto.StartDate,
                             EndDate = itemDto.EndDate,
-                            QA = itemDto.QAIds?.ToList() ?? new List<int>(),
-                            ItemRelations = itemDto.ItemRelations ?? new Dictionary<string, string>(),
+                            ItemRelations = ConvertItemRelationsToIndex(itemDto.ItemRelations) ?? new Dictionary<string, string>(),
                             Creator = actionBy
                         };
                         
@@ -440,9 +445,6 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                     
                     // Update QA members
                     await UpdateQAMembers(planItem, itemDto.QAIds, actionBy);
-                    
-                    // Update teams
-                    await UpdateTeams(planItem, itemDto.TeamIds, actionBy);
                     
                     // Update details
                     await UpdateItemDetails(planItem, itemDto.Details, actionBy);
@@ -500,38 +502,6 @@ namespace Sep490_Backend.Services.ConstructionPlanService
             }
         }
 
-        private async Task UpdateTeams(ConstructPlanItem planItem, List<int>? teamIds, int actionBy)
-        {
-            // Load existing teams if not already loaded
-            if (planItem.ConstructionTeams == null)
-            {
-                await _context.Entry(planItem)
-                    .Collection(pi => pi.ConstructionTeams)
-                    .LoadAsync();
-                
-                if (planItem.ConstructionTeams == null)
-                {
-                    planItem.ConstructionTeams = new List<ConstructionTeam>();
-                }
-            }
-            
-            // Clear existing teams
-            planItem.ConstructionTeams.Clear();
-            
-            // Add new teams
-            if (teamIds != null && teamIds.Any())
-            {
-                foreach (var teamId in teamIds)
-                {
-                    var team = await _context.ConstructionTeams.FirstOrDefaultAsync(t => t.Id == teamId && !t.Deleted);
-                    if (team != null)
-                    {
-                        planItem.ConstructionTeams.Add(team);
-                    }
-                }
-            }
-        }
-
         private async Task UpdateItemDetails(ConstructPlanItem planItem, List<SaveConstructPlanItemDetailDTO>? details, int actionBy)
         {
             if (details == null || !details.Any())
@@ -583,6 +553,7 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                     detail.Unit = detailDto.Unit;
                     detail.UnitPrice = detailDto.UnitPrice;
                     detail.Total = detailDto.Quantity * detailDto.UnitPrice;
+                    detail.ResourceId = detailDto.ResourceId;
                     detail.Updater = actionBy;
                     
                     _context.ConstructPlanItemDetails.Update(detail);
@@ -591,7 +562,7 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                     await _context.SaveChangesAsync();
                     
                     // Update resources based on type
-                    await UpdateDetailResources(detail, detailDto.ResourceType, detailDto.ResourceIds, actionBy);
+                    await SetDetailResource(detail, detailDto.ResourceType, detailDto.ResourceId.Value);
                 }
                 else
                 {
@@ -605,6 +576,7 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                         Unit = detailDto.Unit,
                         UnitPrice = detailDto.UnitPrice,
                         Total = detailDto.Quantity * detailDto.UnitPrice,
+                        ResourceId = detailDto.ResourceId,
                         Creator = actionBy
                     };
                     
@@ -614,103 +586,8 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                     await _context.SaveChangesAsync();
                     
                     // Add resources based on type
-                    await UpdateDetailResources(detail, detailDto.ResourceType, detailDto.ResourceIds, actionBy);
+                    await SetDetailResource(detail, detailDto.ResourceType, detailDto.ResourceId.Value);
                 }
-            }
-        }
-
-        private async Task UpdateDetailResources(ConstructPlanItemDetail detail, ResourceType resourceType, List<int>? resourceIds, int actionBy)
-        {
-            if (resourceIds == null || !resourceIds.Any())
-            {
-                return;
-            }
-            
-            switch (resourceType)
-            {
-                case ResourceType.HUMAN:
-                    // Load existing users if not already loaded
-                    if (detail.Users == null)
-                    {
-                        await _context.Entry(detail)
-                            .Collection(d => d.Users)
-                            .LoadAsync();
-                        
-                        if (detail.Users == null)
-                        {
-                            detail.Users = new List<User>();
-                        }
-                    }
-                    
-                    // Clear existing users
-                    detail.Users.Clear();
-                    
-                    // Add new users
-                    foreach (var userId in resourceIds)
-                    {
-                        var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId && !u.Deleted);
-                        if (user != null)
-                        {
-                            detail.Users.Add(user);
-                        }
-                    }
-                    break;
-
-                case ResourceType.MACHINE:
-                    // Load existing vehicles if not already loaded
-                    if (detail.Vehicles == null)
-                    {
-                        await _context.Entry(detail)
-                            .Collection(d => d.Vehicles)
-                            .LoadAsync();
-                        
-                        if (detail.Vehicles == null)
-                        {
-                            detail.Vehicles = new List<Vehicle>();
-                        }
-                    }
-                    
-                    // Clear existing vehicles
-                    detail.Vehicles.Clear();
-                    
-                    // Add new vehicles
-                    foreach (var vehicleId in resourceIds)
-                    {
-                        var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.Id == vehicleId && !v.Deleted);
-                        if (vehicle != null)
-                        {
-                            detail.Vehicles.Add(vehicle);
-                        }
-                    }
-                    break;
-
-                case ResourceType.MATERIAL:
-                    // Load existing materials if not already loaded
-                    if (detail.Materials == null)
-                    {
-                        await _context.Entry(detail)
-                            .Collection(d => d.Materials)
-                            .LoadAsync();
-                        
-                        if (detail.Materials == null)
-                        {
-                            detail.Materials = new List<Material>();
-                        }
-                    }
-                    
-                    // Clear existing materials
-                    detail.Materials.Clear();
-                    
-                    // Add new materials
-                    foreach (var materialId in resourceIds)
-                    {
-                        var material = await _context.Materials.FirstOrDefaultAsync(m => m.Id == materialId && !m.Deleted);
-                        if (material != null)
-                        {
-                            detail.Materials.Add(material);
-                        }
-                    }
-                    break;
             }
         }
 
@@ -799,11 +676,8 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                     Quantity = planItem.Quantity,
                     UnitPrice = planItem.UnitPrice,
                     TotalPrice = planItem.TotalPrice,
-                    PlanQuantity = planItem.PlanQuantity,
-                    PlanTotalPrice = planItem.PlanTotalPrice,
                     StartDate = planItem.StartDate,
                     EndDate = planItem.EndDate,
-                    QA = planItem.QA,
                     ItemRelations = planItem.ItemRelations ?? new Dictionary<string, string>()
                 };
 
@@ -846,7 +720,7 @@ namespace Sep490_Backend.Services.ConstructionPlanService
 
                 foreach (var detail in itemDetails)
                 {
-                    planItemDto.Details.Add(new ConstructPlanItemDetailDTO
+                    var detailDto = new ConstructPlanItemDetailDTO
                     {
                         Id = detail.Id,
                         PlanItemId = detail.PlanItemId,
@@ -855,8 +729,57 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                         Quantity = detail.Quantity,
                         Unit = detail.Unit,
                         UnitPrice = detail.UnitPrice,
-                        Total = detail.Total
-                    });
+                        Total = detail.Total,
+                        ResourceId = detail.ResourceId
+                    };
+                    
+                    // Add resource information based on type
+                    if (detail.ResourceId.HasValue)
+                    {
+                        switch (detail.ResourceType)
+                        {
+                            case ResourceType.HUMAN:
+                                var team = await _context.ConstructionTeams.FirstOrDefaultAsync(t => t.Id == detail.ResourceId && !t.Deleted);
+                                if (team != null)
+                                {
+                                    detailDto.Resource = new ResourceDTO
+                                    {
+                                        Id = team.Id,
+                                        Name = team.TeamName,
+                                        Type = "TEAM"
+                                    };
+                                }
+                                break;
+                                
+                            case ResourceType.MACHINE:
+                                var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.Id == detail.ResourceId && !v.Deleted);
+                                if (vehicle != null)
+                                {
+                                    detailDto.Resource = new ResourceDTO
+                                    {
+                                        Id = vehicle.Id,
+                                        Name = vehicle.LicensePlate,
+                                        Type = "VEHICLE"
+                                    };
+                                }
+                                break;
+                                
+                            case ResourceType.MATERIAL:
+                                var material = await _context.Materials.FirstOrDefaultAsync(m => m.Id == detail.ResourceId && !m.Deleted);
+                                if (material != null)
+                                {
+                                    detailDto.Resource = new ResourceDTO
+                                    {
+                                        Id = material.Id,
+                                        Name = material.MaterialName,
+                                        Type = "MATERIAL"
+                                    };
+                                }
+                                break;
+                        }
+                    }
+                    
+                    planItemDto.Details.Add(detailDto);
                 }
 
                 dto.PlanItems.Add(planItemDto);
@@ -1062,6 +985,7 @@ namespace Sep490_Backend.Services.ConstructionPlanService
 
             // Get plan item
             var planItem = await _context.ConstructPlanItems
+                .Include(pi => pi.ConstructionTeams)
                 .FirstOrDefaultAsync(pi => pi.PlanId == model.PlanId && pi.WorkCode == model.WorkCode && !pi.Deleted);
 
             if (planItem == null)
@@ -1069,8 +993,22 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                 throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
 
-            // Update teams
-            await UpdateTeams(planItem, model.TeamIds, actionBy);
+            // Clear existing teams
+            planItem.ConstructionTeams.Clear();
+
+            // Add new teams
+            if (model.TeamIds != null && model.TeamIds.Any())
+            {
+                foreach (var teamId in model.TeamIds)
+                {
+                    var team = await _context.ConstructionTeams.FirstOrDefaultAsync(t => t.Id == teamId && !t.Deleted);
+                    if (team != null)
+                    {
+                        planItem.ConstructionTeams.Add(team);
+                    }
+                }
+            }
+
             await _context.SaveChangesAsync();
 
             // Clear cache
@@ -1214,20 +1152,14 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                             unitPrice = parsedUnitPrice;
                         }
                         
-                        decimal planQuantity = 0;
-                        if (decimal.TryParse(GetCellValue(row.GetCell(7)), out decimal parsedPlanQuantity))
-                        {
-                            planQuantity = parsedPlanQuantity;
-                        }
-                        
                         DateTime startDate = DateTime.Now;
-                        if (DateTime.TryParse(GetCellValue(row.GetCell(8)), out DateTime parsedStartDate))
+                        if (DateTime.TryParse(GetCellValue(row.GetCell(7)), out DateTime parsedStartDate))
                         {
                             startDate = parsedStartDate;
                         }
                         
                         DateTime endDate = DateTime.Now.AddMonths(1);
-                        if (DateTime.TryParse(GetCellValue(row.GetCell(9)), out DateTime parsedEndDate))
+                        if (DateTime.TryParse(GetCellValue(row.GetCell(8)), out DateTime parsedEndDate))
                         {
                             endDate = parsedEndDate;
                         }
@@ -1244,11 +1176,8 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                             Quantity = quantity,
                             UnitPrice = unitPrice,
                             TotalPrice = quantity * unitPrice,
-                            PlanQuantity = planQuantity,
-                            PlanTotalPrice = planQuantity * unitPrice,
                             StartDate = startDate,
                             EndDate = endDate,
-                            QA = new List<int>(),
                             ItemRelations = new Dictionary<string, string>(),
                             Creator = actionBy
                         };

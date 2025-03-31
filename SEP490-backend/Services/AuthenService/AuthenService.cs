@@ -322,6 +322,7 @@ namespace Sep490_Backend.Services.AuthenService
 
             return new ReturnSignInDTO
             {
+                UserId = user.Id,
                 AccessToken = accessToken,
                 RefreshToken = refreshToken,
                 Email = user.Email,
