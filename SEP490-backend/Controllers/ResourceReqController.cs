@@ -135,6 +135,20 @@ namespace Sep490_Backend.Controllers
             );
         }
 
+        /// <summary>
+        /// Gets a specific resource mobilization request by ID
+        /// </summary>
+        /// <param name="id">ID of the request to retrieve</param>
+        /// <returns>The resource mobilization request details</returns>
+        [HttpGet("mobilization/{id}")]
+        public async Task<ResponseDTO<ResourceMobilizationReqs>> GetResourceMobilizationRequestById(int id)
+        {
+            return await HandleException(
+                _resourceReqService.GetResourceMobilizationRequestById(id),
+                Message.CommonMessage.ACTION_SUCCESS
+            );
+        }
+
         #endregion
 
         #region Resource Inventory APIs
@@ -212,6 +226,20 @@ namespace Sep490_Backend.Controllers
         {
             return await HandleException(
                 _resourceReqService.DeleteInventoryResource(id, UserId),
+                Message.CommonMessage.ACTION_SUCCESS
+            );
+        }
+
+        /// <summary>
+        /// Gets a specific inventory resource by ID
+        /// </summary>
+        /// <param name="id">ID of the resource to retrieve</param>
+        /// <returns>The resource inventory details</returns>
+        [HttpGet("inventory/{id}")]
+        public async Task<ResponseDTO<ResourceInventoryDTO>> GetInventoryResourceById(int id)
+        {
+            return await HandleException(
+                _resourceReqService.GetInventoryResourceById(id),
                 Message.CommonMessage.ACTION_SUCCESS
             );
         }
@@ -329,6 +357,20 @@ namespace Sep490_Backend.Controllers
         {
             return await HandleException(
                 _resourceReqService.RejectResourceAllocationRequest(id, model.Reason, UserId),
+                Message.CommonMessage.ACTION_SUCCESS
+            );
+        }
+
+        /// <summary>
+        /// Gets a specific resource allocation request by ID
+        /// </summary>
+        /// <param name="id">ID of the request to retrieve</param>
+        /// <returns>The resource allocation request details</returns>
+        [HttpGet("allocation/{id}")]
+        public async Task<ResponseDTO<ResourceAllocationReqs>> GetResourceAllocationRequestById(int id)
+        {
+            return await HandleException(
+                _resourceReqService.GetResourceAllocationRequestById(id),
                 Message.CommonMessage.ACTION_SUCCESS
             );
         }
