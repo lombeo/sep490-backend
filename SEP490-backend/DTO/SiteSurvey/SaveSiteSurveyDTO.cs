@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Sep490_Backend.DTO;
 using Sep490_Backend.Infra.Entities;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 
 namespace Sep490_Backend.DTO.SiteSurvey
@@ -9,7 +10,10 @@ namespace Sep490_Backend.DTO.SiteSurvey
     {
         public int Id { get; set; }
         public int ProjectId { get; set; }
-        public string SiteSurveyName { get; set; }
+        
+        [Required(ErrorMessage = "Site survey name is required for documentation")]
+        public string SiteSurveyName { get; set; } = string.Empty;
+        
         public string? ConstructionRequirements { get; set; }
         public string? EquipmentRequirements { get; set; }
         public string? HumanResourceCapacity { get; set; }

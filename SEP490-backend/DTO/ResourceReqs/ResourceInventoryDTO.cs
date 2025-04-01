@@ -1,5 +1,6 @@
 using Sep490_Backend.Infra.Enums;
 using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace Sep490_Backend.DTO.ResourceReqs
 {
@@ -9,11 +10,19 @@ namespace Sep490_Backend.DTO.ResourceReqs
     public class ResourceInventoryDTO
     {
         public int Id { get; set; }
-        public string Name { get; set; }
-        public string Description { get; set; }
+        
+        [Required(ErrorMessage = "Resource name is required")]
+        public string Name { get; set; } = string.Empty;
+        
+        [Required(ErrorMessage = "Resource description is required")]
+        public string Description { get; set; } = string.Empty;
+        
         public ResourceType ResourceType { get; set; }
         public int Quantity { get; set; }
-        public string Unit { get; set; }
+        
+        [Required(ErrorMessage = "Unit of measurement is required")]
+        public string Unit { get; set; } = string.Empty;
+        
         public bool Status { get; set; }
         public DateTime? CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }

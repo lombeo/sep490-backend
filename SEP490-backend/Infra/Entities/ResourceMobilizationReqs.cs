@@ -7,6 +7,12 @@ namespace Sep490_Backend.Infra.Entities
 {
     public class ResourceMobilizationReqs : CommonEntity
     {
+        public ResourceMobilizationReqs()
+        {
+            RequestCode = string.Empty;
+            ResourceMobilizationDetails = new List<RequestDetails>();
+        }
+        
         public int Id { get; set; }
         public string RequestCode { get; set; } //unique
         public int ProjectId { get; set; } //project
@@ -19,9 +25,9 @@ namespace Sep490_Backend.Infra.Entities
         public DateTime RequestDate { get; set; }
 
         // Navigation properties
-        public virtual Project Project { get; set; }
-        public virtual User Requester { get; set; }
-        public virtual User Approver { get; set; }
+        public virtual Project? Project { get; set; }
+        public virtual User? Requester { get; set; }
+        public virtual User? Approver { get; set; }
     }
 
     public static class ResourceMobilizationReqsConfiguration

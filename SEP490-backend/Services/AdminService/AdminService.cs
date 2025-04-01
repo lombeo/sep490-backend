@@ -74,53 +74,73 @@ namespace Sep490_Backend.Services.AdminService
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
 
-            var errors = new List<ResponseError>();
-
-            //Lấy user
+            // Verify user exists
             var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Id == model.Id && !u.Deleted);
             if (existingUser == null)
             {
                 throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
 
-            if (model.UserName.Contains(" "))
+            // Admin cannot modify other admins or themselves
+            if (existingUser.Id == actionBy || (existingUser.Id != actionBy && IsAdmin(existingUser.Id)))
             {
-                errors.Add(new ResponseError
-                {
-                    Message = Message.AuthenMessage.INVALID_USERNAME,
-                    Field = nameof(model.UserName).ToCamelCase()
-                });
+                throw new ApplicationException(Message.CommonMessage.NOT_ALLOWED);
             }
 
-            if(StaticVariable.UserMemory.FirstOrDefault(t => t.Username == model.UserName && existingUser.Username != model.UserName) != null)
+            var errors = new List<ResponseError>();
+
+            // Validate username
+            if (!string.IsNullOrEmpty(model.UserName))
             {
-                errors.Add(new ResponseError
+                if (model.UserName.Contains(" "))
                 {
-                    Message = Message.AuthenMessage.EXIST_USERNAME,
-                    Field = nameof(model.UserName).ToCamelCase()
-                });
+                    errors.Add(new ResponseError
+                    {
+                        Message = Message.AuthenMessage.INVALID_USERNAME,
+                        Field = nameof(model.UserName).ToCamelCase()
+                    });
+                }
+
+                // Check if username is already taken by another user
+                if (StaticVariable.UserMemory.FirstOrDefault(t => 
+                    t.Username == model.UserName && 
+                    t.Id != existingUser.Id) != null)
+                {
+                    errors.Add(new ResponseError
+                    {
+                        Message = Message.AuthenMessage.EXIST_USERNAME,
+                        Field = nameof(model.UserName).ToCamelCase()
+                    });
+                }
             }
 
-            if (StaticVariable.UserMemory.FirstOrDefault(t => t.Email == model.Email && existingUser.Email != model.Email) != null)
+            // Validate email
+            if (!string.IsNullOrEmpty(model.Email))
             {
-                errors.Add(new ResponseError
+                if (!Regex.IsMatch(model.Email, PatternConst.EMAIL_PATTERN))
                 {
-                    Message = Message.AuthenMessage.EXIST_EMAIL,
-                    Field = nameof(model.Email).ToCamelCase()
-                });
+                    errors.Add(new ResponseError
+                    {
+                        Message = Message.AuthenMessage.INVALID_EMAIL,
+                        Field = nameof(model.Email).ToCamelCase()
+                    });
+                }
+
+                // Check if email is already taken by another user
+                if (StaticVariable.UserMemory.FirstOrDefault(t => 
+                    t.Email == model.Email && 
+                    t.Id != existingUser.Id) != null)
+                {
+                    errors.Add(new ResponseError
+                    {
+                        Message = Message.AuthenMessage.EXIST_EMAIL,
+                        Field = nameof(model.Email).ToCamelCase()
+                    });
+                }
             }
 
-            if (!Regex.IsMatch(model.Email, PatternConst.EMAIL_PATTERN))
-            {
-                errors.Add(new ResponseError
-                {
-                    Message = Message.AuthenMessage.INVALID_EMAIL,
-                    Field = nameof(model.Email).ToCamelCase()
-                });
-            }
-
-            // Kiểm tra Role có hợp lệ không
-            if (!RoleConstValue.ValidRoles.Contains(model.Role))
+            // Validate role
+            if (!string.IsNullOrEmpty(model.Role) && !RoleConstValue.ValidRoles.Contains(model.Role))
             {
                 errors.Add(new ResponseError
                 {
@@ -129,27 +149,19 @@ namespace Sep490_Backend.Services.AdminService
                 });
             }
 
-            //Admin khoong the sua admin khac
-            if (existingUser.Id == actionBy || IsAdmin(existingUser.Id))
-            {
-                errors.Add(new ResponseError
-                {
-                    Message = Message.CommonMessage.NOT_ALLOWED,
-                    Field = nameof(model.Id).ToCamelCase()
-                });
-            }
-
             if (errors.Count > 0)
                 throw new ValidationException(errors);
 
-            //Cap nhat
-            existingUser.Username = model.UserName ?? existingUser.Username;
-            existingUser.Email = model.Email ?? existingUser.Email;
-            existingUser.Role = model.Role ?? existingUser.Role;
-            existingUser.IsVerify = model.IsVerify ? model.IsVerify : existingUser.IsVerify;
-            existingUser.FullName = model.FullName ?? existingUser.FullName;
+            // Update user properties
+            existingUser.Username = !string.IsNullOrEmpty(model.UserName) ? model.UserName : existingUser.Username;
+            existingUser.Email = !string.IsNullOrEmpty(model.Email) ? model.Email : existingUser.Email;
+            existingUser.Role = !string.IsNullOrEmpty(model.Role) ? model.Role : existingUser.Role;
+            existingUser.IsVerify = model.IsVerify.HasValue ? model.IsVerify.Value : existingUser.IsVerify;
+            existingUser.FullName = !string.IsNullOrEmpty(model.FullName) ? model.FullName : existingUser.FullName;
             existingUser.Phone = model.Phone ?? existingUser.Phone;
             existingUser.Gender = model.Gender ?? existingUser.Gender;
+            existingUser.Dob = model.Dob ?? existingUser.Dob;
+            existingUser.TeamId = model.TeamId ?? existingUser.TeamId;
             existingUser.UpdatedAt = DateTime.UtcNow;
             existingUser.Updater = actionBy;
 

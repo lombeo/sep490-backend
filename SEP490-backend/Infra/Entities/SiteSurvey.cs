@@ -5,6 +5,11 @@ namespace Sep490_Backend.Infra.Entities
 {
     public class SiteSurvey : CommonEntity
     {
+        public SiteSurvey()
+        {
+            SiteSurveyName = string.Empty;
+        }
+        
         public int Id { get; set; }
         public int ProjectId { get; set; }
         public string SiteSurveyName { get; set; }
@@ -28,7 +33,7 @@ namespace Sep490_Backend.Infra.Entities
         public DateTime SurveyDate { get; set; }
 
         // Navigation property
-        public virtual Project Project { get; set; }
+        public virtual Project? Project { get; set; }
     }
 
     public static class SiteSurveyConfiguration

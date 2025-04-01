@@ -1,13 +1,26 @@
-﻿namespace Sep490_Backend.DTO.Authen
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace Sep490_Backend.DTO.Authen
 {
 	public class SaveProfileDTO : BaseRequest
 	{
 		public int UserId { get; set; }
-		public string FullName { get; set; }
-		public string PhoneNumber { get; set; }
+		
+		[Required(ErrorMessage = "Full name is required")]
+		public string FullName { get; set; } = string.Empty;
+		
+		[Required(ErrorMessage = "Phone number is required")]
+		[Phone(ErrorMessage = "Invalid phone number format")]
+		public string PhoneNumber { get; set; } = string.Empty;
+		
 		public bool Gender { get; set; }
-		public string Address { get; set; }
-		public string PicProfile { get; set; }
+		
+		[Required(ErrorMessage = "Address is required for construction site personnel")]
+		public string Address { get; set; } = string.Empty;
+		
+		[Required(ErrorMessage = "Profile picture is required for identification")]
+		public string PicProfile { get; set; } = string.Empty;
+		
 		public DateTime Dob { get; set; }
 		public string? School { get; set; }
 		public string? WorkAt { get; set; }

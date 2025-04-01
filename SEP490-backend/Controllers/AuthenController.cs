@@ -32,10 +32,6 @@ namespace Sep490_Backend.Controllers
         [HttpPost("verify-otp")]
         public async Task<ResponseDTO<bool>> VerifyOTP([FromBody] VerifyOtpDTO model)
         {
-            if(UserId != 0)
-            {
-                model.UserId = UserId;
-            }
             return await HandleException(_authenService.VerifyOTP(model), Message.AuthenMessage.VERIFY_OTP_SUCCESS);
         }
 
@@ -66,13 +62,19 @@ namespace Sep490_Backend.Controllers
         }
 
         [HttpGet("user-profile-detail")]
-        public async Task<ResponseDTO<UserDTO>> UserProfileDetail([FromQuery] int userId)
+        public ResponseDTO<UserDTO> UserProfileDetail([FromQuery] int userId)
         {
-            return await HandleException(_authenService.UserProfileDetail(userId), Message.AuthenMessage.GET_USER_DETAIL_SUCCESS);
+            var result = _authenService.UserProfileDetail(userId);
+            return new ResponseDTO<UserDTO> 
+            { 
+                Success = true, 
+                Data = result, 
+                Message = Message.AuthenMessage.GET_USER_DETAIL_SUCCESS 
+            };
         }
 
         [HttpPut("update-profile")]
-        public async Task<ResponseDTO<UserDTO>> UpdateProfile([FromBody] UserUpdateProfileDTO model)
+        public async Task<ResponseDTO<UserDTO>> UpdateProfile([FromForm] UserUpdateProfileDTO model)
         {
             return await HandleException(_authenService.UpdateProfile(UserId, model), Message.AuthenMessage.UPDATE_PROFILE_SUCCESS);
         }

@@ -1,19 +1,46 @@
-﻿namespace Sep490_Backend.DTO.Customer
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace Sep490_Backend.DTO.Customer
 {
     public class CustomerDTO
     {
         public int Id { get; set; }
-        public string CustomerName { get; set; }
-        public string DirectorName { get; set; }
-        public string Phone { get; set; }
-        public string Email { get; set; }
-        public string Address { get; set; }
-        public string Description { get; set; }
-        public string CustomerCode { get; set; }
-        public string TaxCode { get; set; }
-        public string Fax { get; set; }
-        public string BankAccount { get; set; }
-        public string BankName { get; set; }
+        
+        [Required(ErrorMessage = "Customer name is required")]
+        public string CustomerName { get; set; } = string.Empty;
+        
+        [Required(ErrorMessage = "Director name is required")]
+        public string DirectorName { get; set; } = string.Empty;
+        
+        [Required(ErrorMessage = "Phone number is required")]
+        [Phone(ErrorMessage = "Invalid phone number format")]
+        public string Phone { get; set; } = string.Empty;
+        
+        [Required(ErrorMessage = "Email is required")]
+        [EmailAddress(ErrorMessage = "Invalid email format")]
+        public string Email { get; set; } = string.Empty;
+        
+        [Required(ErrorMessage = "Address is required")]
+        public string Address { get; set; } = string.Empty;
+        
+        [Required(ErrorMessage = "Description is required")]
+        public string Description { get; set; } = string.Empty;
+        
+        [Required(ErrorMessage = "Customer code is required")]
+        public string CustomerCode { get; set; } = string.Empty;
+        
+        [Required(ErrorMessage = "Tax code is required")]
+        public string TaxCode { get; set; } = string.Empty;
+        
+        [Required(ErrorMessage = "Fax number is required")]
+        public string Fax { get; set; } = string.Empty;
+        
+        [Required(ErrorMessage = "Bank account is required")]
+        public string BankAccount { get; set; } = string.Empty;
+        
+        [Required(ErrorMessage = "Bank name is required")]
+        public string BankName { get; set; } = string.Empty;
+        
         public DateTime? CreatedAt { get; set; }
         public int Creator { get; set; }
         public DateTime? UpdatedAt { get; set; }

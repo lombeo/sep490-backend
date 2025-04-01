@@ -607,7 +607,7 @@ namespace Sep490_Backend.Services.DataService
             return result;
         }
 
-        public async Task<List<User>> ListUser(AdminSearchUserDTO model)
+        public Task<List<User>> ListUser(AdminSearchUserDTO model)
         {
             var data = StaticVariable.UserMemory.ToList();
 
@@ -657,7 +657,7 @@ namespace Sep490_Backend.Services.DataService
                 // RefreshTokens and PasswordHash fields are intentionally not included
             }).ToList();
 
-            return secureData;
+            return Task.FromResult(secureData);
         }
 
         public async Task<List<Material>> ListMaterial(MaterialSearchDTO model)

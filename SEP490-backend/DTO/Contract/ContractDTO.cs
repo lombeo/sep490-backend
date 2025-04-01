@@ -2,15 +2,23 @@
 using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Infra.Enums;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace Sep490_Backend.DTO.Contract
 {
     public class ContractDTO : CommonEntity
     {
         public int Id { get; set; }
-        public string ContractCode { get; set; }
-        public string ContractName { get; set; }
-        public ProjectDTO Project { get; set; }
+        
+        [Required(ErrorMessage = "Contract code is required for construction project tracking")]
+        public string ContractCode { get; set; } = string.Empty;
+        
+        [Required(ErrorMessage = "Contract name is required for project identification")]
+        public string ContractName { get; set; } = string.Empty;
+        
+        [Required(ErrorMessage = "Project information is required")]
+        public ProjectDTO Project { get; set; } = new ProjectDTO();
+        
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
         public int EstimatedDays { get; set; }

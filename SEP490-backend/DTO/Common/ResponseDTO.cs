@@ -7,11 +7,13 @@ namespace Sep490_Backend.DTO.Common
         public ResponseDTO()
         {
             Errors = new List<ResponseError>();
+            Message = string.Empty;
+            Meta = new ResponseMeta();
         }
         [JsonProperty("code")]
         public int Code { get; set; } = (int)RESPONSE_CODE.OK;
         [JsonProperty("message")]
-        public string Message { get; set; }
+        public string Message { get; set; } = string.Empty;
         [JsonProperty("errors")]
         public IList<ResponseError> Errors { get; set; }
         [JsonProperty("data")]
@@ -28,28 +30,40 @@ namespace Sep490_Backend.DTO.Common
         public ResponseDTO(T data)
         {
             Data = data;
+            Errors = new List<ResponseError>();
+            Message = string.Empty;
+            Meta = new ResponseMeta();
         }
         public ResponseDTO(int code, string message)
         {
             Code = code;
-            Message = message;
+            Message = message ?? string.Empty;
+            Errors = new List<ResponseError>();
+            Meta = new ResponseMeta();
         }
 
         public ResponseDTO(int code, string message, List<ResponseError> errors)
         {
             Code = code;
-            Message = message;
-            Errors = errors;
+            Message = message ?? string.Empty;
+            Errors = errors ?? new List<ResponseError>();
+            Meta = new ResponseMeta();
         }
 
         public bool Deleted { get; internal set; }
     }
     public class ResponseError
     {
+        public ResponseError()
+        {
+            Message = string.Empty;
+            Field = string.Empty;
+        }
+        
         [JsonProperty("message")]
-        public string Message { get; set; }
+        public string Message { get; set; } = string.Empty;
         [JsonProperty("field")]
-        public string Field { get; set; }
+        public string Field { get; set; } = string.Empty;
     }
     public class ResponseMeta
     {

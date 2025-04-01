@@ -73,7 +73,7 @@ namespace Sep490_Backend.Services.CacheService
             await UpdateCache(msg);
         }
 
-        private async Task UpdateCache(PubSubMessage msg)
+        private Task UpdateCache(PubSubMessage msg)
         {
             //IDiscussionService _discussionService = _serviceProvider.GetService<IDiscussionService>();
             IAuthenService _authenService = _serviceProvider.GetService<IAuthenService>();
@@ -107,6 +107,8 @@ namespace Sep490_Backend.Services.CacheService
                     //    break;
 
             }
+            
+            return Task.CompletedTask;
         }
     }
 }
