@@ -1,12 +1,20 @@
-﻿namespace Sep490_Backend.DTO.Customer
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace Sep490_Backend.DTO.Customer
 {
     public class CustomerCreateDTO
     {
         public int? Id { get; set; }
+        
+        [Required(ErrorMessage = "Customer code is required for client identification")]
         public string CustomerCode { get; set; } = string.Empty;
+        
         public string? CustomerName { get; set; } = string.Empty;
         public string? Phone { get; set; }
-        public string TaxCode { get; set; }
+        
+        [Required(ErrorMessage = "Tax code is required for construction client registration")]
+        public string TaxCode { get; set; } = string.Empty;
+        
         public string? Fax { get; set; }
         public string? Address { get; set; }
         public string? Email { get; set; }

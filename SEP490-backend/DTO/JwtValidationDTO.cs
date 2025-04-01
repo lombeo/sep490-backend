@@ -1,10 +1,19 @@
-﻿namespace Sep490_Backend.DTO
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace Sep490_Backend.DTO
 {
     public class JwtValidationDTO
     {
-        public string ValidIssuer { get; set; }
-        public string ValidAudience { get; set; }
-        public string CertificatePath { get; set; }
-        public string CertificatePassword { get; set; }
+        [Required(ErrorMessage = "Valid issuer is required")]
+        public string ValidIssuer { get; set; } = string.Empty;
+        
+        [Required(ErrorMessage = "Valid audience is required")]
+        public string ValidAudience { get; set; } = string.Empty;
+        
+        [Required(ErrorMessage = "Certificate path is required")]
+        public string CertificatePath { get; set; } = string.Empty;
+        
+        [Required(ErrorMessage = "Certificate password is required")]
+        public string CertificatePassword { get; set; } = string.Empty;
     }
 }

@@ -1,16 +1,25 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Sep490_Backend.Infra.Enums;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace Sep490_Backend.DTO.Project
 {
     public class SaveProjectDTO
     {
         public int Id { get; set; }
-        public string ProjectCode { get; set; }
-        public string ProjectName { get; set; }
+        
+        [Required(ErrorMessage = "Project code is required")]
+        public string ProjectCode { get; set; } = string.Empty;
+        
+        [Required(ErrorMessage = "Project name is required")]
+        public string ProjectName { get; set; } = string.Empty;
+        
         public int CustomerId { get; set; }
-        public string ConstructType { get; set; }
+        
+        [Required(ErrorMessage = "Construction type is required")]
+        public string ConstructType { get; set; } = string.Empty;
+        
         public string? Location { get; set; }
         public string? Area { get; set; }
         public string? Purpose { get; set; }

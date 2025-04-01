@@ -16,6 +16,10 @@ using Sep490_Backend.Infra.Enums;
 using Sep490_Backend.Services.CacheService;
 using Sep490_Backend.Services.OTPService;
 using Sep490_Backend.Services.HelperService;
+using Sep490_Backend.Services.GoogleDriveService;
+using Sep490_Backend.DTO.Common;
+using Sep490_Backend.Infra.Helps;
+using Sep490_Backend.Controllers;
 
 namespace Sep490_Backend.Services.AuthenService
 {
@@ -30,7 +34,7 @@ namespace Sep490_Backend.Services.AuthenService
         Task<int> ForgetPassword(string email);
         Task<ReturnSignInDTO> SignIn(SignInDTO model);
         Task<string> Refresh(string refreshToken);
-        Task<UserDTO> UserProfileDetail(int actionBy);
+        UserDTO UserProfileDetail(int actionBy);
         Task<UserDTO> UpdateProfile(int actionBy, UserUpdateProfileDTO model);
     }
 
@@ -43,8 +47,9 @@ namespace Sep490_Backend.Services.AuthenService
         private readonly IOTPService _otpService;
         private readonly ICacheService _cacheService;
         private readonly IHelperService _helperService;
+        private readonly IGoogleDriveService _googleDriveService;
 
-        public AuthenService(IHelperService helperService, BackendContext context, IEmailService email, IPubSubService pubSubService, ILogger<AuthenService> logger, IOTPService otpService, ICacheService cacheService)
+        public AuthenService(IHelperService helperService, BackendContext context, IEmailService email, IPubSubService pubSubService, ILogger<AuthenService> logger, IOTPService otpService, ICacheService cacheService, IGoogleDriveService googleDriveService)
         {
             _context = context;
             _email = email;
@@ -53,6 +58,7 @@ namespace Sep490_Backend.Services.AuthenService
             _otpService = otpService;
             _cacheService = cacheService;
             _helperService = helperService;
+            _googleDriveService = googleDriveService;
         }
 
         public void InitUserMemory()
@@ -389,9 +395,9 @@ namespace Sep490_Backend.Services.AuthenService
             return GenerateAccessToken(user);
         }
 
-        public async Task<UserDTO> UserProfileDetail(int userId)
+        public UserDTO UserProfileDetail(int actionBy)
         {
-            var data = StaticVariable.UserMemory.FirstOrDefault(t => t.Id == userId);
+            var data = StaticVariable.UserMemory.FirstOrDefault(t => t.Id == actionBy);
             if(data == null)
             {
                 throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
@@ -409,49 +415,116 @@ namespace Sep490_Backend.Services.AuthenService
                 UpdatedAt = data.UpdatedAt,
                 CreatedAt = data.CreatedAt,
                 Creator = data.Creator,
-                Updater = data.Updater
+                Updater = data.Updater,
+                PicProfile = data.PicProfile,
+                Address = data.Address,
+                Dob = data.Dob
             };
         }
 
         public async Task<UserDTO> UpdateProfile(int actionBy, UserUpdateProfileDTO model)
         {
-            var data = StaticVariable.UserMemory.FirstOrDefault(t => t.Id == actionBy);
-            if (data == null)
+            var errors = new List<ResponseError>();
+
+            // Get user from database (not just memory) to ensure we can update it
+            var user = await _context.Users.FirstOrDefaultAsync(t => t.Id == actionBy && !t.Deleted);
+            if (user == null)
             {
                 throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
 
-            if (model.Username.Contains(" "))
+            // Validate username if being updated
+            if (!string.IsNullOrEmpty(model.Username))
             {
-                throw new ArgumentException(Message.AuthenMessage.INVALID_USERNAME);
+                if (model.Username.Contains(" "))
+                {
+                    errors.Add(new ResponseError
+                    {
+                        Message = Message.AuthenMessage.INVALID_USERNAME,
+                        Field = nameof(model.Username).ToCamelCase()
+                    });
+                }
+
+                if (StaticVariable.UserMemory.FirstOrDefault(t => t.Username == model.Username && t.Id != actionBy) != null)
+                {
+                    errors.Add(new ResponseError
+                    {
+                        Message = Message.AuthenMessage.EXIST_USERNAME,
+                        Field = nameof(model.Username).ToCamelCase()
+                    });
+                }
             }
 
-            if (StaticVariable.UserMemory.FirstOrDefault(t => t.Username == model.Username) != null)
+            if (errors.Count > 0)
+                throw new ValidationException(errors);
+
+            // Update profile picture if provided
+            if (model.PicProfile != null)
             {
-                throw new ApplicationException(Message.AuthenMessage.EXIST_USERNAME);
+                // Delete existing profile picture if any
+                if (!string.IsNullOrEmpty(user.PicProfile))
+                {
+                    try
+                    {
+                        // Extract file ID from the URL
+                        var fileId = user.PicProfile.Split("id=").Last().Split("&").First();
+                        await _googleDriveService.DeleteFile(fileId);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log the error but continue
+                        _logger.LogError($"Failed to delete old profile picture: {ex.Message}");
+                    }
+                }
+
+                // Upload new profile picture
+                using (var stream = model.PicProfile.OpenReadStream())
+                {
+                    var uploadResult = await _googleDriveService.UploadFile(
+                        stream,
+                        model.PicProfile.FileName,
+                        model.PicProfile.ContentType
+                    );
+
+                    // Store the URL
+                    user.PicProfile = uploadResult;
+                }
             }
 
-            data.Username = model.Username ?? data.Username;
-            data.FullName = model.FullName ?? data.FullName;
-            data.Phone = model.Phone ?? data.Phone;
-            data.Gender = model.Gender ?? data.Gender;
-            data.UpdatedAt = DateTime.UtcNow;
-            data.Updater = actionBy;
+            // Update user properties
+            user.Username = !string.IsNullOrEmpty(model.Username) ? model.Username : user.Username;
+            user.FullName = !string.IsNullOrEmpty(model.FullName) ? model.FullName : user.FullName;
+            user.Phone = !string.IsNullOrEmpty(model.Phone) ? model.Phone : user.Phone;
+            user.Gender = model.Gender ?? user.Gender;
+            user.Dob = model.Dob ?? user.Dob;
+            user.Address = !string.IsNullOrEmpty(model.Address) ? model.Address : user.Address;
+            user.UpdatedAt = DateTime.UtcNow;
+            user.Updater = actionBy;
 
+            _context.Update(user);
+            await _context.SaveChangesAsync();
+
+            // Update in-memory cache
+            TriggerUpdateUserMemory(user.Id);
+
+            // Return updated user information
             return new UserDTO
             {
-                UserId = data.Id,
-                Username = data.Username,
-                Email = data.Email,
-                Role = data.Role,
-                IsVerify = data.IsVerify,
-                FullName = data.FullName,
-                Phone = data.Phone,
-                Gender = data.Gender,
-                UpdatedAt = data.UpdatedAt,
-                CreatedAt = data.CreatedAt,
-                Creator = data.Creator,
-                Updater = data.Updater
+                UserId = user.Id,
+                Username = user.Username,
+                Email = user.Email,
+                Role = user.Role,
+                IsVerify = user.IsVerify,
+                FullName = user.FullName,
+                Phone = user.Phone,
+                Gender = user.Gender,
+                UpdatedAt = user.UpdatedAt,
+                CreatedAt = user.CreatedAt,
+                Creator = user.Creator,
+                Updater = user.Updater,
+                PicProfile = user.PicProfile,
+                Address = user.Address,
+                Dob = user.Dob
             };
         }
     }

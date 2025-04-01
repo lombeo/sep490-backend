@@ -18,7 +18,7 @@ namespace Sep490_Backend.Infra.Helps
             if (reader.TokenType == JsonTokenType.String)
             {
                 var jsonString = reader.GetString();
-                return System.Text.Json.JsonSerializer.Deserialize<Dictionary<int, bool>>(jsonString, options) ?? new Dictionary<int, bool>();
+                return System.Text.Json.JsonSerializer.Deserialize<Dictionary<int, bool>>(jsonString!, options) ?? new Dictionary<int, bool>();
             }
 
             using var doc = JsonDocument.ParseValue(ref reader);
@@ -60,7 +60,8 @@ namespace Sep490_Backend.Infra.Helps
 
         private static string ConvertToDatabase(Dictionary<int, bool> dictionary)
         {
-            if (dictionary == null || dictionary.Count == 0)
+            dictionary ??= new Dictionary<int, bool>();
+            if (dictionary.Count == 0)
             {
                 return "{}";
             }
@@ -77,7 +78,8 @@ namespace Sep490_Backend.Infra.Helps
             try
             {
                 // First try to deserialize as a standard dictionary
-                return Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<int, bool>>(value) ?? new Dictionary<int, bool>();
+                var result = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<int, bool>>(value);
+                return result ?? new Dictionary<int, bool>();
             }
             catch
             {

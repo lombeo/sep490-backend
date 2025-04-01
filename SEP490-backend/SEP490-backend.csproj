@@ -39,7 +39,6 @@
 		<PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
 		<PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
 		<PackageReference Include="System.Net.Sockets" Version="4.3.0" />
-		<PackageReference Include="Google.Apis.AnalyticsReporting.v4" Version="1.60.0.2484" />
 		<PackageReference Include="Google.Apis.Auth" Version="1.68.0" />
 		<PackageReference Include="Google.Apis.Drive.v3" Version="1.68.0.3544" />
 	</ItemGroup>

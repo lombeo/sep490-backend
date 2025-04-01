@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace Sep490_Backend.DTO.ResourceReqs
 {
     /// <summary>
@@ -5,7 +7,8 @@ namespace Sep490_Backend.DTO.ResourceReqs
     /// </summary>
     public class ApproveRequestDTO
     {
-        public string Comments { get; set; }
+        [Required(ErrorMessage = "Comments are required for approval")]
+        public string Comments { get; set; } = string.Empty;
     }
 
     /// <summary>
@@ -13,6 +16,7 @@ namespace Sep490_Backend.DTO.ResourceReqs
     /// </summary>
     public class RejectRequestDTO
     {
-        public string Reason { get; set; }
+        [Required(ErrorMessage = "Rejection reason is required")]
+        public string Reason { get; set; } = string.Empty;
     }
-} 
+}

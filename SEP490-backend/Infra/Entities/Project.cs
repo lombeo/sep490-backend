@@ -6,6 +6,16 @@ namespace Sep490_Backend.Infra.Entities
 {
     public class Project : CommonEntity
     {
+        public Project()
+        {
+            ProjectCode = string.Empty;
+            ProjectName = string.Empty;
+            SiteSurveys = new List<SiteSurvey>();
+            ConstructionPlans = new List<ConstructionPlan>();
+            ResourceMobilizationReqs = new List<ResourceMobilizationReqs>();
+            ProjectUsers = new List<ProjectUser>();
+        }
+
         public int Id { get; set; }
         public string ProjectCode { get; set; }
         public string ProjectName { get; set; }
@@ -23,8 +33,8 @@ namespace Sep490_Backend.Infra.Entities
         public string? Description { get; set; }
 
         // Navigation properties
-        public virtual Customer Customer { get; set; }
-        public virtual Contract Contract { get; set; }
+        public virtual Customer? Customer { get; set; }
+        public virtual Contract? Contract { get; set; }
         public virtual ICollection<SiteSurvey> SiteSurveys { get; set; }
         public virtual ICollection<ConstructionPlan> ConstructionPlans { get; set; }
         public virtual ICollection<ResourceMobilizationReqs> ResourceMobilizationReqs { get; set; }

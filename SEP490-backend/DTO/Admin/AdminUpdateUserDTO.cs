@@ -9,6 +9,8 @@
         public string? FullName { get; set; }
         public string? Phone { get; set; }
         public bool? Gender { get; set; }
-        public bool IsVerify { get; set; }
+        public bool? IsVerify { get; set; }
+        public DateTime? Dob { get; set; }
+        public int? TeamId { get; set; }
     }
 }

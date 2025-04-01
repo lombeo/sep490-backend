@@ -1,9 +1,16 @@
-﻿namespace Sep490_Backend.DTO
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace Sep490_Backend.DTO
 {
     public class RedisConfigDTO
     {
-        public string ConnectionString { get; set; }
-        public string PubSubConnection { get; set; }
-        public string PubSubChannel { get; set; }
+        [Required(ErrorMessage = "Redis connection string is required")]
+        public string ConnectionString { get; set; } = string.Empty;
+        
+        [Required(ErrorMessage = "Redis pubsub connection is required")]
+        public string PubSubConnection { get; set; } = string.Empty;
+        
+        [Required(ErrorMessage = "Redis pubsub channel is required")]
+        public string PubSubChannel { get; set; } = string.Empty;
     }
 }

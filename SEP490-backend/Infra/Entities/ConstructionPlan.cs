@@ -7,6 +7,16 @@ namespace Sep490_Backend.Infra.Entities
 {
     public class ConstructionPlan : CommonEntity
     {
+        public ConstructionPlan()
+        {
+            // Initialize non-nullable properties
+            PlanName = string.Empty;
+            ConstructPlanItems = new List<ConstructPlanItem>();
+            Reviewers = new List<User>();
+            // Project is a navigation property that will be initialized by EF Core
+            // when the entity is loaded from the database
+        }
+        
         public int Id { get; set; }
         public string PlanName { get; set; }
         
@@ -35,7 +45,7 @@ namespace Sep490_Backend.Infra.Entities
 
                 entity.Property(e => e.Reviewer)
                     .HasColumnType("jsonb")
-                    .HasConversion(new ReviewerDictionaryValueConverter());
+                    .HasConversion<string>(new ReviewerDictionaryValueConverter());
 
                 entity.Property(e => e.ProjectId)
                     .IsRequired();

@@ -6,7 +6,7 @@ namespace Sep490_Backend.Infra.ModelBinders
 {
     public class ContractDetailModelBinder : IModelBinder
     {
-        public async Task BindModelAsync(ModelBindingContext bindingContext)
+        public Task BindModelAsync(ModelBindingContext bindingContext)
         {
             if (bindingContext == null)
                 throw new ArgumentNullException(nameof(bindingContext));
@@ -21,7 +21,7 @@ namespace Sep490_Backend.Infra.ModelBinders
             {
                 // Không có dữ liệu nào được tìm thấy, trả về thất bại
                 bindingContext.Result = ModelBindingResult.Failed();
-                return;
+                return Task.CompletedTask;
             }
 
             var values = valueProviderResult.Values;
@@ -55,6 +55,7 @@ namespace Sep490_Backend.Infra.ModelBinders
 
             // Đặt kết quả vào binding context
             bindingContext.Result = ModelBindingResult.Success(result);
+            return Task.CompletedTask;
         }
     }
 

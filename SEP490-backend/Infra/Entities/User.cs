@@ -5,6 +5,26 @@ namespace Sep490_Backend.Infra.Entities
 {
     public class User : CommonEntity
     {
+        public User()
+        {
+            Username = string.Empty;
+            Email = string.Empty;
+            PasswordHash = string.Empty;
+            Role = string.Empty;
+            FullName = string.Empty;
+            Phone = string.Empty;
+            RefreshTokens = new List<RefreshToken>();
+            ProjectUsers = new List<ProjectUser>();
+            ResourceAllocations = new List<ConstructPlanItemDetail>();
+            ReviewedPlans = new List<ConstructionPlan>();
+            ConductedSurveys = new List<SiteSurvey>();
+            ApprovedSurveys = new List<SiteSurvey>();
+            RequestedMobilizations = new List<ResourceMobilizationReqs>();
+            ApprovedMobilizations = new List<ResourceMobilizationReqs>();
+            RequestedAllocations = new List<ResourceAllocationReqs>();
+            ApprovedAllocations = new List<ResourceAllocationReqs>();
+        }
+
         public int Id { get; set; }
         public string Username { get; set; }
         public string Email { get; set; }
@@ -16,12 +36,14 @@ namespace Sep490_Backend.Infra.Entities
         public DateTime Dob { get; set; }
         public bool IsVerify { get; set; }
         public int? TeamId { get; set; }  // Foreign key for membership in a team
+        public string? PicProfile { get; set; } // Profile picture URL
+        public string? Address { get; set; } // User address
         
         // Navigation properties
         public virtual ICollection<RefreshToken> RefreshTokens { get; set; }
         public virtual ICollection<ProjectUser> ProjectUsers { get; set; }
-        public virtual Vehicle Vehicle { get; set; }
-        public virtual ConstructionTeam Team { get; set; }
+        public virtual Vehicle? Vehicle { get; set; }
+        public virtual ConstructionTeam? Team { get; set; }
         public virtual ICollection<ConstructPlanItemDetail> ResourceAllocations { get; set; }
         public virtual ICollection<ConstructionPlan> ReviewedPlans { get; set; }
         public virtual ICollection<SiteSurvey> ConductedSurveys { get; set; }
@@ -53,6 +75,10 @@ namespace Sep490_Backend.Infra.Entities
                 entity.HasIndex(e => e.Gender);
                 entity.Property(e => e.Dob)
                       .HasColumnType("timestamp without time zone");
+                entity.Property(e => e.PicProfile)
+                      .IsRequired(false);
+                entity.Property(e => e.Address)
+                      .IsRequired(false);
                 entity.Property(e => e.Creator);
                 entity.Property(e => e.Updater);
 

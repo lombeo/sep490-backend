@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Sep490_Backend.Infra.Enums;
+using System.ComponentModel.DataAnnotations;
 
 namespace Sep490_Backend.DTO.ConstructionPlan
 {
@@ -15,7 +16,10 @@ namespace Sep490_Backend.DTO.ConstructionPlan
     public class SaveConstructionPlanDTO : BaseRequest
     {
         public int? Id { get; set; }
-        public string PlanName { get; set; }
+        
+        [Required(ErrorMessage = "Construction plan name is required")]
+        public string PlanName { get; set; } = string.Empty;
+        
         public int ProjectId { get; set; }
         public List<SaveConstructPlanItemDTO> PlanItems { get; set; } = new List<SaveConstructPlanItemDTO>();
         public List<int> ReviewerIds { get; set; } = new List<int>();
@@ -23,11 +27,20 @@ namespace Sep490_Backend.DTO.ConstructionPlan
 
     public class SaveConstructPlanItemDTO
     {
-        public string WorkCode { get; set; }
-        public string Index { get; set; }
+        [Required(ErrorMessage = "Work code is required for construction activity identification")]
+        public string WorkCode { get; set; } = string.Empty;
+        
+        [Required(ErrorMessage = "Index is required for proper ordering of construction tasks")]
+        public string Index { get; set; } = string.Empty;
+        
         public string? ParentIndex { get; set; }
-        public string WorkName { get; set; }
-        public string Unit { get; set; }
+        
+        [Required(ErrorMessage = "Work name is required for site leveling activity")]
+        public string WorkName { get; set; } = string.Empty;
+        
+        [Required(ErrorMessage = "Unit of measurement is required for construction materials")]
+        public string Unit { get; set; } = string.Empty;
+        
         public decimal Quantity { get; set; }
         public decimal UnitPrice { get; set; }
         public DateTime StartDate { get; set; }
@@ -39,7 +52,10 @@ namespace Sep490_Backend.DTO.ConstructionPlan
     public class SaveConstructPlanItemDetailDTO
     {
         public int? Id { get; set; }
-        public string WorkCode { get; set; }
+        
+        [Required(ErrorMessage = "Work code is required for resource allocation")]
+        public string WorkCode { get; set; } = string.Empty;
+        
         public ResourceType ResourceType { get; set; }
         public int Quantity { get; set; }
         public string? Unit { get; set; }
@@ -57,15 +73,23 @@ namespace Sep490_Backend.DTO.ConstructionPlan
     public class AssignTeamDTO : BaseRequest
     {
         public int PlanId { get; set; }
-        public string WorkCode { get; set; }
+        
+        [Required(ErrorMessage = "Work code is required for team assignment")]
+        public string WorkCode { get; set; } = string.Empty;
+        
         public List<int> TeamIds { get; set; } = new List<int>();
     }
 
     public class ImportConstructionPlanDTO : BaseRequest
     {
         public int ProjectId { get; set; }
-        public string PlanName { get; set; }
-        public IFormFile ExcelFile { get; set; }
+        
+        [Required(ErrorMessage = "Plan name is required for construction schedule")]
+        public string PlanName { get; set; } = string.Empty;
+        
+        [Required(ErrorMessage = "Excel file with construction plan is required")]
+        public IFormFile ExcelFile { get; set; } = null!;
+        
         public List<int> ReviewerIds { get; set; } = new List<int>();
     }
 } 

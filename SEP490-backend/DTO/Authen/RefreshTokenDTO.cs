@@ -1,4 +1,5 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.ComponentModel.DataAnnotations;
+using System.Runtime.InteropServices;
 
 namespace Sep490_Backend.DTO.Authen
 {
@@ -6,7 +7,10 @@ namespace Sep490_Backend.DTO.Authen
     {
         public int Id { get; set; }
         public int UserId { get; set; }
-        public string Token { get; set; }
+        
+        [Required(ErrorMessage = "Token is required for authentication renewal")]
+        public string Token { get; set; } = string.Empty;
+        
         public DateTime Expires { get; set; }
         public DateTime Created { get; set; } = DateTime.UtcNow;
         public DateTime? Revoked { get; set; } // Đã thu hồi

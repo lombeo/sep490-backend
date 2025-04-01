@@ -1,10 +1,19 @@
-﻿namespace Sep490_Backend.DTO
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace Sep490_Backend.DTO
 {
     public class AttachmentInfo
     {
-        public string Id { get; set; }
-        public string Name { get; set; }
-        public string WebViewLink { get; set; }
-        public string WebContentLink { get; set; }
+        [Required(ErrorMessage = "Attachment ID is required")]
+        public string Id { get; set; } = string.Empty;
+        
+        [Required(ErrorMessage = "Attachment name is required")]
+        public string Name { get; set; } = string.Empty;
+        
+        [Required(ErrorMessage = "Web view link is required")]
+        public string WebViewLink { get; set; } = string.Empty;
+        
+        [Required(ErrorMessage = "Web content link is required")]
+        public string WebContentLink { get; set; } = string.Empty;
     }
 }
