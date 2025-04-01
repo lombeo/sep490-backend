@@ -24,16 +24,19 @@ namespace Sep490_Backend.Services.ResourceReqService
         
         // Updated method signatures to use BaseQuery instead of PagedResponseDTO
         Task<List<ResourceMobilizationReqs>> ViewResourceMobilizationRequests(int projectId, RequestStatus? status, BaseQuery query);
+        Task<ResourceMobilizationReqs> GetResourceMobilizationRequestById(int id);
         Task<ResourceMobilizationReqs> SendResourceMobilizationRequest(int reqId, int actionBy);
         Task<ResourceMobilizationReqs> ApproveResourceMobilizationRequest(int reqId, string comments, int actionBy);
         Task<ResourceMobilizationReqs> RejectResourceMobilizationRequest(int reqId, string reason, int actionBy);
         
         Task<List<ResourceInventoryDTO>> ViewInventoryResources(ResourceType? type, BaseQuery query);
+        Task<ResourceInventoryDTO> GetInventoryResourceById(int id);
         Task<ResourceInventory> AddInventoryResource(AddResourceInventoryDTO model, int actionBy);
         Task<ResourceInventory> UpdateInventoryResource(UpdateResourceInventoryDTO model, int actionBy);
         Task<bool> DeleteInventoryResource(int resourceId, int actionBy);
         
         Task<List<ResourceAllocationReqs>> ViewResourceAllocationRequests(int? fromProjectId, int? toProjectId, RequestStatus? status, BaseQuery query);
+        Task<ResourceAllocationReqs> GetResourceAllocationRequestById(int id);
         Task<ResourceAllocationReqs> SendResourceAllocationRequest(int reqId, int actionBy);
         Task<ResourceAllocationReqs> ApproveResourceAllocationRequest(int reqId, string comments, int actionBy);
         Task<ResourceAllocationReqs> RejectResourceAllocationRequest(int reqId, string reason, int actionBy);
@@ -533,20 +536,23 @@ namespace Sep490_Backend.Services.ResourceReqService
         /// </summary>
         private async Task InvalidateResourceAllocationReqCache(int reqId, int fromProjectId, int toProjectId)
         {
-            // Invalidate specific request cache
+            // Delete specific request cache
             await _cacheService.DeleteAsync(string.Format(RedisCacheKey.ALLOCATION_REQ_CACHE_KEY, reqId));
             
-            // Invalidate project-specific request caches
+            // Delete request detail cache
+            await _cacheService.DeleteAsync(string.Format(RedisCacheKey.RESOURCE_ALLOCATION_REQ_BY_ID_CACHE_KEY, reqId));
+            
+            // Delete project-related caches
             await _cacheService.DeleteAsync(string.Format(RedisCacheKey.ALLOCATION_REQ_BY_PROJECT_CACHE_KEY, fromProjectId));
             await _cacheService.DeleteAsync(string.Format(RedisCacheKey.ALLOCATION_REQ_BY_PROJECT_CACHE_KEY, toProjectId));
             
-            // Invalidate list caches - since we don't know which page or filter was affected
+            // Delete list caches
             await _cacheService.DeleteAsync(RedisCacheKey.ALLOCATION_REQS_LIST_CACHE_KEY);
             await _cacheService.DeleteAsync(string.Format(RedisCacheKey.ALLOCATION_REQS_BY_FROM_PROJECT_LIST_CACHE_KEY, fromProjectId));
             await _cacheService.DeleteAsync(string.Format(RedisCacheKey.ALLOCATION_REQS_BY_TO_PROJECT_LIST_CACHE_KEY, toProjectId));
             
-            // Delete all status-based caches using pattern
-            foreach (RequestStatus status in Enum.GetValues(typeof(RequestStatus)))
+            // Clear status-based caches (all statuses to be safe)
+            foreach (var status in Enum.GetValues(typeof(RequestStatus)))
             {
                 await _cacheService.DeleteAsync(string.Format(RedisCacheKey.ALLOCATION_REQS_BY_STATUS_LIST_CACHE_KEY, status));
             }
@@ -557,18 +563,21 @@ namespace Sep490_Backend.Services.ResourceReqService
         /// </summary>
         private async Task InvalidateResourceMobilizationReqCache(int reqId, int projectId)
         {
-            // Invalidate specific request cache
+            // Delete specific request cache
             await _cacheService.DeleteAsync(string.Format(RedisCacheKey.MOBILIZATION_REQ_CACHE_KEY, reqId));
             
-            // Invalidate project-specific request caches
+            // Delete request detail cache
+            await _cacheService.DeleteAsync(string.Format(RedisCacheKey.RESOURCE_MOBILIZATION_REQ_BY_ID_CACHE_KEY, reqId));
+            
+            // Delete project-related cache
             await _cacheService.DeleteAsync(string.Format(RedisCacheKey.MOBILIZATION_REQ_BY_PROJECT_CACHE_KEY, projectId));
             
-            // Invalidate list caches - since we don't know which page or filter was affected
+            // Delete list caches
             await _cacheService.DeleteAsync(RedisCacheKey.MOBILIZATION_REQS_LIST_CACHE_KEY);
             await _cacheService.DeleteAsync(string.Format(RedisCacheKey.MOBILIZATION_REQS_BY_PROJECT_LIST_CACHE_KEY, projectId));
             
-            // Delete all status-based caches using pattern
-            foreach (RequestStatus status in Enum.GetValues(typeof(RequestStatus)))
+            // Clear status-based caches (all statuses to be safe)
+            foreach (var status in Enum.GetValues(typeof(RequestStatus)))
             {
                 await _cacheService.DeleteAsync(string.Format(RedisCacheKey.MOBILIZATION_REQS_BY_STATUS_LIST_CACHE_KEY, status));
             }
@@ -652,6 +661,41 @@ namespace Sep490_Backend.Services.ResourceReqService
             await _cacheService.SetAsync(cacheKey, (query.Total, items), TimeSpan.FromMinutes(15));
 
             return items;
+        }
+
+        /// <summary>
+        /// Gets a specific resource mobilization request by ID
+        /// </summary>
+        /// <param name="id">The ID of the request to retrieve</param>
+        /// <returns>The resource mobilization request if found</returns>
+        public async Task<ResourceMobilizationReqs> GetResourceMobilizationRequestById(int id)
+        {
+            // Check cache first
+            string cacheKey = string.Format(RedisCacheKey.RESOURCE_MOBILIZATION_REQ_BY_ID_CACHE_KEY, id);
+            var cachedResult = await _cacheService.GetAsync<ResourceMobilizationReqs>(cacheKey);
+            
+            if (cachedResult != null)
+            {
+                return cachedResult;
+            }
+            
+            // Get from database if not in cache
+            var request = await _context.ResourceMobilizationReqs
+                .Include(r => r.Project)
+                .Include(r => r.Requester)
+                .Include(r => r.Approver)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(r => r.Id == id && !r.Deleted);
+            
+            if (request == null)
+            {
+                throw new KeyNotFoundException($"Resource mobilization request with ID {id} not found");
+            }
+            
+            // Cache the result
+            await _cacheService.SetAsync(cacheKey, request, TimeSpan.FromMinutes(30));
+            
+            return request;
         }
 
         /// <summary>
@@ -946,6 +990,52 @@ namespace Sep490_Backend.Services.ResourceReqService
         }
 
         /// <summary>
+        /// Gets a specific resource inventory item by ID
+        /// </summary>
+        /// <param name="id">The ID of the resource to retrieve</param>
+        /// <returns>The resource inventory DTO if found</returns>
+        public async Task<ResourceInventoryDTO> GetInventoryResourceById(int id)
+        {
+            // Check cache first
+            string cacheKey = string.Format(RedisCacheKey.RESOURCE_INVENTORY_BY_ID_CACHE_KEY, id);
+            var cachedResult = await _cacheService.GetAsync<ResourceInventoryDTO>(cacheKey);
+            
+            if (cachedResult != null)
+            {
+                return cachedResult;
+            }
+            
+            // Get from database if not in cache
+            var resource = await _context.ResourceInventory
+                .AsNoTracking()
+                .FirstOrDefaultAsync(r => r.Id == id && !r.Deleted);
+            
+            if (resource == null)
+            {
+                throw new KeyNotFoundException($"Resource with ID {id} not found");
+            }
+            
+            // Map to DTO
+            var resourceDto = new ResourceInventoryDTO
+            {
+                Id = resource.Id,
+                Name = resource.Name,
+                Description = resource.Description,
+                ResourceType = resource.ResourceType,
+                Quantity = resource.Quantity,
+                Unit = resource.Unit,
+                Status = resource.Status,
+                CreatedAt = resource.CreatedAt,
+                UpdatedAt = resource.UpdatedAt
+            };
+            
+            // Cache the result
+            await _cacheService.SetAsync(cacheKey, resourceDto, TimeSpan.FromMinutes(30));
+            
+            return resourceDto;
+        }
+
+        /// <summary>
         /// Adds a new resource to inventory
         /// </summary>
         /// <param name="model">Data for the new inventory resource</param>
@@ -1166,8 +1256,13 @@ namespace Sep490_Backend.Services.ResourceReqService
 
         private async Task InvalidateResourceInventoryCache(int resourceId, ResourceType resourceType)
         {
+            // Delete specific resource cache
             await _cacheService.DeleteAsync(string.Format(RedisCacheKey.RESOURCE_INVENTORY_BY_ID_CACHE_KEY, resourceId));
+            
+            // Delete resource type cache
             await _cacheService.DeleteAsync(string.Format(RedisCacheKey.RESOURCE_INVENTORY_BY_TYPE_CACHE_KEY, resourceType));
+            
+            // Delete all resources cache
             await _cacheService.DeleteAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
         }
 
@@ -1260,6 +1355,42 @@ namespace Sep490_Backend.Services.ResourceReqService
             await _cacheService.SetAsync(cacheKey, (query.Total, items), TimeSpan.FromMinutes(15));
 
             return items;
+        }
+
+        /// <summary>
+        /// Gets a specific resource allocation request by ID
+        /// </summary>
+        /// <param name="id">The ID of the request to retrieve</param>
+        /// <returns>The resource allocation request if found</returns>
+        public async Task<ResourceAllocationReqs> GetResourceAllocationRequestById(int id)
+        {
+            // Check cache first
+            string cacheKey = string.Format(RedisCacheKey.RESOURCE_ALLOCATION_REQ_BY_ID_CACHE_KEY, id);
+            var cachedResult = await _cacheService.GetAsync<ResourceAllocationReqs>(cacheKey);
+            
+            if (cachedResult != null)
+            {
+                return cachedResult;
+            }
+            
+            // Get from database if not in cache
+            var request = await _context.ResourceAllocationReqs
+                .Include(r => r.FromProject)
+                .Include(r => r.ToProject)
+                .Include(r => r.Requester)
+                .Include(r => r.Approver)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(r => r.Id == id && !r.Deleted);
+            
+            if (request == null)
+            {
+                throw new KeyNotFoundException($"Resource allocation request with ID {id} not found");
+            }
+            
+            // Cache the result
+            await _cacheService.SetAsync(cacheKey, request, TimeSpan.FromMinutes(30));
+            
+            return request;
         }
 
         /// <summary>
