@@ -27,7 +27,6 @@ namespace Sep490_Backend.DTO.ConstructionPlan
 
     public class SaveConstructPlanItemDTO
     {
-        [Required(ErrorMessage = "Work code is required for construction activity identification")]
         public string WorkCode { get; set; } = string.Empty;
         
         [Required(ErrorMessage = "Index is required for proper ordering of construction tasks")]
@@ -53,7 +52,6 @@ namespace Sep490_Backend.DTO.ConstructionPlan
     {
         public int? Id { get; set; }
         
-        [Required(ErrorMessage = "Work code is required for resource allocation")]
         public string WorkCode { get; set; } = string.Empty;
         
         public ResourceType ResourceType { get; set; }

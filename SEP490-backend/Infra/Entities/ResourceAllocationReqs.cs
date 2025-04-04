@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Sep490_Backend.DTO.ResourceReqs;
 using Sep490_Backend.Infra.Enums;
 using System.Text.Json;
@@ -17,6 +17,7 @@ namespace Sep490_Backend.Infra.Entities
         public PriorityLevel PriorityLevel { get; set; }
         public RequestStatus Status { get; set; }
         public JsonDocument? Attachments { get; set; }
+        public DateTime RequestDate { get; set; }
 
         // Navigation properties
         public virtual Project FromProject { get; set; }
