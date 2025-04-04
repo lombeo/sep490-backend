@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 
 namespace Sep490_Backend.Infra.Entities
 {
@@ -79,6 +79,9 @@ namespace Sep490_Backend.Infra.Entities
                 entity.HasIndex(e => e.StartDate);
                 entity.HasIndex(e => e.EndDate);
 
+                // Create a unique index that scopes Index to PlanId
+                entity.HasIndex(e => new { e.PlanId, e.Index }).IsUnique();
+
                 // Relationships
                 entity.HasOne(e => e.ConstructionPlan)
                     .WithMany(cp => cp.ConstructPlanItems)
@@ -108,11 +111,11 @@ namespace Sep490_Backend.Infra.Entities
                             j.ToTable("ConstructionTeamPlanItems");
                         });
 
-                // One-to-many relationship with child items
+                // Modified: One-to-many relationship with child items using composite key
                 entity.HasMany(e => e.ChildItems)
                     .WithOne(e => e.ParentItem)
-                    .HasForeignKey(e => e.ParentIndex)
-                    .HasPrincipalKey(e => e.Index)
+                    .HasForeignKey("ParentIndex", "PlanId")
+                    .HasPrincipalKey("Index", "PlanId")
                     .OnDelete(DeleteBehavior.Restrict);
 
                 // One-to-many relationship with details

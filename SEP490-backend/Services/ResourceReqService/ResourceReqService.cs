@@ -182,6 +182,7 @@ namespace Sep490_Backend.Services.ResourceReqService
                     reqToUpdate.PriorityLevel = model.PriorityLevel;
                     reqToUpdate.Status = model.Status;
                     reqToUpdate.Attachments = model.Attachments;
+                    reqToUpdate.RequestDate = model.RequestDate;
                     
                     // Update audit fields
                     reqToUpdate.UpdatedAt = DateTime.UtcNow;
@@ -214,6 +215,7 @@ namespace Sep490_Backend.Services.ResourceReqService
                         PriorityLevel = model.PriorityLevel,
                         Status = RequestStatus.Draft, // New requests always start as Draft
                         Attachments = model.Attachments,
+                        RequestDate = model.RequestDate,
                         
                         // Set audit fields
                         Creator = actionBy,
