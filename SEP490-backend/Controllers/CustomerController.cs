@@ -46,7 +46,7 @@ namespace Sep490_Backend.Controllers
         }
 
         [HttpPut("update-customer")]
-        public async Task<ResponseDTO<Customer>> UpdateCustomer([FromBody] Customer model)
+        public async Task<ResponseDTO<Customer>> UpdateCustomer([FromBody] CustomerUpdateDTO model)
         {
             return await HandleException(_customerSerivce.UpdateCustomer(model, UserId), Message.CustomerMessage.UPDATE_CUSTOMER_SUCCESS);
         }

@@ -9,12 +9,13 @@ using Sep490_Backend.Services.CacheService;
 using Sep490_Backend.DTO.Common;
 using System.Text.RegularExpressions;
 using Sep490_Backend.Controllers;
+using Sep490_Backend.DTO.Material;
 
 namespace Sep490_Backend.Services.MaterialService
 {
     public interface IMaterialService
     {
-        Task<Material> SaveMaterial(Material model, int actionBy);
+        Task<Material> SaveMaterial(MaterialSaveDTO model, int actionBy);
         Task<bool> DeleteMaterial(int materialId, int actionBy);
     }
 
@@ -40,10 +41,10 @@ namespace Sep490_Backend.Services.MaterialService
         /// <summary>
         /// Creates or updates a material
         /// </summary>
-        /// <param name="model">Material model with data to save</param>
+        /// <param name="model">MaterialSaveDTO model with data to save</param>
         /// <param name="actionBy">ID of the user performing the action</param>
         /// <returns>The saved material entity</returns>
-        public async Task<Material> SaveMaterial(Material model, int actionBy)
+        public async Task<Material> SaveMaterial(MaterialSaveDTO model, int actionBy)
         {
             var errors = new List<ResponseError>();
 
@@ -74,7 +75,7 @@ namespace Sep490_Backend.Services.MaterialService
 
             // Check for duplicate MaterialCode
             var existingMaterial = await _context.Materials
-                .FirstOrDefaultAsync(m => m.MaterialCode == model.MaterialCode && m.Id != model.Id && !m.Deleted);
+                .FirstOrDefaultAsync(m => m.MaterialCode == model.MaterialCode && (model.Id == null || m.Id != model.Id) && !m.Deleted);
 
             if (existingMaterial != null)
             {
@@ -90,10 +91,10 @@ namespace Sep490_Backend.Services.MaterialService
                 throw new ValidationException(errors);
 
             // If ID is provided, update existing material
-            if (model.Id > 0)
+            if (model.Id.HasValue && model.Id.Value > 0)
             {
                 var materialToUpdate = await _context.Materials
-                    .FirstOrDefaultAsync(m => m.Id == model.Id && !m.Deleted);
+                    .FirstOrDefaultAsync(m => m.Id == model.Id.Value && !m.Deleted);
 
                 if (materialToUpdate == null)
                 {
@@ -109,11 +110,11 @@ namespace Sep490_Backend.Services.MaterialService
                 materialToUpdate.ChassisNumber = model.ChassisNumber;
                 materialToUpdate.WholesalePrice = model.WholesalePrice;
                 materialToUpdate.RetailPrice = model.RetailPrice;
-                materialToUpdate.Inventory = model.Inventory;
+                materialToUpdate.Inventory = model.Inventory ?? 0;
                 materialToUpdate.Attachment = model.Attachment;
                 materialToUpdate.ExpireDate = model.ExpireDate;
                 materialToUpdate.ProductionDate = model.ProductionDate;
-                materialToUpdate.Description = model.Description;
+                materialToUpdate.Description = model.Description ?? "";
                 
                 // Update audit fields
                 materialToUpdate.UpdatedAt = DateTime.Now;

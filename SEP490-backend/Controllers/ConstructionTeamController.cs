@@ -50,7 +50,7 @@ namespace Sep490_Backend.Controllers
         }
 
         [HttpPost("save")]
-        public async Task<ResponseDTO<ConstructionTeam>> Save([FromBody] ConstructionTeam model)
+        public async Task<ResponseDTO<ConstructionTeam>> Save([FromBody] ConstructionTeamSaveDTO model)
         {
             return await HandleException(_constructionTeamService.Save(model, UserId), Message.ConstructionTeamMessage.SAVE_SUCCESS);
         }

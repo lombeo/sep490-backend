@@ -7,6 +7,7 @@ using Sep490_Backend.Services.HelperService;
 using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.CacheService;
 using Sep490_Backend.DTO.Common;
+using Sep490_Backend.DTO.ConstructionTeam;
 using System.Text.Json;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -18,7 +19,7 @@ namespace Sep490_Backend.Services.ConstructionTeamService
 {
     public interface IConstructionTeamService
     {
-        Task<ConstructionTeam> Save(ConstructionTeam model, int actionBy);
+        Task<ConstructionTeam> Save(ConstructionTeamSaveDTO model, int actionBy);
         Task<bool> Delete(int teamId, int actionBy);
     }
 
@@ -44,10 +45,10 @@ namespace Sep490_Backend.Services.ConstructionTeamService
         /// <summary>
         /// Creates or updates a construction team
         /// </summary>
-        /// <param name="model">ConstructionTeam model with data to save</param>
+        /// <param name="model">ConstructionTeamSaveDTO model with data to save</param>
         /// <param name="actionBy">ID of the user performing the action</param>
         /// <returns>The saved construction team entity</returns>
-        public async Task<ConstructionTeam> Save(ConstructionTeam model, int actionBy)
+        public async Task<ConstructionTeam> Save(ConstructionTeamSaveDTO model, int actionBy)
         {
             var errors = new List<ResponseError>();
 
@@ -58,10 +59,10 @@ namespace Sep490_Backend.Services.ConstructionTeamService
             }
 
             // For update: verify that the user is the creator of the team
-            if (model.Id > 0)
+            if (model.Id.HasValue && model.Id.Value > 0)
             {
                 var existingTeam = await _context.ConstructionTeams
-                    .FirstOrDefaultAsync(t => t.Id == model.Id && !t.Deleted);
+                    .FirstOrDefaultAsync(t => t.Id == model.Id.Value && !t.Deleted);
                 
                 if (existingTeam != null && existingTeam.Creator != actionBy)
                 {
@@ -112,7 +113,7 @@ namespace Sep490_Backend.Services.ConstructionTeamService
                 
                 // Check if manager is already assigned to another team (except current team)
                 var existingTeam = await _context.ConstructionTeams
-                    .FirstOrDefaultAsync(t => t.TeamManager == model.TeamManager && t.Id != model.Id && !t.Deleted);
+                    .FirstOrDefaultAsync(t => t.TeamManager == model.TeamManager && (model.Id == null || t.Id != model.Id) && !t.Deleted);
                 
                 if (existingTeam != null)
                 {
@@ -126,7 +127,7 @@ namespace Sep490_Backend.Services.ConstructionTeamService
 
             // Check for duplicate team name
             var duplicateTeam = await _context.ConstructionTeams
-                .FirstOrDefaultAsync(t => t.TeamName == model.TeamName && t.Id != model.Id && !t.Deleted);
+                .FirstOrDefaultAsync(t => t.TeamName == model.TeamName && (model.Id == null || t.Id != model.Id) && !t.Deleted);
 
             if (duplicateTeam != null)
             {
@@ -147,11 +148,11 @@ namespace Sep490_Backend.Services.ConstructionTeamService
             try
             {
                 // If ID is provided, update existing team
-                if (model.Id > 0)
+                if (model.Id.HasValue && model.Id.Value > 0)
                 {
                     var teamToUpdate = await _context.ConstructionTeams
                         .Include(t => t.Members)
-                        .FirstOrDefaultAsync(t => t.Id == model.Id && !t.Deleted);
+                        .FirstOrDefaultAsync(t => t.Id == model.Id.Value && !t.Deleted);
 
                     if (teamToUpdate == null)
                     {
@@ -185,7 +186,7 @@ namespace Sep490_Backend.Services.ConstructionTeamService
                     // Update properties
                     teamToUpdate.TeamName = model.TeamName;
                     teamToUpdate.TeamManager = model.TeamManager;
-                    teamToUpdate.Description = model.Description;
+                    teamToUpdate.Description = model.Description ?? "";
                     
                     // Update audit fields
                     teamToUpdate.UpdatedAt = DateTime.Now;

@@ -21,7 +21,7 @@ namespace Sep490_Backend.Services.CustomerService
         Task<Customer> GetDetailCustomer(int customerId, int actionBy);
         Task<bool> DeleteCustomer(int customerId, int actionBy);
         Task<Customer> CreateCustomer(CustomerCreateDTO model, int actionBy);
-        Task<Customer> UpdateCustomer(Customer model, int actionBy);
+        Task<Customer> UpdateCustomer(CustomerUpdateDTO model, int actionBy);
     }
 
     public class CustomerService : ICustomerService
@@ -234,7 +234,7 @@ namespace Sep490_Backend.Services.CustomerService
             return customer;
         }
 
-        public async Task<Customer> UpdateCustomer(Customer model, int actionBy)
+        public async Task<Customer> UpdateCustomer(CustomerUpdateDTO model, int actionBy)
         {
             var errors = new List<ResponseError>();
             if (!_helperService.IsInRole(actionBy, RoleConstValue.BUSINESS_EMPLOYEE))
@@ -303,7 +303,6 @@ namespace Sep490_Backend.Services.CustomerService
                     Field = nameof(model.Email).ToCamelCase()
                 });
             }
-
 
             if (!string.IsNullOrWhiteSpace(model.Email) && data.FirstOrDefault(t => t.Email == model.Email && t.Id != model.Id) != null)
             {

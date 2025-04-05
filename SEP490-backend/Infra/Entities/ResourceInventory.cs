@@ -8,6 +8,8 @@ namespace Sep490_Backend.Infra.Entities
         public int Id { get; set; }
         public string Name { get; set; }
         public string Description { get; set; }
+        public int? ResourceId { get; set; }
+        public int? ProjectId { get; set; }
         public ResourceType ResourceType { get; set; }
         public int Quantity { get; set; }
         public string Unit { get; set; }
@@ -29,6 +31,12 @@ namespace Sep490_Backend.Infra.Entities
 
                 entity.Property(e => e.Description)
                     .HasColumnType("text");
+
+                entity.Property(e => e.ResourceId)
+                    .IsRequired(false);
+
+                entity.Property(e => e.ProjectId)
+                    .IsRequired(false);
 
                 entity.Property(e => e.ResourceType)
                     .IsRequired();
