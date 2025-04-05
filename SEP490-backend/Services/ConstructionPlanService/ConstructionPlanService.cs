@@ -92,13 +92,13 @@ namespace Sep490_Backend.Services.ConstructionPlanService
             };
 
             // Add reviewers
-            if (model.ReviewerIds != null && model.ReviewerIds.Any())
+            if (model.Reviewers != null && model.Reviewers.Any())
             {
                 // Initialize reviewers collection if it's null
                 constructionPlan.Reviewers = new List<User>();
 
                 // Add each reviewer to dictionary with default false (not approved)
-                foreach (var reviewerId in model.ReviewerIds)
+                foreach (var reviewerId in model.Reviewers)
                 {
                     var reviewer = await _context.Users.FirstOrDefaultAsync(u => u.Id == reviewerId && !u.Deleted);
                     if (reviewer != null)
@@ -263,7 +263,7 @@ namespace Sep490_Backend.Services.ConstructionPlanService
             constructionPlan.Updater = actionBy;
 
             // Update reviewers
-            if (model.ReviewerIds != null)
+            if (model.Reviewers != null)
             {
                 // Create a new dictionary for reviewers
                 var newReviewer = new Dictionary<int, bool>();
@@ -271,7 +271,7 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                 // Transfer existing approval statuses
                 if (constructionPlan.Reviewer != null)
                 {
-                    foreach (var reviewerId in model.ReviewerIds)
+                    foreach (var reviewerId in model.Reviewers)
                     {
                         if (constructionPlan.Reviewer.ContainsKey(reviewerId))
                         {
@@ -286,7 +286,7 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                 else
                 {
                     // Initialize with all false
-                    foreach (var reviewerId in model.ReviewerIds)
+                    foreach (var reviewerId in model.Reviewers)
                     {
                         newReviewer[reviewerId] = false;
                     }
@@ -304,7 +304,7 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                     constructionPlan.Reviewers.Clear();
                 }
                 
-                foreach (var reviewerId in model.ReviewerIds)
+                foreach (var reviewerId in model.Reviewers)
                 {
                     var reviewer = await _context.Users.FirstOrDefaultAsync(u => u.Id == reviewerId && !u.Deleted);
                     if (reviewer != null)
@@ -583,6 +583,7 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
         if (!resourceExists)
         {
             // Resource doesn't exist - exit silently without error
+            System.Diagnostics.Debug.WriteLine($"Resource not found: Type={resourceType}, Id={resourceId}");
             return;
         }
 
@@ -596,44 +597,84 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
             return; // Detail not found, nothing to do
         }
 
-        // CRITICAL FIX: Store resource metadata in Unit field to avoid FK issues
+        // Always store resource metadata in Unit field as a backup
         detail.Unit = $"Type={resourceType},Id={resourceId}|{detail.Unit}";
 
         // Set ResourceType normally
         detail.ResourceType = resourceType;
         
-        // Crucial step: Reset ResourceId to null first to detach from any existing FKs
-        detail.ResourceId = null;
-        
-        // Update using disconnected entity approach
-        _context.Update(detail);
-        await _context.SaveChangesAsync();
-        
-        // Now try to set the ResourceId in a separate step
-        // If this fails, we still have the metadata in Notes
-        try
+        // Handle different resource types properly using different approaches
+        if (resourceType == ResourceType.MATERIAL)
         {
-            // Refresh context to ensure clean state
-            _context.ChangeTracker.Clear();
+            // For materials, directly set the ResourceId and relationship
+            detail.ResourceId = resourceId;
             
-            // Find the entity again
-            var detailForUpdate = await _context.ConstructPlanItemDetails.FindAsync(detailId);
-            if (detailForUpdate != null)
+            // Update using disconnected entity approach
+            _context.Update(detail);
+            await _context.SaveChangesAsync();
+            
+            try {
+                // Explicitly create relationship with Material
+                var material = await _context.Materials.FindAsync(resourceId);
+                if (material != null)
+                {
+                    // Ensure material has the collection initialized
+                    if (material.ConstructPlanItemDetails == null)
+                    {
+                        material.ConstructPlanItemDetails = new List<ConstructPlanItemDetail>();
+                    }
+                    
+                    // Add reference if not already there
+                    if (!material.ConstructPlanItemDetails.Any(d => d.Id == detailId))
+                    {
+                        material.ConstructPlanItemDetails.Add(detail);
+                        _context.Update(material);
+                        await _context.SaveChangesAsync();
+                    }
+                }
+            }
+            catch (Exception ex)
             {
-                // CRITICAL: Use direct update approach with minimal tracking
-                detailForUpdate.ResourceId = resourceId;
-                _context.Entry(detailForUpdate).Property("ResourceId").IsModified = true;
-                
-                // Save only this change
-                await _context.SaveChangesAsync();
-                
-                // Immediately detach to avoid future issues
-                _context.Entry(detailForUpdate).State = EntityState.Detached;
+                // Log the error but continue since we already set ResourceId
+                System.Diagnostics.Debug.WriteLine($"Error creating Material relationship: {ex.Message}");
             }
         }
-        catch (Exception)
+        else
         {
-            // Silently handle FK errors - we already have the data in Notes
+            // For other resource types, use the original approach
+            // Crucial step: Reset ResourceId to null first to detach from any existing FKs
+            detail.ResourceId = null;
+            
+            // Update using disconnected entity approach
+            _context.Update(detail);
+            await _context.SaveChangesAsync();
+            
+            // Now try to set the ResourceId in a separate step
+            try
+            {
+                // Refresh context to ensure clean state
+                _context.ChangeTracker.Clear();
+                
+                // Find the entity again
+                var detailForUpdate = await _context.ConstructPlanItemDetails.FindAsync(detailId);
+                if (detailForUpdate != null)
+                {
+                    // CRITICAL: Use direct update approach with minimal tracking
+                    detailForUpdate.ResourceId = resourceId;
+                    _context.Entry(detailForUpdate).Property("ResourceId").IsModified = true;
+                    
+                    // Save only this change
+                    await _context.SaveChangesAsync();
+                    
+                    // Immediately detach to avoid future issues
+                    _context.Entry(detailForUpdate).State = EntityState.Detached;
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log error but continue - we still have the data in Unit field
+                System.Diagnostics.Debug.WriteLine($"Failed to set ResourceId: {ex.Message}");
+            }
         }
     }
     catch (Exception ex)

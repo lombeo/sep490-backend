@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Sep490_Backend.DTO.ResourceReqs;
@@ -14,9 +15,11 @@ using Sep490_Backend.Infra;
 namespace Sep490_Backend.Migrations
 {
     [DbContext(typeof(BackendContext))]
-    partial class BackendContextModelSnapshot : ModelSnapshot
+    [Migration("20250405075804_AddRequestDateToResourceReqs")]
+    partial class AddRequestDateToResourceReqs
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -927,13 +930,7 @@ namespace Sep490_Backend.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
-                    b.Property<int?>("ProjectId")
-                        .HasColumnType("integer");
-
                     b.Property<int>("Quantity")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("ResourceId")
                         .HasColumnType("integer");
 
                     b.Property<int>("ResourceType")

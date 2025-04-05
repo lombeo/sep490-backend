@@ -22,7 +22,7 @@ namespace Sep490_Backend.DTO.ConstructionPlan
         
         public int ProjectId { get; set; }
         public List<SaveConstructPlanItemDTO> PlanItems { get; set; } = new List<SaveConstructPlanItemDTO>();
-        public List<int> ReviewerIds { get; set; } = new List<int>();
+        public List<int> Reviewers { get; set; } = new List<int>();
     }
 
     public class SaveConstructPlanItemDTO

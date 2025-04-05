@@ -8,6 +8,7 @@ using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.MaterialService;
 using Sep490_Backend.Services.SiteSurveyService;
+using Microsoft.Extensions.Logging;
 
 namespace Sep490_Backend.Controllers
 {
@@ -18,11 +19,15 @@ namespace Sep490_Backend.Controllers
     {
         private readonly IMaterialService _materialService;
         private readonly IDataService _dataService;
-        public MaterialController(IMaterialService materialService, IDataService dataService)
+        private readonly ILogger<MaterialController> _logger;
+
+        public MaterialController(IMaterialService materialService, IDataService dataService, ILogger<MaterialController> logger)
         {
             _materialService = materialService;
             _dataService = dataService;
+            _logger = logger;
         }
+
         [HttpGet("search")]
         public async Task<ResponseDTO<List<Material>>> Search([FromQuery] MaterialSearchDTO model)
         {
@@ -33,17 +38,17 @@ namespace Sep490_Backend.Controllers
         }
 
         [HttpDelete("delete/{id}")]
-        public async Task<ResponseDTO<bool>> Delete(int id)
+        public async Task<ResponseDTO<bool>> DeleteMaterial(int id)
         {
-            var result = await HandleException(_materialService.DeleteMaterial(id, UserId), Message.SiteSurveyMessage.DELETE_SUCCESS);
-            return result;
+            _logger.LogInformation($"Deleting material with ID: {id}");
+            return await HandleException(_materialService.DeleteMaterial(id, UserId), Message.MaterialMessage.DELETE_SUCCESS);
         }
 
         [HttpPost("save")]
-        public async Task<ResponseDTO<Material>> SaveSiteSurvey([FromForm] Material model)
+        public async Task<ResponseDTO<Material>> SaveMaterial([FromBody] MaterialSaveDTO model)
         {
-            var result = await HandleException(_materialService.SaveMaterial(model, UserId), Message.SiteSurveyMessage.SAVE_SUCCESS);
-            return result;
+            _logger.LogInformation($"Saving material: {model.MaterialCode}");
+            return await HandleException(_materialService.SaveMaterial(model, UserId), Message.MaterialMessage.SAVE_SUCCESS);
         }
     }
 }

@@ -23,7 +23,7 @@ namespace Sep490_Backend.Services.ResourceReqService
         Task<bool> DeleteResourceMobilizationReq(int reqId, int actionBy);
         
         // Updated method signatures to use BaseQuery instead of PagedResponseDTO
-        Task<List<ResourceMobilizationReqs>> ViewResourceMobilizationRequests(int projectId, RequestStatus? status, BaseQuery query);
+        Task<List<ResourceMobilizationReqs>> ViewResourceMobilizationRequests(int projectId, RequestStatus? status, string? searchTerm, BaseQuery query);
         Task<ResourceMobilizationReqs> GetResourceMobilizationRequestById(int id);
         Task<ResourceMobilizationReqs> SendResourceMobilizationRequest(int reqId, int actionBy);
         Task<ResourceMobilizationReqs> ApproveResourceMobilizationRequest(int reqId, string comments, int actionBy);
@@ -35,7 +35,7 @@ namespace Sep490_Backend.Services.ResourceReqService
         Task<ResourceInventory> UpdateInventoryResource(UpdateResourceInventoryDTO model, int actionBy);
         Task<bool> DeleteInventoryResource(int resourceId, int actionBy);
         
-        Task<List<ResourceAllocationReqs>> ViewResourceAllocationRequests(int? fromProjectId, int? toProjectId, RequestStatus? status, BaseQuery query);
+        Task<List<ResourceAllocationReqs>> ViewResourceAllocationRequests(int? fromProjectId, int? toProjectId, RequestStatus? status, string? searchTerm, BaseQuery query);
         Task<ResourceAllocationReqs> GetResourceAllocationRequestById(int id);
         Task<ResourceAllocationReqs> SendResourceAllocationRequest(int reqId, int actionBy);
         Task<ResourceAllocationReqs> ApproveResourceAllocationRequest(int reqId, string comments, int actionBy);
@@ -78,7 +78,7 @@ namespace Sep490_Backend.Services.ResourceReqService
             var errors = new List<ResponseError>();
 
             // For updates, verify the user is the creator
-            if (model.Id.HasValue)
+            if (model.Id.HasValue && model.Id.Value > 0)
             {
                 var existingReq = await _context.ResourceAllocationReqs
                     .FirstOrDefaultAsync(r => r.Id == model.Id.Value && !r.Deleted);
@@ -156,7 +156,7 @@ namespace Sep490_Backend.Services.ResourceReqService
 
             try
             {
-                if (model.Id.HasValue)
+                if (model.Id.HasValue && model.Id.Value > 0)
                 {
                     // Update existing resource allocation request
                     var reqToUpdate = await _context.ResourceAllocationReqs
@@ -592,10 +592,11 @@ namespace Sep490_Backend.Services.ResourceReqService
         /// </summary>
         /// <param name="projectId">Optional filter by project ID</param>
         /// <param name="status">Optional filter by request status</param>
+        /// <param name="searchTerm">Optional search by request code or request name</param>
         /// <param name="query">BaseQuery object containing pagination parameters</param>
         /// <returns>List of resource mobilization requests</returns>
         public async Task<List<ResourceMobilizationReqs>> ViewResourceMobilizationRequests(
-            int projectId, RequestStatus? status, BaseQuery query)
+            int projectId, RequestStatus? status, string? searchTerm, BaseQuery query)
         {
             // Check authorization - this method is accessible by both Resource Manager, Technical Department, and Executive Board
             if (!_helperService.IsInRole(query.ActionBy, RoleConstValue.RESOURCE_MANAGER) && 
@@ -607,10 +608,23 @@ namespace Sep490_Backend.Services.ResourceReqService
 
             // Build cache key based on parameters
             string cacheKey;
-            if (projectId > 0 && status.HasValue)
+            if (projectId > 0 && status.HasValue && !string.IsNullOrEmpty(searchTerm))
+            {
+                cacheKey = $"{RedisCacheKey.MOBILIZATION_REQS_BY_PROJECT_LIST_CACHE_KEY}:{status.Value}:SEARCH:{searchTerm}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+                cacheKey = string.Format(cacheKey, projectId);
+            }
+            else if (projectId > 0 && status.HasValue)
             {
                 cacheKey = $"{RedisCacheKey.MOBILIZATION_REQS_BY_PROJECT_LIST_CACHE_KEY}:{status.Value}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
                 cacheKey = string.Format(cacheKey, projectId);
+            }
+            else if (projectId > 0 && !string.IsNullOrEmpty(searchTerm))
+            {
+                cacheKey = string.Format(RedisCacheKey.MOBILIZATION_REQS_BY_PROJECT_LIST_CACHE_KEY, projectId) + $":SEARCH:{searchTerm}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+            }
+            else if (status.HasValue && !string.IsNullOrEmpty(searchTerm))
+            {
+                cacheKey = string.Format(RedisCacheKey.MOBILIZATION_REQS_BY_STATUS_LIST_CACHE_KEY, status.Value) + $":SEARCH:{searchTerm}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
             }
             else if (projectId > 0)
             {
@@ -619,6 +633,10 @@ namespace Sep490_Backend.Services.ResourceReqService
             else if (status.HasValue)
             {
                 cacheKey = string.Format(RedisCacheKey.MOBILIZATION_REQS_BY_STATUS_LIST_CACHE_KEY, status.Value) + $":PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+            }
+            else if (!string.IsNullOrEmpty(searchTerm))
+            {
+                cacheKey = $"{RedisCacheKey.MOBILIZATION_REQS_LIST_CACHE_KEY}:SEARCH:{searchTerm}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
             }
             else
             {
@@ -647,6 +665,14 @@ namespace Sep490_Backend.Services.ResourceReqService
             if (status.HasValue)
             {
                 dbQuery = dbQuery.Where(r => r.Status == status.Value);
+            }
+
+            if (!string.IsNullOrEmpty(searchTerm))
+            {
+                var searchTermLower = searchTerm.ToLower();
+                dbQuery = dbQuery.Where(r => 
+                    r.RequestCode.ToLower().Contains(searchTermLower) || 
+                    (r.RequestName != null && r.RequestName.ToLower().Contains(searchTermLower)));
             }
 
             // Get total count for pagination
@@ -796,7 +822,9 @@ namespace Sep490_Backend.Services.ResourceReqService
                 throw new InvalidOperationException(Message.ResourceRequestMessage.NOT_WAITING_FOR_APPROVAL);
             }
 
-            if (isExecutiveBoard && request.Status != RequestStatus.ManagerApproved)
+            // Fix: Only check this condition when the user is Executive Board but not also Technical Department
+            // This handles cases where a user might have multiple roles
+            if (isExecutiveBoard && !isTechnicalDepartment && request.Status != RequestStatus.ManagerApproved)
             {
                 throw new InvalidOperationException(Message.ResourceRequestMessage.NOT_WAITING_FOR_APPROVAL);
             }
@@ -807,11 +835,11 @@ namespace Sep490_Backend.Services.ResourceReqService
             try
             {
                 // Update request status based on who is approving
-                if (isTechnicalDepartment)
+                if (isTechnicalDepartment && request.Status == RequestStatus.WaitManagerApproval)
                 {
                     request.Status = RequestStatus.ManagerApproved;
                 }
-                else if (isExecutiveBoard)
+                else if (isExecutiveBoard && request.Status == RequestStatus.ManagerApproved)
                 {
                     request.Status = RequestStatus.BodApproved;
                 }
@@ -875,7 +903,8 @@ namespace Sep490_Backend.Services.ResourceReqService
                 throw new InvalidOperationException(Message.ResourceRequestMessage.NOT_WAITING_FOR_APPROVAL);
             }
 
-            if (isExecutiveBoard && request.Status != RequestStatus.ManagerApproved)
+            // Fix: Only check this condition when the user is Executive Board but not also Technical Department
+            if (isExecutiveBoard && !isTechnicalDepartment && request.Status != RequestStatus.ManagerApproved)
             {
                 throw new InvalidOperationException(Message.ResourceRequestMessage.NOT_WAITING_FOR_APPROVAL);
             }
@@ -976,6 +1005,8 @@ namespace Sep490_Backend.Services.ResourceReqService
                     Id = r.Id,
                     Name = r.Name,
                     Description = r.Description,
+                    ResourceId = r.ResourceId,
+                    ProjectId = r.ProjectId,
                     ResourceType = r.ResourceType,
                     Quantity = r.Quantity,
                     Unit = r.Unit,
@@ -1023,6 +1054,8 @@ namespace Sep490_Backend.Services.ResourceReqService
                 Id = resource.Id,
                 Name = resource.Name,
                 Description = resource.Description,
+                ResourceId = resource.ResourceId,
+                ProjectId = resource.ProjectId,
                 ResourceType = resource.ResourceType,
                 Quantity = resource.Quantity,
                 Unit = resource.Unit,
@@ -1087,6 +1120,8 @@ namespace Sep490_Backend.Services.ResourceReqService
                 {
                     Name = model.Name,
                     Description = model.Description,
+                    ResourceId = model.ResourceId,
+                    ProjectId = model.ProjectId,
                     ResourceType = model.ResourceType,
                     Quantity = model.Quantity,
                     Unit = model.Unit,
@@ -1176,6 +1211,8 @@ namespace Sep490_Backend.Services.ResourceReqService
                 // Update properties
                 resource.Name = model.Name;
                 resource.Description = model.Description;
+                resource.ResourceId = model.ResourceId;
+                resource.ProjectId = model.ProjectId;
                 resource.ResourceType = model.ResourceType;
                 resource.Quantity = model.Quantity;
                 resource.Unit = model.Unit;
@@ -1278,10 +1315,11 @@ namespace Sep490_Backend.Services.ResourceReqService
         /// <param name="fromProjectId">Optional filter by source project ID</param>
         /// <param name="toProjectId">Optional filter by destination project ID</param>
         /// <param name="status">Optional filter by request status</param>
+        /// <param name="searchTerm">Optional search by request code or request name</param>
         /// <param name="query">BaseQuery object containing pagination parameters</param>
         /// <returns>List of resource allocation requests</returns>
         public async Task<List<ResourceAllocationReqs>> ViewResourceAllocationRequests(
-            int? fromProjectId, int? toProjectId, RequestStatus? status, BaseQuery query)
+            int? fromProjectId, int? toProjectId, RequestStatus? status, string? searchTerm, BaseQuery query)
         {
             // Check authorization - this method is accessible by both Resource Manager, Technical Department, and Executive Board
             if (!_helperService.IsInRole(query.ActionBy, RoleConstValue.RESOURCE_MANAGER) && 
@@ -1309,6 +1347,11 @@ namespace Sep490_Backend.Services.ResourceReqService
             if (status.HasValue)
             {
                 cacheKey = $"{cacheKey}:STATUS:{status.Value}";
+            }
+
+            if (!string.IsNullOrEmpty(searchTerm))
+            {
+                cacheKey = $"{cacheKey}:SEARCH:{searchTerm}";
             }
             
             cacheKey = $"{cacheKey}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
@@ -1341,6 +1384,14 @@ namespace Sep490_Backend.Services.ResourceReqService
             if (status.HasValue)
             {
                 dbQuery = dbQuery.Where(r => r.Status == status.Value);
+            }
+
+            if (!string.IsNullOrEmpty(searchTerm))
+            {
+                var searchTermLower = searchTerm.ToLower();
+                dbQuery = dbQuery.Where(r => 
+                    r.RequestCode.ToLower().Contains(searchTermLower) || 
+                    (r.RequestName != null && r.RequestName.ToLower().Contains(searchTermLower)));
             }
 
             // Get total count for pagination
@@ -1491,7 +1542,9 @@ namespace Sep490_Backend.Services.ResourceReqService
                 throw new InvalidOperationException(Message.ResourceRequestMessage.NOT_WAITING_FOR_APPROVAL);
             }
 
-            if (isExecutiveBoard && request.Status != RequestStatus.ManagerApproved)
+            // Fix: Only check this condition when the user is Executive Board but not also Technical Department
+            // This handles cases where a user might have multiple roles
+            if (isExecutiveBoard && !isTechnicalDepartment && request.Status != RequestStatus.ManagerApproved)
             {
                 throw new InvalidOperationException(Message.ResourceRequestMessage.NOT_WAITING_FOR_APPROVAL);
             }
@@ -1502,11 +1555,11 @@ namespace Sep490_Backend.Services.ResourceReqService
             try
             {
                 // Update request status based on who is approving
-                if (isTechnicalDepartment)
+                if (isTechnicalDepartment && request.Status == RequestStatus.WaitManagerApproval)
                 {
                     request.Status = RequestStatus.ManagerApproved;
                 }
-                else if (isExecutiveBoard)
+                else if (isExecutiveBoard && request.Status == RequestStatus.ManagerApproved)
                 {
                     request.Status = RequestStatus.BodApproved;
                 }
@@ -1570,7 +1623,8 @@ namespace Sep490_Backend.Services.ResourceReqService
                 throw new InvalidOperationException(Message.ResourceRequestMessage.NOT_WAITING_FOR_APPROVAL);
             }
 
-            if (isExecutiveBoard && request.Status != RequestStatus.ManagerApproved)
+            // Fix: Only check this condition when the user is Executive Board but not also Technical Department
+            if (isExecutiveBoard && !isTechnicalDepartment && request.Status != RequestStatus.ManagerApproved)
             {
                 throw new InvalidOperationException(Message.ResourceRequestMessage.NOT_WAITING_FOR_APPROVAL);
             }

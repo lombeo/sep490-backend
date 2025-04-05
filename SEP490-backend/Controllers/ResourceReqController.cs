@@ -57,6 +57,7 @@ namespace Sep490_Backend.Controllers
         /// </summary>
         /// <param name="projectId">Optional filter by project ID</param>
         /// <param name="status">Optional filter by request status</param>
+        /// <param name="searchTerm">Optional search by request code or request name</param>
         /// <param name="pageIndex">Page number for pagination (default: 1)</param>
         /// <param name="pageSize">Page size for pagination (default: 10)</param>
         /// <returns>List of resource mobilization requests</returns>
@@ -64,6 +65,7 @@ namespace Sep490_Backend.Controllers
         public async Task<ResponseDTO<List<ResourceMobilizationReqs>>> GetResourceMobilizationRequests(
             [FromQuery] int projectId = 0,
             [FromQuery] RequestStatus? status = null,
+            [FromQuery] string? searchTerm = null,
             [FromQuery] int pageIndex = 1,
             [FromQuery] int pageSize = 10)
         {
@@ -75,7 +77,7 @@ namespace Sep490_Backend.Controllers
             };
             
             var result = await HandleException(
-                _resourceReqService.ViewResourceMobilizationRequests(projectId, status, query),
+                _resourceReqService.ViewResourceMobilizationRequests(projectId, status, searchTerm, query),
                 Message.CommonMessage.ACTION_SUCCESS
             );
             
@@ -282,6 +284,7 @@ namespace Sep490_Backend.Controllers
         /// <param name="fromProjectId">Optional filter by source project ID</param>
         /// <param name="toProjectId">Optional filter by destination project ID</param>
         /// <param name="status">Optional filter by request status</param>
+        /// <param name="searchTerm">Optional search by request code or request name</param>
         /// <param name="pageIndex">Page number for pagination (default: 1)</param>
         /// <param name="pageSize">Page size for pagination (default: 10)</param>
         /// <returns>List of resource allocation requests</returns>
@@ -290,6 +293,7 @@ namespace Sep490_Backend.Controllers
             [FromQuery] int? fromProjectId = null,
             [FromQuery] int? toProjectId = null,
             [FromQuery] RequestStatus? status = null,
+            [FromQuery] string? searchTerm = null,
             [FromQuery] int pageIndex = 1,
             [FromQuery] int pageSize = 10)
         {
@@ -301,7 +305,7 @@ namespace Sep490_Backend.Controllers
             };
             
             var result = await HandleException(
-                _resourceReqService.ViewResourceAllocationRequests(fromProjectId, toProjectId, status, query),
+                _resourceReqService.ViewResourceAllocationRequests(fromProjectId, toProjectId, status, searchTerm, query),
                 Message.CommonMessage.ACTION_SUCCESS
             );
             
