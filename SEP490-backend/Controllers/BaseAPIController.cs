@@ -168,4 +168,15 @@ namespace Sep490_Backend.Controllers
             Errors = errors;
         }
     }
+    
+    public class ApiException : Exception
+    {
+        public string ErrorCode { get; }
+        
+        public ApiException(string errorCode, string message) 
+            : base(message)
+        {
+            ErrorCode = errorCode;
+        }
+    }
 }

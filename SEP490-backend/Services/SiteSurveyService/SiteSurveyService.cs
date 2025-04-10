@@ -51,7 +51,10 @@ namespace Sep490_Backend.Services.SiteSurveyService
         public async Task<int> DeleteSiteSurvey(int id, int actionBy)
         {
             // Kiểm tra vai trò người dùng (Technical Manager hoặc Executive Board)
-            if (!_helpService.IsInRole(actionBy, new List<string> { RoleConstValue.TECHNICAL_MANAGER, RoleConstValue.EXECUTIVE_BOARD }))
+            bool isExecutiveBoard = _helpService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD);
+            bool isTechnicalManager = _helpService.IsInRole(actionBy, RoleConstValue.TECHNICAL_MANAGER);
+            
+            if (!isExecutiveBoard && !isTechnicalManager)
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
@@ -61,6 +64,18 @@ namespace Sep490_Backend.Services.SiteSurveyService
             if (data == null)
             {
                 throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
+            }
+            
+            // Nếu là Technical Manager, kiểm tra có thuộc project không
+            if (isTechnicalManager && !isExecutiveBoard)
+            {
+                var isProjectMember = await _context.ProjectUsers
+                    .AnyAsync(pu => pu.ProjectId == data.ProjectId && pu.UserId == actionBy && !pu.Deleted);
+                
+                if (!isProjectMember)
+                {
+                    throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+                }
             }
 
             // Xóa các file đính kèm từ Google Drive
@@ -113,8 +128,11 @@ namespace Sep490_Backend.Services.SiteSurveyService
 
         public async Task<SiteSurvey> GetSiteSurveyDetail(int projectId, int actionBy)
         {
-            // Kiểm tra xem người dùng có phải là thành viên của project không
-            var hasAccess = await _context.ProjectUsers
+            // Chỉ Executive Board có thể xem tất cả các project
+            bool isExecutiveBoard = _helpService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD);
+            
+            // Kiểm tra người dùng có thuộc project không
+            bool hasAccess = isExecutiveBoard || await _context.ProjectUsers
                 .AnyAsync(pu => pu.ProjectId == projectId && pu.UserId == actionBy && !pu.Deleted);
                 
             if (!hasAccess)
@@ -173,9 +191,24 @@ namespace Sep490_Backend.Services.SiteSurveyService
             var errors = new List<ResponseError>();
             
             // Kiểm tra vai trò người dùng
-            if (!_helpService.IsInRole(actionBy, new List<string> { RoleConstValue.TECHNICAL_MANAGER, RoleConstValue.EXECUTIVE_BOARD }))
+            bool isExecutiveBoard = _helpService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD);
+            bool isTechnicalManager = _helpService.IsInRole(actionBy, RoleConstValue.TECHNICAL_MANAGER);
+            
+            if (!isExecutiveBoard && !isTechnicalManager)
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+            }
+            
+            // Nếu là Technical Manager, kiểm tra có thuộc project không
+            if (isTechnicalManager && !isExecutiveBoard)
+            {
+                var isProjectMember = await _context.ProjectUsers
+                    .AnyAsync(pu => pu.ProjectId == model.ProjectId && pu.UserId == actionBy && !pu.Deleted);
+                
+                if (!isProjectMember)
+                {
+                    throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+                }
             }
             
             // Kiểm tra xem project có tồn tại không

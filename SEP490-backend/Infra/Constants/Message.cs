@@ -235,5 +235,20 @@ namespace Sep490_Backend.Infra.Constants
             // Error messages
             public const string NOT_FOUND = "E-LOG-001"; // Action log not found!
         }
+
+        public static class ConstructionLogMessage
+        {
+            // Success messages
+            public const string CREATE_SUCCESS = "S-CL-001"; // Create construction log successfully!
+            public const string UPDATE_SUCCESS = "S-CL-002"; // Update construction log successfully!
+            public const string DELETE_SUCCESS = "S-CL-003"; // Delete construction log successfully!
+            public const string SEARCH_SUCCESS = "S-CL-004"; // Search construction logs successfully!
+            public const string GET_DETAIL_SUCCESS = "S-CL-005"; // Get construction log details successfully!
+            
+            // Error messages
+            public const string NOT_FOUND = "E-CL-001"; // Construction log not found!
+            public const string PERMISSION_DENIED = "E-CL-002"; // You don't have permission to perform this action on this construction log!
+            public const string PROJECT_NOT_FOUND = "E-CL-003"; // Project not found!
+        }
     }
 }
