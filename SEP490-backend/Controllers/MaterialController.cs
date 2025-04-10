@@ -37,6 +37,13 @@ namespace Sep490_Backend.Controllers
             return result;
         }
 
+        [HttpGet("detail/{id}")]
+        public async Task<ResponseDTO<MaterialDetailDTO>> GetMaterialById(int id)
+        {
+            _logger.LogInformation($"Getting material details for material ID: {id}");
+            return await HandleException(_materialService.GetMaterialById(id, UserId), Message.MaterialMessage.GET_DETAIL_SUCCESS);
+        }
+
         [HttpDelete("delete/{id}")]
         public async Task<ResponseDTO<bool>> DeleteMaterial(int id)
         {

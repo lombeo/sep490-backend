@@ -10,6 +10,7 @@ using Sep490_Backend.DTO.Common;
 using System.Text.RegularExpressions;
 using Sep490_Backend.Controllers;
 using Sep490_Backend.DTO.Material;
+using Microsoft.Extensions.Logging;
 
 namespace Sep490_Backend.Services.MaterialService
 {
@@ -17,6 +18,7 @@ namespace Sep490_Backend.Services.MaterialService
     {
         Task<Material> SaveMaterial(MaterialSaveDTO model, int actionBy);
         Task<bool> DeleteMaterial(int materialId, int actionBy);
+        Task<MaterialDetailDTO> GetMaterialById(int materialId, int actionBy);
     }
 
     public class MaterialService : IMaterialService
@@ -25,17 +27,21 @@ namespace Sep490_Backend.Services.MaterialService
         private readonly IHelperService _helperService;
         private readonly ICacheService _cacheService;
         private readonly IDataService _dataService;
+        private readonly ILogger<MaterialService> _logger;
+        private readonly TimeSpan DEFAULT_CACHE_DURATION = TimeSpan.FromMinutes(15);
 
         public MaterialService(
             BackendContext context, 
             IHelperService helperService, 
             ICacheService cacheService,
-            IDataService dataService)
+            IDataService dataService,
+            ILogger<MaterialService> logger)
         {
             _context = context;
             _helperService = helperService;
             _cacheService = cacheService;
             _dataService = dataService;
+            _logger = logger;
         }
 
         /// <summary>
@@ -214,6 +220,66 @@ namespace Sep490_Backend.Services.MaterialService
         private async Task InvalidateMaterialCache()
         {
             await _cacheService.DeleteAsync(RedisCacheKey.MATERIAL_CACHE_KEY);
+        }
+
+        public async Task<MaterialDetailDTO> GetMaterialById(int materialId, int actionBy)
+        {
+            // Authorization check
+            if (!_helperService.IsInRole(actionBy, RoleConstValue.RESOURCE_MANAGER))
+            {
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+            }
+
+            // Create cache key for this specific material
+            string cacheKey = $"{RedisCacheKey.MATERIAL_CACHE_KEY}_ID_{materialId}";
+            
+            // Try to get from cache first
+            var cachedMaterial = await _cacheService.GetAsync<MaterialDetailDTO>(cacheKey);
+            
+            if (cachedMaterial != null)
+            {
+                _logger.LogInformation($"Cache hit for material detail: {cacheKey}");
+                return cachedMaterial;
+            }
+            
+            _logger.LogInformation($"Cache miss for material detail: {cacheKey}, fetching from database");
+
+            // Find the material in the database
+            var material = await _context.Materials
+                .FirstOrDefaultAsync(m => m.Id == materialId && !m.Deleted);
+
+            if (material == null)
+            {
+                throw new KeyNotFoundException(Message.MaterialMessage.NOT_FOUND);
+            }
+
+            // Map the entity to DTO
+            var materialDetailDTO = new MaterialDetailDTO
+            {
+                Id = material.Id,
+                MaterialCode = material.MaterialCode,
+                MaterialName = material.MaterialName,
+                Unit = material.Unit,
+                Branch = material.Branch,
+                MadeIn = material.MadeIn,
+                ChassisNumber = material.ChassisNumber,
+                WholesalePrice = material.WholesalePrice,
+                RetailPrice = material.RetailPrice,
+                Inventory = material.Inventory,
+                Attachment = material.Attachment,
+                ExpireDate = material.ExpireDate,
+                ProductionDate = material.ProductionDate,
+                Description = material.Description,
+                CreatedAt = material.CreatedAt,
+                UpdatedAt = material.UpdatedAt,
+                Creator = material.Creator,
+                Updater = material.Updater
+            };
+
+            // Cache the result
+            await _cacheService.SetAsync(cacheKey, materialDetailDTO, DEFAULT_CACHE_DURATION);
+            
+            return materialDetailDTO;
         }
     }
 }
