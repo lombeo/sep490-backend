@@ -27,7 +27,7 @@ namespace Sep490_Backend.Services.ConstructionLogService
                 .FirstOrDefaultAsync(cl => cl.Id == id && !cl.Deleted);
 
             if (constructionLog == null)
-                throw new ApiException(Message.ConstructionLogMessage.NOT_FOUND, $"Construction log with ID {id} not found");
+                throw new KeyNotFoundException(Message.ConstructionLogMessage.NOT_FOUND);
 
             return MapEntityToDTO(constructionLog);
         }
@@ -71,7 +71,7 @@ namespace Sep490_Backend.Services.ConstructionLogService
         {
             // Check if user has permission to create
             if (!await CheckPermissionAsync(dto.ProjectId, userId, false))
-                throw new ApiException(Message.ConstructionLogMessage.PERMISSION_DENIED, "You don't have permission to create construction logs for this project");
+                throw new UnauthorizedAccessException(Message.ConstructionLogMessage.PERMISSION_DENIED);
 
             // Create construction log
             var constructionLog = new ConstructionLog
@@ -149,11 +149,11 @@ namespace Sep490_Backend.Services.ConstructionLogService
                 .FirstOrDefaultAsync(cl => cl.Id == dto.Id && !cl.Deleted);
 
             if (constructionLog == null)
-                throw new ApiException(Message.ConstructionLogMessage.NOT_FOUND, $"Construction log with ID {dto.Id} not found");
+                throw new KeyNotFoundException(Message.ConstructionLogMessage.NOT_FOUND);
 
             // Check if user has permission to update
             if (!await CheckPermissionAsync(constructionLog.ProjectId, userId, false))
-                throw new ApiException(Message.ConstructionLogMessage.PERMISSION_DENIED, "You don't have permission to update construction logs for this project");
+                throw new UnauthorizedAccessException(Message.ConstructionLogMessage.PERMISSION_DENIED);
 
             // Update construction log
             constructionLog.LogCode = dto.LogCode;
@@ -225,11 +225,11 @@ namespace Sep490_Backend.Services.ConstructionLogService
                 .FirstOrDefaultAsync(cl => cl.Id == id && !cl.Deleted);
 
             if (constructionLog == null)
-                throw new ApiException(Message.ConstructionLogMessage.NOT_FOUND, $"Construction log with ID {id} not found");
+                throw new KeyNotFoundException(Message.ConstructionLogMessage.NOT_FOUND);
 
             // Check if user has permission to delete
             if (!await CheckPermissionAsync(constructionLog.ProjectId, userId, false))
-                throw new ApiException(Message.ConstructionLogMessage.PERMISSION_DENIED, "You don't have permission to delete construction logs for this project");
+                throw new UnauthorizedAccessException(Message.ConstructionLogMessage.PERMISSION_DENIED);
 
             constructionLog.Deleted = true;
             constructionLog.Updater = userId;
