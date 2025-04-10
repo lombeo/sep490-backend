@@ -224,11 +224,7 @@ namespace Sep490_Backend.Services.MaterialService
 
         public async Task<MaterialDetailDTO> GetMaterialById(int materialId, int actionBy)
         {
-            // Authorization check
-            if (!_helperService.IsInRole(actionBy, RoleConstValue.RESOURCE_MANAGER))
-            {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
-            }
+            // Remove role-based authorization check - all authenticated users can view material details
 
             // Create cache key for this specific material
             string cacheKey = $"{RedisCacheKey.MATERIAL_CACHE_KEY}_ID_{materialId}";

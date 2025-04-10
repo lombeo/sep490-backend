@@ -662,10 +662,7 @@ namespace Sep490_Backend.Services.DataService
 
         public async Task<List<Material>> ListMaterial(MaterialSearchDTO model)
         {
-            if (!_helpService.IsInRole(model.ActionBy, RoleConstValue.RESOURCE_MANAGER))
-            {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
-            }
+            // Remove role-based authorization check - all authenticated users can view materials
 
             // Create cache key based on search parameters
             string cacheKey = GetMaterialSearchCacheKey(model);
@@ -717,17 +714,7 @@ namespace Sep490_Backend.Services.DataService
 
         public async Task<List<ConstructionTeam>> ListConstructionTeam(ConstructionTeamSearchDTO model)
         {
-            // Check authorization - only Construction Manager, Technical Manager, and Executive Board can view teams
-            if (!_helpService.IsInRole(model.ActionBy, new List<string> 
-            { 
-                RoleConstValue.CONSTRUCTION_MANAGER, 
-                RoleConstValue.TECHNICAL_MANAGER, 
-                RoleConstValue.EXECUTIVE_BOARD 
-            }))
-            {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
-            }
-
+            // Remove role-based authorization check - all authenticated users can view teams
             // Try to get teams from cache
             string cacheKey = RedisCacheKey.CONSTRUCTION_TEAM_CACHE_KEY;
             var teamsCacheList = await _cacheService.GetAsync<List<ConstructionTeam>>(cacheKey);
