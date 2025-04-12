@@ -97,6 +97,7 @@ namespace Sep490_Backend
                 options.Configuration = connectionString;
             });
             builder.Services.AddMemoryCache();
+            builder.Services.AddSingleton<RedisConnManager>();
             builder.Services.AddScoped<ICacheService, CacheService>();
             builder.Services.AddScoped<IPubSubService, PubSubService>();
             builder.Services.AddScoped<IAuthenService, AuthenService>();
@@ -117,7 +118,6 @@ namespace Sep490_Backend
             builder.Services.AddScoped<IVehicleService, VehicleService>();
             builder.Services.AddScoped<IActionLogService, ActionLogService>();
             builder.Services.AddScoped<IConstructionLogService, ConstructionLogService>();
-            builder.Services.AddScoped<RedisConnManager>();
             builder.Services.AddHostedService<DefaultBackgroundService>();
 
             builder.Services.AddEndpointsApiExplorer();

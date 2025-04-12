@@ -273,25 +273,20 @@ namespace Sep490_Backend.Services.VehicleService
         
         private async Task InvalidateVehicleCaches(int? specificVehicleId = null)
         {
-            var keysToInvalidate = new List<string>();
-            
             // Invalidate general vehicle cache
-            keysToInvalidate.Add(RedisCacheKey.VEHICLE_CACHE_KEY);
+            await _cacheService.DeleteAsync(RedisCacheKey.VEHICLE_CACHE_KEY);
             
             // If a specific vehicle ID is provided, invalidate its cache
             if (specificVehicleId.HasValue)
             {
-                keysToInvalidate.Add(GetVehicleByIdCacheKey(specificVehicleId.Value));
+                await _cacheService.DeleteAsync(GetVehicleByIdCacheKey(specificVehicleId.Value));
             }
             
-            // Always invalidate search caches as they may contain the affected vehicle
-            keysToInvalidate.Add(RedisCacheKey.VEHICLE_SEARCH_CACHE_KEY);
+            // Use pattern-based invalidation for all vehicle-related caches
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.VEHICLE_CACHE_KEY);
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.VEHICLE_SEARCH_CACHE_KEY);
             
-            foreach (var key in keysToInvalidate)
-            {
-                await _cacheService.DeleteAsync(key);
-                _logger.LogInformation($"Invalidated cache with key pattern: {key}");
-            }
+            _logger.LogInformation($"Invalidated vehicle caches. Specific ID: {specificVehicleId}");
         }
     }
 } 

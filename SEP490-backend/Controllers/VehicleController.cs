@@ -5,6 +5,7 @@ using Sep490_Backend.DTO.Vehicle;
 using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Services.VehicleService;
+using Sep490_Backend.Services.CacheService;
 
 namespace Sep490_Backend.Controllers
 {
@@ -15,11 +16,13 @@ namespace Sep490_Backend.Controllers
     {
         private readonly IVehicleService _vehicleService;
         private readonly ILogger<VehicleController> _logger;
+        private readonly ICacheService _cacheService;
 
-        public VehicleController(IVehicleService vehicleService, ILogger<VehicleController> logger)
+        public VehicleController(IVehicleService vehicleService, ILogger<VehicleController> logger, ICacheService cacheService)
         {
             _vehicleService = vehicleService;
             _logger = logger;
+            _cacheService = cacheService;
         }
 
         [HttpGet("{id}")]
@@ -67,6 +70,40 @@ namespace Sep490_Backend.Controllers
             _logger.LogInformation($"Deleting vehicle with ID: {id}");
             var result = await HandleException(_vehicleService.DeleteVehicle(id, UserId), Message.VehicleMessage.DELETE_SUCCESS);
             return result;
+        }
+
+        /// <summary>
+        /// Manually invalidates vehicle caches to ensure fresh data is fetched
+        /// </summary>
+        /// <returns>Success message</returns>
+        [HttpPost("clear-cache")]
+        [ResponseCache(NoStore = true)]
+        public async Task<ResponseDTO<string>> ClearVehicleCache()
+        {
+            try
+            {
+                // Clear all vehicle-related caches using pattern deletion
+                await _cacheService.DeleteByPatternAsync(RedisCacheKey.VEHICLE_CACHE_KEY);
+                await _cacheService.DeleteByPatternAsync(RedisCacheKey.VEHICLE_SEARCH_CACHE_KEY);
+                await _cacheService.DeleteByPatternAsync(RedisCacheKey.VEHICLE_BY_ID_CACHE_KEY);
+                
+                return new ResponseDTO<string>
+                {
+                    Code = (int)RESPONSE_CODE.OK,
+                    Message = Message.CommonMessage.ACTION_SUCCESS,
+                    Data = "All vehicle caches cleared. Reload your page to get fresh data."
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error clearing vehicle cache");
+                return new ResponseDTO<string>
+                {
+                    Code = (int)RESPONSE_CODE.InternalServerError,
+                    Message = ex.Message,
+                    Data = null
+                };
+            }
         }
     }
 } 

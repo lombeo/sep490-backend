@@ -12,6 +12,8 @@ using Sep490_Backend.Services.CacheService;
 using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.HelperService;
 using System.Text.Json;
+using Microsoft.AspNetCore.Http;
+using System.Security.Claims;
 
 namespace Sep490_Backend.Services.ResourceReqService
 {
@@ -28,6 +30,10 @@ namespace Sep490_Backend.Services.ResourceReqService
         Task<ResourceMobilizationReqs> SendResourceMobilizationRequest(int reqId, int actionBy);
         Task<ResourceMobilizationReqs> ApproveResourceMobilizationRequest(int reqId, string comments, int actionBy);
         Task<ResourceMobilizationReqs> RejectResourceMobilizationRequest(int reqId, string reason, int actionBy);
+        
+        // Cache invalidation methods
+        Task InvalidateMobilizationCacheForProject(int projectId);
+        Task InvalidateAllMobilizationCaches();
         
         Task<List<ResourceInventoryDTO>> ViewInventoryResources(ResourceType? type, BaseQuery query);
         Task<ResourceInventoryDTO> GetInventoryResourceById(int id);
@@ -228,6 +234,9 @@ namespace Sep490_Backend.Services.ResourceReqService
                     await _context.SaveChangesAsync();
                     
                     await transaction.CommitAsync();
+                    
+                    // Invalidate cache after adding new resource allocation request
+                    await InvalidateResourceAllocationReqCache(newReq.Id, newReq.FromProjectId, newReq.ToProjectId);
 
                     return newReq;
                 }
@@ -398,6 +407,9 @@ namespace Sep490_Backend.Services.ResourceReqService
                     await _context.SaveChangesAsync();
                     
                     await transaction.CommitAsync();
+                    
+                    // Invalidate cache after adding new resource mobilization request
+                    await InvalidateResourceMobilizationReqCache(newReq.Id, newReq.ProjectId);
 
                     return newReq;
                 }
@@ -550,14 +562,19 @@ namespace Sep490_Backend.Services.ResourceReqService
             
             // Delete list caches
             await _cacheService.DeleteAsync(RedisCacheKey.ALLOCATION_REQS_LIST_CACHE_KEY);
-            await _cacheService.DeleteAsync(string.Format(RedisCacheKey.ALLOCATION_REQS_BY_FROM_PROJECT_LIST_CACHE_KEY, fromProjectId));
-            await _cacheService.DeleteAsync(string.Format(RedisCacheKey.ALLOCATION_REQS_BY_TO_PROJECT_LIST_CACHE_KEY, toProjectId));
             
-            // Clear status-based caches (all statuses to be safe)
-            foreach (var status in Enum.GetValues(typeof(RequestStatus)))
-            {
-                await _cacheService.DeleteAsync(string.Format(RedisCacheKey.ALLOCATION_REQS_BY_STATUS_LIST_CACHE_KEY, status));
-            }
+            // Use pattern-based deletion for project-specific caches
+            string fromProjectPattern = string.Format(RedisCacheKey.ALLOCATION_REQS_BY_FROM_PROJECT_LIST_CACHE_KEY, fromProjectId);
+            await _cacheService.DeleteByPatternAsync(fromProjectPattern);
+            
+            string toProjectPattern = string.Format(RedisCacheKey.ALLOCATION_REQS_BY_TO_PROJECT_LIST_CACHE_KEY, toProjectId);
+            await _cacheService.DeleteByPatternAsync(toProjectPattern);
+            
+            // Delete all status-based caches using pattern matching
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.ALLOCATION_REQS_BY_STATUS_LIST_CACHE_KEY);
+            
+            // Clear all paginated caches using pattern matching
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.ALLOCATION_REQS_LIST_CACHE_KEY);
         }
 
         /// <summary>
@@ -576,13 +593,16 @@ namespace Sep490_Backend.Services.ResourceReqService
             
             // Delete list caches
             await _cacheService.DeleteAsync(RedisCacheKey.MOBILIZATION_REQS_LIST_CACHE_KEY);
-            await _cacheService.DeleteAsync(string.Format(RedisCacheKey.MOBILIZATION_REQS_BY_PROJECT_LIST_CACHE_KEY, projectId));
             
-            // Clear status-based caches (all statuses to be safe)
-            foreach (var status in Enum.GetValues(typeof(RequestStatus)))
-            {
-                await _cacheService.DeleteAsync(string.Format(RedisCacheKey.MOBILIZATION_REQS_BY_STATUS_LIST_CACHE_KEY, status));
-            }
+            // Use pattern-based deletion for project-specific and paginated caches
+            string projectPattern = string.Format(RedisCacheKey.MOBILIZATION_REQS_BY_PROJECT_LIST_CACHE_KEY, projectId);
+            await _cacheService.DeleteByPatternAsync(projectPattern);
+            
+            // Delete all status-based caches using pattern matching
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.MOBILIZATION_REQS_BY_STATUS_LIST_CACHE_KEY);
+            
+            // Clear all paginated caches for mobilization requests using pattern matching
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.MOBILIZATION_REQS_LIST_CACHE_KEY);
         }
 
         #region Resource Mobilization Methods
@@ -1298,11 +1318,14 @@ namespace Sep490_Backend.Services.ResourceReqService
             // Delete specific resource cache
             await _cacheService.DeleteAsync(string.Format(RedisCacheKey.RESOURCE_INVENTORY_BY_ID_CACHE_KEY, resourceId));
             
-            // Delete resource type cache
-            await _cacheService.DeleteAsync(string.Format(RedisCacheKey.RESOURCE_INVENTORY_BY_TYPE_CACHE_KEY, resourceType));
+            // Delete resource type cache and related patterns
+            string typeKeyBase = string.Format(RedisCacheKey.RESOURCE_INVENTORY_BY_TYPE_CACHE_KEY, resourceType);
+            await _cacheService.DeleteAsync(typeKeyBase);
+            await _cacheService.DeleteByPatternAsync(typeKeyBase);
             
-            // Delete all resources cache
+            // Delete all resources cache and patterns
             await _cacheService.DeleteAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
         }
 
         #endregion
@@ -1664,5 +1687,79 @@ namespace Sep490_Backend.Services.ResourceReqService
         }
 
         #endregion
+
+        /// <summary>
+        /// Invalidates the mobilization cache for a specific project
+        /// </summary>
+        /// <param name="projectId">The project ID</param>
+        /// <param name="actionBy">ID of the user performing the action</param>
+        public async Task InvalidateMobilizationCacheForProject(int projectId)
+        {
+            int actionBy = 0;
+            // Use HTTP context accessor to get current user ID if available
+            var httpContext = new HttpContextAccessor().HttpContext;
+            if (httpContext != null && httpContext.User.Identity.IsAuthenticated)
+            {
+                var userIdClaim = httpContext.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier);
+                if (userIdClaim != null && int.TryParse(userIdClaim.Value, out int userId))
+                {
+                    actionBy = userId;
+                }
+            }
+
+            // Validate user role - only Resource Manager or Technical Manager can invalidate caches
+            if (!_helperService.IsInRole(actionBy, RoleConstValue.RESOURCE_MANAGER) && 
+                !_helperService.IsInRole(actionBy, RoleConstValue.TECHNICAL_MANAGER))
+            {
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+            }
+
+            // Delete project-related cache
+            await _cacheService.DeleteAsync(string.Format(RedisCacheKey.MOBILIZATION_REQ_BY_PROJECT_CACHE_KEY, projectId));
+            
+            // Use pattern-based deletion for project-specific and paginated caches
+            string projectPattern = string.Format(RedisCacheKey.MOBILIZATION_REQS_BY_PROJECT_LIST_CACHE_KEY, projectId);
+            await _cacheService.DeleteByPatternAsync(projectPattern);
+        }
+
+        /// <summary>
+        /// Invalidates all mobilization caches
+        /// </summary>
+        /// <param name="actionBy">ID of the user performing the action</param>
+        public async Task InvalidateAllMobilizationCaches()
+        {
+            int actionBy = 0;
+            // Use HTTP context accessor to get current user ID if available
+            var httpContext = new HttpContextAccessor().HttpContext;
+            if (httpContext != null && httpContext.User.Identity.IsAuthenticated)
+            {
+                var userIdClaim = httpContext.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier);
+                if (userIdClaim != null && int.TryParse(userIdClaim.Value, out int userId))
+                {
+                    actionBy = userId;
+                }
+            }
+
+            // Validate user role - only Resource Manager or Technical Manager can invalidate caches
+            if (!_helperService.IsInRole(actionBy, RoleConstValue.RESOURCE_MANAGER) && 
+                !_helperService.IsInRole(actionBy, RoleConstValue.TECHNICAL_MANAGER))
+            {
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+            }
+
+            // Delete list caches
+            await _cacheService.DeleteAsync(RedisCacheKey.MOBILIZATION_REQS_LIST_CACHE_KEY);
+            
+            // Delete all status-based caches using pattern matching
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.MOBILIZATION_REQS_BY_STATUS_LIST_CACHE_KEY);
+            
+            // Clear all paginated caches for mobilization requests using pattern matching
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.MOBILIZATION_REQS_LIST_CACHE_KEY);
+            
+            // Clear all resource mobilization request IDs
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.MOBILIZATION_REQ_CACHE_KEY);
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_MOBILIZATION_REQ_BY_ID_CACHE_KEY);
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.MOBILIZATION_REQ_BY_PROJECT_CACHE_KEY);
+        }
     }
 }
