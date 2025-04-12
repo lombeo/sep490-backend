@@ -7,6 +7,7 @@ using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Infra.Enums;
 using Sep490_Backend.Services.ResourceReqService;
+using Sep490_Backend.Services.CacheService;
 
 namespace Sep490_Backend.Controllers
 {
@@ -16,10 +17,12 @@ namespace Sep490_Backend.Controllers
     public class ResourceReqController : BaseAPIController
     {
         private readonly IResourceReqService _resourceReqService;
+        private readonly ICacheService _cacheService;
 
-        public ResourceReqController(IResourceReqService resourceReqService)
+        public ResourceReqController(IResourceReqService resourceReqService, ICacheService cacheService)
         {
             _resourceReqService = resourceReqService;
+            _cacheService = cacheService;
         }
 
         #region Resource Mobilization APIs
@@ -151,6 +154,68 @@ namespace Sep490_Backend.Controllers
             );
         }
 
+        /// <summary>
+        /// Manually invalidates the cache for resource mobilization requests
+        /// </summary>
+        /// <param name="projectId">Optional project ID to invalidate only specific project caches</param>
+        /// <returns>Success message</returns>
+        [HttpPost("mobilization/invalidate-cache")]
+        public async Task<ResponseDTO<string>> InvalidateMobilizationCache([FromQuery] int? projectId = null)
+        {
+            if (projectId.HasValue)
+            {
+                // Invalidate project-specific cache
+                await _resourceReqService.InvalidateMobilizationCacheForProject(projectId.Value);
+                return await HandleException(
+                    Task.FromResult($"Cache invalidated for project {projectId}"),
+                    Message.CommonMessage.ACTION_SUCCESS
+                );
+            }
+            else
+            {
+                // Invalidate all mobilization caches
+                await _resourceReqService.InvalidateAllMobilizationCaches();
+                return await HandleException(
+                    Task.FromResult("All mobilization caches invalidated"),
+                    Message.CommonMessage.ACTION_SUCCESS
+                );
+            }
+        }
+
+        /// <summary>
+        /// Manually invalidates resource mobilization caches to ensure fresh data is fetched
+        /// </summary>
+        /// <returns>Success message</returns>
+        [HttpPost("mobilization/clear-cache")]
+        public async Task<ResponseDTO<string>> ClearMobilizationCache()
+        {
+            try
+            {
+                // Clear all mobilization-related caches using pattern deletion
+                await _cacheService.DeleteByPatternAsync(RedisCacheKey.MOBILIZATION_REQS_LIST_CACHE_KEY);
+                await _cacheService.DeleteByPatternAsync(RedisCacheKey.MOBILIZATION_REQ_CACHE_KEY);
+                await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_MOBILIZATION_REQ_BY_ID_CACHE_KEY);
+                await _cacheService.DeleteByPatternAsync(RedisCacheKey.MOBILIZATION_REQ_BY_PROJECT_CACHE_KEY);
+                await _cacheService.DeleteByPatternAsync(RedisCacheKey.MOBILIZATION_REQS_BY_STATUS_LIST_CACHE_KEY);
+                
+                return new ResponseDTO<string>
+                {
+                    Code = (int)RESPONSE_CODE.OK,
+                    Message = Message.CommonMessage.ACTION_SUCCESS,
+                    Data = "All mobilization caches cleared. Reload your page to get fresh data."
+                };
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO<string>
+                {
+                    Code = (int)RESPONSE_CODE.InternalServerError,
+                    Message = ex.Message,
+                    Data = null
+                };
+            }
+        }
+
         #endregion
 
         #region Resource Inventory APIs
@@ -244,6 +309,38 @@ namespace Sep490_Backend.Controllers
                 _resourceReqService.GetInventoryResourceById(id),
                 Message.CommonMessage.ACTION_SUCCESS
             );
+        }
+
+        /// <summary>
+        /// Manually invalidates resource inventory caches to ensure fresh data is fetched
+        /// </summary>
+        /// <returns>Success message</returns>
+        [HttpPost("inventory/clear-cache")]
+        public async Task<ResponseDTO<string>> ClearInventoryCache()
+        {
+            try
+            {
+                // Clear all inventory-related caches using pattern deletion
+                await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
+                await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_BY_ID_CACHE_KEY);
+                await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_BY_TYPE_CACHE_KEY);
+                
+                return new ResponseDTO<string>
+                {
+                    Code = (int)RESPONSE_CODE.OK,
+                    Message = Message.CommonMessage.ACTION_SUCCESS,
+                    Data = "All inventory caches cleared. Reload your page to get fresh data."
+                };
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO<string>
+                {
+                    Code = (int)RESPONSE_CODE.InternalServerError,
+                    Message = ex.Message,
+                    Data = null
+                };
+            }
         }
 
         #endregion
@@ -377,6 +474,42 @@ namespace Sep490_Backend.Controllers
                 _resourceReqService.GetResourceAllocationRequestById(id),
                 Message.CommonMessage.ACTION_SUCCESS
             );
+        }
+
+        /// <summary>
+        /// Manually invalidates resource allocation caches to ensure fresh data is fetched
+        /// </summary>
+        /// <returns>Success message</returns>
+        [HttpPost("allocation/clear-cache")]
+        public async Task<ResponseDTO<string>> ClearAllocationCache()
+        {
+            try
+            {
+                // Clear all allocation-related caches using pattern deletion
+                await _cacheService.DeleteByPatternAsync(RedisCacheKey.ALLOCATION_REQS_LIST_CACHE_KEY);
+                await _cacheService.DeleteByPatternAsync(RedisCacheKey.ALLOCATION_REQ_CACHE_KEY);
+                await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_ALLOCATION_REQ_BY_ID_CACHE_KEY);
+                await _cacheService.DeleteByPatternAsync(RedisCacheKey.ALLOCATION_REQ_BY_PROJECT_CACHE_KEY);
+                await _cacheService.DeleteByPatternAsync(RedisCacheKey.ALLOCATION_REQS_BY_STATUS_LIST_CACHE_KEY);
+                await _cacheService.DeleteByPatternAsync(RedisCacheKey.ALLOCATION_REQS_BY_FROM_PROJECT_LIST_CACHE_KEY);
+                await _cacheService.DeleteByPatternAsync(RedisCacheKey.ALLOCATION_REQS_BY_TO_PROJECT_LIST_CACHE_KEY);
+                
+                return new ResponseDTO<string>
+                {
+                    Code = (int)RESPONSE_CODE.OK,
+                    Message = Message.CommonMessage.ACTION_SUCCESS,
+                    Data = "All allocation caches cleared. Reload your page to get fresh data."
+                };
+            }
+            catch (Exception ex)
+            {
+                return new ResponseDTO<string>
+                {
+                    Code = (int)RESPONSE_CODE.InternalServerError,
+                    Message = ex.Message,
+                    Data = null
+                };
+            }
         }
 
         #endregion

@@ -8,6 +8,7 @@ using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.MaterialService;
 using Sep490_Backend.Services.SiteSurveyService;
+using Sep490_Backend.Services.CacheService;
 using Microsoft.Extensions.Logging;
 
 namespace Sep490_Backend.Controllers
@@ -20,12 +21,14 @@ namespace Sep490_Backend.Controllers
         private readonly IMaterialService _materialService;
         private readonly IDataService _dataService;
         private readonly ILogger<MaterialController> _logger;
+        private readonly ICacheService _cacheService;
 
-        public MaterialController(IMaterialService materialService, IDataService dataService, ILogger<MaterialController> logger)
+        public MaterialController(IMaterialService materialService, IDataService dataService, ILogger<MaterialController> logger, ICacheService cacheService)
         {
             _materialService = materialService;
             _dataService = dataService;
             _logger = logger;
+            _cacheService = cacheService;
         }
 
         [HttpGet("search")]
@@ -56,6 +59,37 @@ namespace Sep490_Backend.Controllers
         {
             _logger.LogInformation($"Saving material: {model.MaterialCode}");
             return await HandleException(_materialService.SaveMaterial(model, UserId), Message.MaterialMessage.SAVE_SUCCESS);
+        }
+
+        /// <summary>
+        /// Manually invalidates material caches to ensure fresh data is fetched
+        /// </summary>
+        /// <returns>Success message</returns>
+        [HttpPost("clear-cache")]
+        public async Task<ResponseDTO<string>> ClearMaterialCache()
+        {
+            try
+            {
+                // Clear all material-related caches using pattern deletion
+                await _cacheService.DeleteByPatternAsync(RedisCacheKey.MATERIAL_CACHE_KEY);
+                
+                return new ResponseDTO<string>
+                {
+                    Code = (int)RESPONSE_CODE.OK,
+                    Message = Message.CommonMessage.ACTION_SUCCESS,
+                    Data = "All material caches cleared. Reload your page to get fresh data."
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error clearing material cache");
+                return new ResponseDTO<string>
+                {
+                    Code = (int)RESPONSE_CODE.InternalServerError,
+                    Message = ex.Message,
+                    Data = null
+                };
+            }
         }
     }
 }

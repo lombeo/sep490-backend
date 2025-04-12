@@ -219,7 +219,11 @@ namespace Sep490_Backend.Services.MaterialService
         /// </summary>
         private async Task InvalidateMaterialCache()
         {
+            // Clear the main materials cache
             await _cacheService.DeleteAsync(RedisCacheKey.MATERIAL_CACHE_KEY);
+            
+            // Use pattern-based deletion for all material-related caches
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.MATERIAL_CACHE_KEY);
         }
 
         public async Task<MaterialDetailDTO> GetMaterialById(int materialId, int actionBy)
