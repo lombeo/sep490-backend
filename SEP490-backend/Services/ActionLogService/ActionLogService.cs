@@ -28,14 +28,18 @@ namespace Sep490_Backend.Services.ActionLogService
 
         public async Task<ActionLogDTO> GetByIdAsync(int id)
         {
-            // Try to get from cache first
-            var cacheKey = string.Format(RedisCacheKey.ACTION_LOG_BY_ID_CACHE_KEY, id);
-            var cachedLog = await _cacheService.GetAsync<ActionLogDTO>(cacheKey, true);
+            // Try to get from main cache
+            var allLogs = await _cacheService.GetAsync<List<ActionLogDTO>>(RedisCacheKey.ACTION_LOG_ALL_CACHE_KEY);
 
-            if (cachedLog != null)
+            if (allLogs != null)
             {
-                _logger.LogInformation("ActionLog {id} returned from cache", id);
-                return cachedLog;
+                // Find the specific log in the cache
+                var cachedLog = allLogs.FirstOrDefault(log => log.Id == id);
+                if (cachedLog != null)
+                {
+                    _logger.LogInformation("ActionLog {id} returned from main cache", id);
+                    return cachedLog;
+                }
             }
 
             // If not in cache, get from database
@@ -50,71 +54,70 @@ namespace Sep490_Backend.Services.ActionLogService
 
             var result = MapToDTO(actionLog);
 
-            // Store in cache
-            await _cacheService.SetAsync(cacheKey, result, _cacheExpirationTime, true);
+            // Update the main cache if it exists
+            if (allLogs != null)
+            {
+                allLogs.Add(result);
+                await _cacheService.SetAsync(RedisCacheKey.ACTION_LOG_ALL_CACHE_KEY, allLogs, _cacheExpirationTime);
+            }
+            else
+            {
+                // If main cache doesn't exist, load all logs and cache them
+                allLogs = await LoadAllLogsFromDb();
+                await _cacheService.SetAsync(RedisCacheKey.ACTION_LOG_ALL_CACHE_KEY, allLogs, _cacheExpirationTime);
+            }
 
             return result;
         }
 
         public async Task<List<ActionLogDTO>> GetAllAsync(ActionLogQuery query)
         {
-            // For search and filtering, we don't use cache directly
-            // Build cache key based on query parameters
-            var cacheKey = BuildCacheKey(query);
-            var cachedResult = await _cacheService.GetAsync<List<ActionLogDTO>>(cacheKey, true);
+            // Get all logs from cache
+            var allLogs = await _cacheService.GetAsync<List<ActionLogDTO>>(RedisCacheKey.ACTION_LOG_ALL_CACHE_KEY);
 
-            if (cachedResult != null)
+            if (allLogs == null)
             {
-                _logger.LogInformation("ActionLogs returned from cache with key {cacheKey}", cacheKey);
-                return cachedResult;
+                // If not in cache, load all from database
+                allLogs = await LoadAllLogsFromDb();
+                await _cacheService.SetAsync(RedisCacheKey.ACTION_LOG_ALL_CACHE_KEY, allLogs, _cacheExpirationTime);
             }
 
-            // Build the query
-            var actionLogsQuery = _context.ActionLogs
-                .AsNoTracking()
-                .Where(x => !x.Deleted);
-
             // Apply filters
+            var filteredLogs = allLogs.AsQueryable();
+
             if (query.LogType.HasValue)
             {
-                actionLogsQuery = actionLogsQuery.Where(x => x.LogType == query.LogType.Value);
+                filteredLogs = filteredLogs.Where(x => x.LogType == query.LogType.Value);
             }
 
             if (!string.IsNullOrWhiteSpace(query.SearchTerm))
             {
                 var searchTerm = query.SearchTerm.ToLower();
-                actionLogsQuery = actionLogsQuery.Where(x => 
+                filteredLogs = filteredLogs.Where(x => 
                     (x.Title != null && x.Title.ToLower().Contains(searchTerm)) || 
                     (x.Description != null && x.Description.ToLower().Contains(searchTerm)));
             }
 
             if (query.FromDate.HasValue)
             {
-                actionLogsQuery = actionLogsQuery.Where(x => x.CreatedAt >= query.FromDate.Value);
+                filteredLogs = filteredLogs.Where(x => x.CreatedAt >= query.FromDate.Value);
             }
 
             if (query.ToDate.HasValue)
             {
-                actionLogsQuery = actionLogsQuery.Where(x => x.CreatedAt <= query.ToDate.Value);
+                filteredLogs = filteredLogs.Where(x => x.CreatedAt <= query.ToDate.Value);
             }
 
-            // Get total count for pagination
-            query.Total = await actionLogsQuery.CountAsync();
+            // Convert to list for total count
+            var filteredList = filteredLogs.ToList();
+            query.Total = filteredList.Count;
 
-            // Apply pagination
-            var paginatedItems = await actionLogsQuery
+            // Apply sorting and pagination
+            return filteredList
                 .OrderByDescending(x => x.CreatedAt)
                 .Skip(query.Skip)
                 .Take(query.PageSize)
-                .ToListAsync();
-
-            // Map to DTOs
-            var items = paginatedItems.Select(MapToDTO).ToList();
-
-            // Cache the result
-            await _cacheService.SetAsync(cacheKey, items, _cacheExpirationTime, true);
-
-            return items;
+                .ToList();
         }
 
         public async Task<ActionLogDTO> CreateAsync(ActionLogCreateDTO dto, int userId)
@@ -135,12 +138,8 @@ namespace Sep490_Backend.Services.ActionLogService
 
             var result = MapToDTO(actionLog);
 
-            // Cache the new entity
-            var cacheKey = string.Format(RedisCacheKey.ACTION_LOG_BY_ID_CACHE_KEY, result.Id);
-            await _cacheService.SetAsync(cacheKey, result, _cacheExpirationTime, true);
-
-            // Invalidate the collection cache
-            await InvalidateCacheAsync();
+            // Invalidate the main cache
+            await _cacheService.DeleteAsync(RedisCacheKey.ACTION_LOG_ALL_CACHE_KEY);
 
             return result;
         }
@@ -165,12 +164,8 @@ namespace Sep490_Backend.Services.ActionLogService
 
             var result = MapToDTO(actionLog);
 
-            // Update cache
-            var cacheKey = string.Format(RedisCacheKey.ACTION_LOG_BY_ID_CACHE_KEY, id);
-            await _cacheService.SetAsync(cacheKey, result, _cacheExpirationTime, true);
-
-            // Invalidate collection cache
-            await InvalidateCacheAsync();
+            // Invalidate the main cache
+            await _cacheService.DeleteAsync(RedisCacheKey.ACTION_LOG_ALL_CACHE_KEY);
 
             return result;
         }
@@ -190,39 +185,33 @@ namespace Sep490_Backend.Services.ActionLogService
 
             await _context.SaveChangesAsync();
 
-            // Invalidate caches
-            await InvalidateCacheAsync(id);
+            // Invalidate the main cache
+            await _cacheService.DeleteAsync(RedisCacheKey.ACTION_LOG_ALL_CACHE_KEY);
 
             return true;
         }
 
         public async Task<bool> InvalidateCacheAsync(int? id = null)
         {
-            try
-            {
-                var tasks = new List<Task>();
+            var tasks = new List<Task>();
+            
+            // Just invalidate the main cache
+            tasks.Add(_cacheService.DeleteAsync(RedisCacheKey.ACTION_LOG_ALL_CACHE_KEY));
+            
+            await Task.WhenAll(tasks);
+            return true;
+        }
 
-                // If specific id is provided, invalidate that cache entry
-                if (id.HasValue)
-                {
-                    tasks.Add(_cacheService.DeleteAsync(string.Format(RedisCacheKey.ACTION_LOG_BY_ID_CACHE_KEY, id.Value)));
-                }
-
-                // Always invalidate the collection cache with any prefix
-                tasks.Add(_cacheService.DeleteAsync(RedisCacheKey.ACTION_LOG_ALL_CACHE_KEY));
-
-                // Get all cache keys matching the pattern for collection caches with query parameters
-                // In a real-world scenario, you might need a more sophisticated way to invalidate
-                // all query-specific cache keys, possibly by storing them
-
-                await Task.WhenAll(tasks);
-                return true;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error invalidating ActionLog cache");
-                return false;
-            }
+        // Helper method to load all logs from database
+        private async Task<List<ActionLogDTO>> LoadAllLogsFromDb()
+        {
+            var logs = await _context.ActionLogs
+                .AsNoTracking()
+                .Where(x => !x.Deleted)
+                .OrderByDescending(x => x.CreatedAt)
+                .ToListAsync();
+            
+            return logs.Select(MapToDTO).ToList();
         }
 
         private ActionLogDTO MapToDTO(ActionLog entity)
@@ -238,35 +227,6 @@ namespace Sep490_Backend.Services.ActionLogService
                 Creator = entity.Creator,
                 Updater = entity.Updater
             };
-        }
-
-        private string BuildCacheKey(ActionLogQuery query)
-        {
-            var keyBuilder = new StringBuilder(RedisCacheKey.ACTION_LOG_ALL_CACHE_KEY);
-
-            keyBuilder.Append($"_Page{query.PageIndex}_Size{query.PageSize}");
-
-            if (query.LogType.HasValue)
-            {
-                keyBuilder.Append($"_Type{query.LogType.Value}");
-            }
-
-            if (!string.IsNullOrWhiteSpace(query.SearchTerm))
-            {
-                keyBuilder.Append($"_Search{query.SearchTerm}");
-            }
-
-            if (query.FromDate.HasValue)
-            {
-                keyBuilder.Append($"_From{query.FromDate.Value:yyyyMMdd}");
-            }
-
-            if (query.ToDate.HasValue)
-            {
-                keyBuilder.Append($"_To{query.ToDate.Value:yyyyMMdd}");
-            }
-
-            return keyBuilder.ToString();
         }
     }
 } 

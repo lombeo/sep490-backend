@@ -14,6 +14,7 @@ namespace Sep490_Backend.Infra.Entities
             ConstructionPlans = new List<ConstructionPlan>();
             ResourceMobilizationReqs = new List<ResourceMobilizationReqs>();
             ProjectUsers = new List<ProjectUser>();
+            Contracts = new List<Contract>();
         }
 
         public int Id { get; set; }
@@ -34,7 +35,7 @@ namespace Sep490_Backend.Infra.Entities
 
         // Navigation properties
         public virtual Customer? Customer { get; set; }
-        public virtual Contract? Contract { get; set; }
+        public virtual ICollection<Contract> Contracts { get; set; }
         public virtual ICollection<SiteSurvey> SiteSurveys { get; set; }
         public virtual ICollection<ConstructionPlan> ConstructionPlans { get; set; }
         public virtual ICollection<ResourceMobilizationReqs> ResourceMobilizationReqs { get; set; }
@@ -97,9 +98,9 @@ namespace Sep490_Backend.Infra.Entities
                       .HasForeignKey(e => e.CustomerId)
                       .OnDelete(DeleteBehavior.Restrict);
 
-                entity.HasOne(e => e.Contract)
+                entity.HasMany(e => e.Contracts)
                       .WithOne(c => c.Project)
-                      .HasForeignKey<Contract>(c => c.ProjectId)
+                      .HasForeignKey(c => c.ProjectId)
                       .OnDelete(DeleteBehavior.Restrict);
 
                 entity.HasMany(e => e.SiteSurveys)

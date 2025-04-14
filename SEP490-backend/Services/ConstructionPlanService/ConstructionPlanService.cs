@@ -200,19 +200,10 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                 await _context.SaveChangesAsync();
             }
 
-            // Clear cache
+            // Clear only the main cache 
             await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY);
-            // Clear user-specific caches
-            var users = await _context.Users
-                .Where(u => !u.Deleted)
-                .Select(u => u.Id)
-                .ToListAsync();
-            foreach (var userId in users)
-            {
-                await _cacheService.DeleteAsync(string.Format(RedisCacheKey.CONSTRUCTION_PLAN_BY_USER_CACHE_KEY, userId));
-            }
-
-            // Return the created plan
+            
+            // Return the newly created plan
             return await GetById(constructionPlan.Id, actionBy);
         }
 
@@ -421,18 +412,9 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                 await _context.SaveChangesAsync();
             }
 
-            // Clear cache
+            // Clear only the main cache
             await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY);
-            // Clear user-specific caches
-            var users = await _context.Users
-                .Where(u => !u.Deleted)
-                .Select(u => u.Id)
-                .ToListAsync();
-            foreach (var userId in users)
-            {
-                await _cacheService.DeleteAsync(string.Format(RedisCacheKey.CONSTRUCTION_PLAN_BY_USER_CACHE_KEY, userId));
-            }
-
+            
             // Return the updated plan
             return await GetById(constructionPlan.Id, actionBy);
         }
@@ -933,18 +915,9 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
 
             await _context.SaveChangesAsync();
 
-            // Clear cache
+            // Clear only the main cache
             await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY);
-            // Clear user-specific caches
-            var users = await _context.Users
-                .Where(u => !u.Deleted)
-                .Select(u => u.Id)
-                .ToListAsync();
-            foreach (var userId in users)
-            {
-                await _cacheService.DeleteAsync(string.Format(RedisCacheKey.CONSTRUCTION_PLAN_BY_USER_CACHE_KEY, userId));
-            }
-
+            
             return true;
         }
 
@@ -988,18 +961,9 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
             _context.ConstructionPlans.Update(constructionPlan);
             await _context.SaveChangesAsync();
 
-            // Clear cache
+            // Clear only the main cache
             await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY);
-            // Clear user-specific caches
-            var users = await _context.Users
-                .Where(u => !u.Deleted)
-                .Select(u => u.Id)
-                .ToListAsync();
-            foreach (var userId in users)
-            {
-                await _cacheService.DeleteAsync(string.Format(RedisCacheKey.CONSTRUCTION_PLAN_BY_USER_CACHE_KEY, userId));
-            }
-
+            
             return true;
         }
 
@@ -1045,18 +1009,9 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
             _context.ConstructionPlans.Update(constructionPlan);
             await _context.SaveChangesAsync();
 
-            // Clear cache
+            // Clear only the main cache
             await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY);
-            // Clear user-specific caches
-            var users = await _context.Users
-                .Where(u => !u.Deleted)
-                .Select(u => u.Id)
-                .ToListAsync();
-            foreach (var userId in users)
-            {
-                await _cacheService.DeleteAsync(string.Format(RedisCacheKey.CONSTRUCTION_PLAN_BY_USER_CACHE_KEY, userId));
-            }
-
+            
             return true;
         }
 
@@ -1108,18 +1063,9 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
 
             await _context.SaveChangesAsync();
 
-            // Clear cache
+            // Clear only the main cache
             await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY);
-            // Clear user-specific caches
-            var users = await _context.Users
-                .Where(u => !u.Deleted)
-                .Select(u => u.Id)
-                .ToListAsync();
-            foreach (var userId in users)
-            {
-                await _cacheService.DeleteAsync(string.Format(RedisCacheKey.CONSTRUCTION_PLAN_BY_USER_CACHE_KEY, userId));
-            }
-
+            
             return true;
         }
 
@@ -1285,7 +1231,7 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
 
                 await _context.SaveChangesAsync();
                 
-                // Clear cache
+                // Clear only the main cache
                 await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY);
 
                 // Return the created plan

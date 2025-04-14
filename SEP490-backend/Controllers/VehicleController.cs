@@ -84,8 +84,6 @@ namespace Sep490_Backend.Controllers
             {
                 // Clear all vehicle-related caches using pattern deletion
                 await _cacheService.DeleteByPatternAsync(RedisCacheKey.VEHICLE_CACHE_KEY);
-                await _cacheService.DeleteByPatternAsync(RedisCacheKey.VEHICLE_SEARCH_CACHE_KEY);
-                await _cacheService.DeleteByPatternAsync(RedisCacheKey.VEHICLE_BY_ID_CACHE_KEY);
                 
                 return new ResponseDTO<string>
                 {

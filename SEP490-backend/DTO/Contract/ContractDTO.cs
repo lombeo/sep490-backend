@@ -19,12 +19,24 @@ namespace Sep490_Backend.DTO.Contract
         [Required(ErrorMessage = "Project information is required")]
         public ProjectDTO Project { get; set; } = new ProjectDTO();
         
+        public int ProjectId { get; set; }
+        
+        public string? ContractNumber { get; set; }
+        
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
         public int EstimatedDays { get; set; }
         public ContractStatusEnum Status { get; set; }
         public decimal Tax { get; set; }
         public DateTime SignDate { get; set; }
+        public DateTime SignedDate { get; set; }
+        public DateTime CompletionDate { get; set; }
+        public decimal Value { get; set; }
+        public string? CustomerRepName { get; set; }
+        public string? CustomerRepTitle { get; set; }
+        public string? CompanyRepName { get; set; }
+        public string? CompanyRepTitle { get; set; }
+        public string? Description { get; set; }
         public List<AttachmentInfo>? Attachments { get; set; }
         public List<ContractDetailDTO> ContractDetails { get; set; } = new List<ContractDetailDTO>();
     }

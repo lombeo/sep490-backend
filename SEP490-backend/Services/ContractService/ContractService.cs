@@ -30,11 +30,6 @@ namespace Sep490_Backend.Services.ContractService
         private readonly IHelperService _helpService;
         private readonly IGoogleDriveService _googleDriveService;
 
-        // Remove the local cache key constants and use the ones from RedisCacheKey class
-        // private const string CONTRACT_BY_PROJECT_CACHE_KEY = "CONTRACT:PROJECT:{0}"; // Pattern: CONTRACT:PROJECT:projectId
-        // private const string CONTRACT_BY_USER_CACHE_KEY = "CONTRACT:USER:{0}"; // Pattern: CONTRACT:USER:userId
-        // private const string CONTRACT_DETAIL_BY_USER_CACHE_KEY = "CONTRACT_DETAIL:USER:{0}"; // Pattern: CONTRACT_DETAIL:USER:userId
-
         public ContractService(BackendContext context, ICacheService cacheService, IDataService dataService, IHelperService helpService, IGoogleDriveService googleDriveService)
         {
             _context = context;
@@ -98,50 +93,37 @@ namespace Sep490_Backend.Services.ContractService
 
             await _context.SaveChangesAsync();
 
-            // Xóa cache liên quan
+            // Xóa cache chính
             _ = _cacheService.DeleteAsync(new List<string>
             {
                 RedisCacheKey.CONTRACT_CACHE_KEY,
                 RedisCacheKey.CONTRACT_DETAIL_CACHE_KEY
             });
-            
-            // Xóa cache theo project
-            string projectCacheKey = string.Format(RedisCacheKey.CONTRACT_BY_PROJECT_CACHE_KEY, projectId);
-            _ = _cacheService.DeleteAsync(projectCacheKey);
-            
-            // Xóa cache của người dùng liên quan đến project
-            var projectUsers = await _context.ProjectUsers
-                .Where(pu => pu.ProjectId == projectId && !pu.Deleted)
-                .ToListAsync();
-                
-            foreach (var pu in projectUsers)
-            {
-                string userContractCacheKey = string.Format(RedisCacheKey.CONTRACT_BY_USER_CACHE_KEY, pu.UserId);
-                string userContractDetailCacheKey = string.Format(RedisCacheKey.CONTRACT_DETAIL_BY_USER_CACHE_KEY, pu.UserId);
-                _ = _cacheService.DeleteAsync(userContractCacheKey);
-                _ = _cacheService.DeleteAsync(userContractDetailCacheKey);
-            }
 
             return data.Id;
         }
 
         public async Task<ContractDTO> Detail(int projectId, int actionBy)
         {
-            // Verificar si el usuario es Executive Board
+            // Xác thực người dùng
             var user = StaticVariable.UserMemory.FirstOrDefault(u => u.Id == actionBy);
             bool isExecutiveBoard = user != null && user.Role == RoleConstValue.EXECUTIVE_BOARD;
             
-            // Kiểm tra trong cache của người dùng trước
-            string userContractCacheKey = string.Format(RedisCacheKey.CONTRACT_BY_USER_CACHE_KEY, actionBy);
-            var userContracts = await _cacheService.GetAsync<List<ContractDTO>>(userContractCacheKey);
+            // Lấy tất cả hợp đồng từ cache chính
+            var allContracts = await _cacheService.GetAsync<List<ContractDTO>>(RedisCacheKey.CONTRACT_CACHE_KEY);
             
-            if (userContracts != null)
+            if (allContracts != null)
             {
-                // Tìm contract trong cache theo ProjectId thay vì Id
-                var contractFromCache = userContracts.FirstOrDefault(c => c.Project.Id == projectId);
+                // Tìm contract trong cache theo ProjectId
+                var contractFromCache = allContracts.FirstOrDefault(c => c.Project?.Id == projectId);
                 if (contractFromCache != null)
                 {
-                    return contractFromCache;
+                    // Kiểm tra quyền truy cập
+                    if (isExecutiveBoard || 
+                        (contractFromCache.Project?.ProjectUsers?.Any(pu => pu.UserId == actionBy && !pu.Deleted) == true))
+                    {
+                        return contractFromCache;
+                    }
                 }
             }
             
@@ -165,10 +147,9 @@ namespace Sep490_Backend.Services.ContractService
                 throw new KeyNotFoundException(Message.SiteSurveyMessage.PROJECT_NOT_FOUND);
             }
             
-            // Si es Executive Board, permitir acceso sin restricciones
+            // Kiểm tra quyền truy cập
             if (!isExecutiveBoard)
             {
-                // Kiểm tra quyền truy cập - Allow all users associated with the project
                 var hasAccess = await _context.ProjectUsers
                     .AnyAsync(pu => pu.ProjectId == projectId && pu.UserId == actionBy && !pu.Deleted);
                     
@@ -199,44 +180,129 @@ namespace Sep490_Backend.Services.ContractService
                     Deleted = cd.Deleted
                 })
                 .ToListAsync();
-                
-            // Tạo ContractDTO
+            
+            // Map dữ liệu từ database thành DTO
             var contractDTO = new ContractDTO
             {
                 Id = contract.Id,
-                ContractCode = contract.ContractCode,
                 ContractName = contract.ContractName,
+                ContractNumber = contract.ContractNumber,
+                ProjectId = contract.ProjectId,
                 Project = project,
+                SignedDate = contract.SignedDate,
                 StartDate = contract.StartDate,
-                EndDate = contract.EndDate,
-                EstimatedDays = contract.EstimatedDays,
-                Status = contract.Status,
-                Tax = contract.Tax,
-                SignDate = contract.SignDate,
-                Attachments = contract.Attachments != null ? 
-                    System.Text.Json.JsonSerializer.Deserialize<List<AttachmentInfo>>(contract.Attachments.RootElement.ToString()) 
-                    : null,
-                UpdatedAt = contract.UpdatedAt,
-                Updater = contract.Updater,
+                CompletionDate = contract.CompletionDate,
+                Value = contract.Value,
+                CustomerRepName = contract.CustomerRepName,
+                CustomerRepTitle = contract.CustomerRepTitle,
+                CompanyRepName = contract.CompanyRepName,
+                CompanyRepTitle = contract.CompanyRepTitle,
+                Description = contract.Description,
                 CreatedAt = contract.CreatedAt,
                 Creator = contract.Creator,
-                Deleted = contract.Deleted,
+                UpdatedAt = contract.UpdatedAt,
+                Updater = contract.Updater,
                 ContractDetails = contractDetails
             };
             
-            // Cập nhật cache nếu cần
-            if (userContracts != null)
+            // Cập nhật cache
+            if (allContracts == null)
             {
-                userContracts.Add(contractDTO);
-                _ = _cacheService.SetAsync(userContractCacheKey, userContracts, TimeSpan.FromMinutes(30));
+                // Nếu cache trống, lấy toàn bộ dữ liệu và cập nhật cache
+                allContracts = await GetAllContractDTOs();
+                await _cacheService.SetAsync(RedisCacheKey.CONTRACT_CACHE_KEY, allContracts, TimeSpan.FromHours(1));
             }
-            else
+            else if (!allContracts.Any(c => c.Id == contractDTO.Id))
             {
-                userContracts = new List<ContractDTO> { contractDTO };
-                _ = _cacheService.SetAsync(userContractCacheKey, userContracts, TimeSpan.FromMinutes(30));
+                // Nếu contract không có trong cache, thêm vào cache
+                allContracts.Add(contractDTO);
+                await _cacheService.SetAsync(RedisCacheKey.CONTRACT_CACHE_KEY, allContracts, TimeSpan.FromHours(1));
             }
-
+            
             return contractDTO;
+        }
+        
+        // Helper method to get all contracts as DTOs
+        private async Task<List<ContractDTO>> GetAllContractDTOs()
+        {
+            var contracts = await _context.Contracts
+                .Where(c => !c.Deleted)
+                .ToListAsync();
+                
+            List<ContractDTO> contractDTOs = new List<ContractDTO>();
+            
+            foreach (var contract in contracts)
+            {
+                var project = await _context.Projects
+                    .Include(p => p.ProjectUsers)
+                    .FirstOrDefaultAsync(p => p.Id == contract.ProjectId && !p.Deleted);
+                    
+                if (project != null)
+                {
+                    var contractDetails = await _context.ContractDetails
+                        .Where(cd => cd.ContractId == contract.Id && !cd.Deleted)
+                        .Select(cd => new ContractDetailDTO
+                        {
+                            WorkCode = cd.WorkCode,
+                            Index = cd.Index,
+                            ContractId = cd.ContractId,
+                            ParentIndex = cd.ParentIndex,
+                            WorkName = cd.WorkName,
+                            Unit = cd.Unit,
+                            Quantity = cd.Quantity,
+                            UnitPrice = cd.UnitPrice,
+                            Total = cd.Total,
+                            CreatedAt = cd.CreatedAt,
+                            Creator = cd.Creator,
+                            UpdatedAt = cd.UpdatedAt,
+                            Updater = cd.Updater,
+                            Deleted = cd.Deleted
+                        })
+                        .ToListAsync();
+                        
+                    // Map to ProjectDTO
+                    var projectDTO = new ProjectDTO
+                    {
+                        Id = project.Id,
+                        ProjectName = project.ProjectName,
+                        // Minimal project data as needed
+                        ProjectUsers = project.ProjectUsers
+                            .Where(pu => !pu.Deleted)
+                            .Select(pu => new DTO.Project.ProjectUserDTO
+                            {
+                                Id = pu.Id,
+                                UserId = pu.UserId,
+                                ProjectId = pu.ProjectId,
+                                IsCreator = pu.IsCreator
+                            }).ToList()
+                    };
+                    
+                    contractDTOs.Add(new ContractDTO
+                    {
+                        Id = contract.Id,
+                        ContractName = contract.ContractName,
+                        ContractNumber = contract.ContractNumber,
+                        ProjectId = contract.ProjectId,
+                        Project = projectDTO,
+                        SignedDate = contract.SignedDate,
+                        StartDate = contract.StartDate,
+                        CompletionDate = contract.CompletionDate,
+                        Value = contract.Value,
+                        CustomerRepName = contract.CustomerRepName,
+                        CustomerRepTitle = contract.CustomerRepTitle,
+                        CompanyRepName = contract.CompanyRepName,
+                        CompanyRepTitle = contract.CompanyRepTitle,
+                        Description = contract.Description,
+                        CreatedAt = contract.CreatedAt,
+                        Creator = contract.Creator,
+                        UpdatedAt = contract.UpdatedAt,
+                        Updater = contract.Updater,
+                        ContractDetails = contractDetails
+                    });
+                }
+            }
+            
+            return contractDTOs;
         }
 
         public async Task<ContractDTO> Save(SaveContractDTO model)
@@ -616,27 +682,13 @@ namespace Sep490_Backend.Services.ContractService
                 // Commit transaction khi tất cả thay đổi đã thành công
                 await transaction.CommitAsync();
 
-                // Xóa cache liên quan
-                _ = _cacheService.DeleteAsync(RedisCacheKey.CONTRACT_CACHE_KEY);
-                _ = _cacheService.DeleteAsync(RedisCacheKey.CONTRACT_DETAIL_CACHE_KEY);
-                
-                // Xóa cache theo project
-                string projectCacheKey = string.Format(RedisCacheKey.CONTRACT_BY_PROJECT_CACHE_KEY, model.ProjectId);
-                _ = _cacheService.DeleteAsync(projectCacheKey);
-                
-                // Xóa cache của người dùng liên quan đến project
-                var projectUsers = await _context.ProjectUsers
-                    .Where(pu => pu.ProjectId == model.ProjectId && !pu.Deleted)
-                    .ToListAsync();
-                    
-                foreach (var pu in projectUsers)
+                // Xóa cache chính
+                _ = _cacheService.DeleteAsync(new List<string>
                 {
-                    string userContractCacheKey = string.Format(RedisCacheKey.CONTRACT_BY_USER_CACHE_KEY, pu.UserId);
-                    string userContractDetailCacheKey = string.Format(RedisCacheKey.CONTRACT_DETAIL_BY_USER_CACHE_KEY, pu.UserId);
-                    _ = _cacheService.DeleteAsync(userContractCacheKey);
-                    _ = _cacheService.DeleteAsync(userContractDetailCacheKey);
-                }
-
+                    RedisCacheKey.CONTRACT_CACHE_KEY,
+                    RedisCacheKey.CONTRACT_DETAIL_CACHE_KEY
+                });
+                
                 // Return the Contract DTO
                 return await Detail(model.ProjectId, model.ActionBy);
             }
