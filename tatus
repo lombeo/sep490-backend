@@ -1,0 +1,9 @@
+warning: in the working copy of 'SEP490-backend/Services/ConstructionPlanService/ConstructionPlanService.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'SEP490-backend/Services/ContractService/ContractService.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'SEP490-backend/Services/DataService/DataService.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'SEP490-backend/Services/SiteSurveyService/SiteSurveyService.cs', LF will be replaced by CRLF the next time Git touches it
+SEP490-backend/Services/ConstructionPlanService/ConstructionPlanService.cs
+SEP490-backend/Services/ContractService/ContractService.cs
+SEP490-backend/Services/DataService/DataService.cs
+SEP490-backend/Services/ProjectService/ProjectService.cs
+SEP490-backend/Services/SiteSurveyService/SiteSurveyService.cs

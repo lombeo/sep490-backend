@@ -33,5 +33,6 @@ namespace Sep490_Backend.DTO.Project
         public string? Description { get; set; }
         public bool IsCreator { get; set; } = false;
         public List<int> ViewerUserIds { get; set; } = new List<int>();
+        public List<ProjectUserDTO>? ProjectUsers { get; set; }
     }
 }

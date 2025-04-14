@@ -30,10 +30,6 @@ namespace Sep490_Backend.Services.SiteSurveyService
         private readonly IDataService _dataService;
         private readonly IGoogleDriveService _googleDriveService;
 
-        // Định nghĩa các key cache cho SiteSurvey
-        private const string SITE_SURVEY_BY_PROJECT_CACHE_KEY = "SITE_SURVEY:PROJECT:{0}"; // Pattern: SITE_SURVEY:PROJECT:projectId
-        private const string SITE_SURVEY_BY_USER_CACHE_KEY = "SITE_SURVEY:USER:{0}"; // Pattern: SITE_SURVEY:USER:userId
-
         public SiteSurveyService(
             BackendContext context, 
             IDataService dataService, 
@@ -105,23 +101,8 @@ namespace Sep490_Backend.Services.SiteSurveyService
             _context.Update(data);
             await _context.SaveChangesAsync();
 
-            // Xóa cache liên quan
+            // Xóa cache duy nhất cho SiteSurvey
             _ = _cacheService.DeleteAsync(RedisCacheKey.SITE_SURVEY_CACHE_KEY);
-            
-            // Xóa cache theo project
-            string projectCacheKey = string.Format(SITE_SURVEY_BY_PROJECT_CACHE_KEY, data.ProjectId);
-            _ = _cacheService.DeleteAsync(projectCacheKey);
-            
-            // Xóa cache của người dùng
-            var projectUsers = await _context.ProjectUsers
-                .Where(pu => pu.ProjectId == data.ProjectId && !pu.Deleted)
-                .ToListAsync();
-                
-            foreach (var pu in projectUsers)
-            {
-                string userCacheKey = string.Format(SITE_SURVEY_BY_USER_CACHE_KEY, pu.UserId);
-                _ = _cacheService.DeleteAsync(userCacheKey);
-            }
 
             return data.Id;
         }
@@ -140,47 +121,37 @@ namespace Sep490_Backend.Services.SiteSurveyService
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
 
-            // Kiểm tra cache theo project trước
-            string projectCacheKey = string.Format(SITE_SURVEY_BY_PROJECT_CACHE_KEY, projectId);
-            var projectSurvey = await _cacheService.GetAsync<SiteSurvey>(projectCacheKey);
+            // Lấy toàn bộ dữ liệu SiteSurvey từ cache chính
+            var allSurveys = await _cacheService.GetAsync<List<SiteSurvey>>(RedisCacheKey.SITE_SURVEY_CACHE_KEY);
             
-            if (projectSurvey != null)
+            if (allSurveys != null)
             {
-                return projectSurvey;
-            }
-
-            // Kiểm tra cache theo user
-            string userCacheKey = string.Format(SITE_SURVEY_BY_USER_CACHE_KEY, actionBy);
-            var userSurveys = await _cacheService.GetAsync<List<SiteSurvey>>(userCacheKey);
-            
-            if (userSurveys != null)
-            {
-                var surveyFromCache = userSurveys.FirstOrDefault(s => s.ProjectId == projectId);
+                // Lọc từ cache chính theo projectId
+                var surveyFromCache = allSurveys.FirstOrDefault(s => s.ProjectId == projectId && !s.Deleted);
                 if (surveyFromCache != null)
                 {
                     return surveyFromCache;
                 }
             }
 
-            // Nếu không có trong cache, tìm trong database
+            // Nếu không có trong cache hoặc không tìm thấy trong cache, tìm trong database
             var survey = await _context.SiteSurveys.FirstOrDefaultAsync(s => s.ProjectId == projectId && !s.Deleted);
             if (survey == null)
             {
                 throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
 
-            // Cập nhật cache
-            _ = _cacheService.SetAsync(projectCacheKey, survey, TimeSpan.FromMinutes(30));
-            
-            if (userSurveys != null)
+            // Nếu cache chưa có, tải toàn bộ dữ liệu vào cache
+            if (allSurveys == null)
             {
-                userSurveys.Add(survey);
-                _ = _cacheService.SetAsync(userCacheKey, userSurveys, TimeSpan.FromMinutes(30));
+                allSurveys = await _context.SiteSurveys.Where(s => !s.Deleted).ToListAsync();
+                await _cacheService.SetAsync(RedisCacheKey.SITE_SURVEY_CACHE_KEY, allSurveys, TimeSpan.FromMinutes(30));
             }
+            // Nếu đã có cache nhưng không tìm thấy bản ghi cần tìm, cập nhật cache
             else
             {
-                userSurveys = new List<SiteSurvey> { survey };
-                _ = _cacheService.SetAsync(userCacheKey, userSurveys, TimeSpan.FromMinutes(30));
+                allSurveys.Add(survey); 
+                await _cacheService.SetAsync(RedisCacheKey.SITE_SURVEY_CACHE_KEY, allSurveys, TimeSpan.FromMinutes(30));
             }
 
             return survey;
@@ -340,23 +311,8 @@ namespace Sep490_Backend.Services.SiteSurveyService
 
             await _context.SaveChangesAsync();
             
-            // Xóa cache liên quan
+            // Xóa cache duy nhất cho SiteSurvey
             _ = _cacheService.DeleteAsync(RedisCacheKey.SITE_SURVEY_CACHE_KEY);
-            
-            // Xóa cache theo project
-            string projectCacheKey = string.Format(SITE_SURVEY_BY_PROJECT_CACHE_KEY, model.ProjectId);
-            _ = _cacheService.DeleteAsync(projectCacheKey);
-            
-            // Xóa cache của người dùng liên quan đến project
-            var projectUsers = await _context.ProjectUsers
-                .Where(pu => pu.ProjectId == model.ProjectId && !pu.Deleted)
-                .ToListAsync();
-                
-            foreach (var pu in projectUsers)
-            {
-                string userCacheKey = string.Format(SITE_SURVEY_BY_USER_CACHE_KEY, pu.UserId);
-                _ = _cacheService.DeleteAsync(userCacheKey);
-            }
 
             return survey;
         }

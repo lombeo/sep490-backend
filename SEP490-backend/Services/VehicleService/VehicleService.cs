@@ -22,129 +22,118 @@ namespace Sep490_Backend.Services.VehicleService
             _logger = logger;
         }
 
-        private string GetVehicleByIdCacheKey(int id) => string.Format(RedisCacheKey.VEHICLE_BY_ID_CACHE_KEY, id);
         private string GetVehicleSearchCacheKey(VehicleSearchDTO searchDto)
         {
-            var stringBuilder = new StringBuilder(RedisCacheKey.VEHICLE_SEARCH_CACHE_KEY);
-            stringBuilder.Append("_");
-            
-            if (!string.IsNullOrEmpty(searchDto.LicensePlate))
-                stringBuilder.Append($"LP_{searchDto.LicensePlate}_");
-            
-            if (!string.IsNullOrEmpty(searchDto.Brand))
-                stringBuilder.Append($"BR_{searchDto.Brand}_");
-            
-            if (searchDto.VehicleType.HasValue)
-                stringBuilder.Append($"VT_{searchDto.VehicleType.Value}_");
-            
-            if (searchDto.Status.HasValue)
-                stringBuilder.Append($"ST_{searchDto.Status.Value}_");
-            
-            if (searchDto.Driver.HasValue)
-                stringBuilder.Append($"DR_{searchDto.Driver.Value}_");
-            
-            stringBuilder.Append($"PI_{searchDto.PageIndex}_PS_{searchDto.PageSize}");
-            
-            return stringBuilder.ToString();
+            return RedisCacheKey.VEHICLE_CACHE_KEY;
         }
 
         public async Task<Vehicle> GetVehicleById(int id)
         {
-            var cacheKey = GetVehicleByIdCacheKey(id);
+            string cacheKey = RedisCacheKey.VEHICLE_CACHE_KEY;
             
-            // Try to get from cache first
-            var cachedVehicle = await _cacheService.GetAsync<Vehicle>(cacheKey, true);
+            var cachedVehicles = await _cacheService.GetAsync<List<Vehicle>>(cacheKey);
             
-            if (cachedVehicle != null)
+            if (cachedVehicles != null)
             {
-                _logger.LogInformation($"Cache hit for vehicle ID {id}");
-                return cachedVehicle;
+                _logger.LogInformation($"Cache hit for all vehicles, finding vehicle ID {id}");
+                var vehicle = cachedVehicles.FirstOrDefault(v => v.Id == id && !v.Deleted);
+                if (vehicle != null)
+                {
+                    return vehicle;
+                }
             }
             
             _logger.LogInformation($"Cache miss for vehicle ID {id}, fetching from database");
             
-            // If not in cache, get from database
-            var vehicle = await _context.Vehicles
+            var foundVehicle = await _context.Vehicles
                 .Include(v => v.User)
                 .FirstOrDefaultAsync(v => v.Id == id && !v.Deleted);
 
-            if (vehicle == null)
+            if (foundVehicle == null)
             {
                 throw new KeyNotFoundException($"Vehicle with ID {id} not found");
             }
 
-            // Cache the result
-            await _cacheService.SetAsync(cacheKey, vehicle, DEFAULT_CACHE_DURATION, true);
+            if (cachedVehicles == null)
+            {
+                cachedVehicles = await _context.Vehicles
+                    .Include(v => v.User)
+                    .Where(v => !v.Deleted)
+                    .ToListAsync();
+                    
+                await _cacheService.SetAsync(cacheKey, cachedVehicles, DEFAULT_CACHE_DURATION);
+            }
+            else if (!cachedVehicles.Any(v => v.Id == id))
+            {
+                cachedVehicles.Add(foundVehicle);
+                await _cacheService.SetAsync(cacheKey, cachedVehicles, DEFAULT_CACHE_DURATION);
+            }
             
-            return vehicle;
+            return foundVehicle;
         }
 
         public async Task<List<Vehicle>> GetVehicles(VehicleSearchDTO searchDto)
         {
-            var cacheKey = GetVehicleSearchCacheKey(searchDto);
+            string cacheKey = RedisCacheKey.VEHICLE_CACHE_KEY;
             
-            // Try to get from cache first
-            var cachedVehicles = await _cacheService.GetAsync<List<Vehicle>>(cacheKey);
+            var allVehicles = await _cacheService.GetAsync<List<Vehicle>>(cacheKey);
             
-            if (cachedVehicles != null && cachedVehicles.Count > 0)
+            if (allVehicles == null)
             {
-                _logger.LogInformation($"Cache hit for vehicles search: {cacheKey}");
-                return cachedVehicles;
+                _logger.LogInformation($"Cache miss for all vehicles, fetching from database");
+                
+                allVehicles = await _context.Vehicles
+                    .Include(v => v.User)
+                    .Where(v => !v.Deleted)
+                    .ToListAsync();
+                    
+                await _cacheService.SetAsync(cacheKey, allVehicles, DEFAULT_CACHE_DURATION);
+            }
+            else
+            {
+                _logger.LogInformation($"Cache hit for all vehicles");
             }
             
-            _logger.LogInformation($"Cache miss for vehicles search: {cacheKey}, fetching from database");
+            var filteredVehicles = allVehicles.AsQueryable();
             
-            // If not in cache, get from database
-            var query = _context.Vehicles
-                .Include(v => v.User)
-                .Where(v => !v.Deleted)
-                .AsQueryable();
-
-            // Apply filters if provided
             if (!string.IsNullOrEmpty(searchDto.LicensePlate))
             {
-                query = query.Where(v => v.LicensePlate.Contains(searchDto.LicensePlate));
+                filteredVehicles = filteredVehicles.Where(v => v.LicensePlate.Contains(searchDto.LicensePlate));
             }
 
             if (!string.IsNullOrEmpty(searchDto.Brand))
             {
-                query = query.Where(v => v.Brand.Contains(searchDto.Brand));
+                filteredVehicles = filteredVehicles.Where(v => v.Brand.Contains(searchDto.Brand));
             }
 
             if (searchDto.VehicleType.HasValue)
             {
-                query = query.Where(v => v.VehicleType == searchDto.VehicleType.Value);
+                filteredVehicles = filteredVehicles.Where(v => v.VehicleType == searchDto.VehicleType.Value);
             }
 
             if (searchDto.Status.HasValue)
             {
-                query = query.Where(v => v.Status == searchDto.Status.Value);
+                filteredVehicles = filteredVehicles.Where(v => v.Status == searchDto.Status.Value);
             }
 
             if (searchDto.Driver.HasValue)
             {
-                query = query.Where(v => v.Driver == searchDto.Driver.Value);
+                filteredVehicles = filteredVehicles.Where(v => v.Driver == searchDto.Driver.Value);
             }
 
-            // Count total records for pagination
-            searchDto.Total = await query.CountAsync();
+            var filteredList = filteredVehicles.ToList();
+            
+            searchDto.Total = filteredList.Count;
 
-            // Apply pagination
-            var vehicles = await query
+            return filteredList
                 .OrderByDescending(v => v.UpdatedAt)
                 .Skip(searchDto.Skip)
                 .Take(searchDto.PageSize)
-                .ToListAsync();
-
-            // Cache the result
-            await _cacheService.SetAsync(cacheKey, vehicles, DEFAULT_CACHE_DURATION);
-            
-            return vehicles;
+                .ToList();
         }
 
         public async Task<Vehicle> CreateVehicle(VehicleCreateDTO vehicleDto, int userId)
         {
-            // Check for duplicate license plate
             var existingVehicle = await _context.Vehicles
                 .FirstOrDefaultAsync(v => v.LicensePlate == vehicleDto.LicensePlate && !v.Deleted);
 
@@ -153,7 +142,6 @@ namespace Sep490_Backend.Services.VehicleService
                 throw new ArgumentException($"Vehicle with license plate {vehicleDto.LicensePlate} already exists");
             }
 
-            // Check if the driver exists
             var driver = await _context.Users.FirstOrDefaultAsync(u => u.Id == vehicleDto.Driver && !u.Deleted);
             if (driver == null)
             {
@@ -185,7 +173,6 @@ namespace Sep490_Backend.Services.VehicleService
             await _context.Vehicles.AddAsync(vehicle);
             await _context.SaveChangesAsync();
 
-            // Invalidate relevant caches
             await InvalidateVehicleCaches();
             
             return vehicle;
@@ -201,7 +188,6 @@ namespace Sep490_Backend.Services.VehicleService
                 throw new KeyNotFoundException($"Vehicle with ID {vehicleDto.Id} not found");
             }
 
-            // Check for duplicate license plate if changed
             if (vehicle.LicensePlate != vehicleDto.LicensePlate)
             {
                 var existingVehicle = await _context.Vehicles
@@ -213,14 +199,12 @@ namespace Sep490_Backend.Services.VehicleService
                 }
             }
 
-            // Check if the driver exists
             var driver = await _context.Users.FirstOrDefaultAsync(u => u.Id == vehicleDto.Driver && !u.Deleted);
             if (driver == null)
             {
                 throw new ArgumentException($"Driver with ID {vehicleDto.Driver} not found");
             }
 
-            // Update vehicle properties
             vehicle.LicensePlate = vehicleDto.LicensePlate;
             vehicle.Brand = vehicleDto.Brand;
             vehicle.YearOfManufacture = vehicleDto.YearOfManufacture;
@@ -242,8 +226,7 @@ namespace Sep490_Backend.Services.VehicleService
             _context.Vehicles.Update(vehicle);
             await _context.SaveChangesAsync();
 
-            // Invalidate relevant caches
-            await InvalidateVehicleCaches(vehicle.Id);
+            await InvalidateVehicleCaches();
             
             return vehicle;
         }
@@ -258,35 +241,20 @@ namespace Sep490_Backend.Services.VehicleService
                 throw new KeyNotFoundException($"Vehicle with ID {id} not found");
             }
 
-            // Soft delete
             vehicle.Deleted = true;
             vehicle.Updater = userId;
 
             _context.Vehicles.Update(vehicle);
             await _context.SaveChangesAsync();
 
-            // Invalidate relevant caches
-            await InvalidateVehicleCaches(id);
+            await InvalidateVehicleCaches();
             
             return true;
         }
         
         private async Task InvalidateVehicleCaches(int? specificVehicleId = null)
         {
-            // Invalidate general vehicle cache
             await _cacheService.DeleteAsync(RedisCacheKey.VEHICLE_CACHE_KEY);
-            
-            // If a specific vehicle ID is provided, invalidate its cache
-            if (specificVehicleId.HasValue)
-            {
-                await _cacheService.DeleteAsync(GetVehicleByIdCacheKey(specificVehicleId.Value));
-            }
-            
-            // Use pattern-based invalidation for all vehicle-related caches
-            await _cacheService.DeleteByPatternAsync(RedisCacheKey.VEHICLE_CACHE_KEY);
-            await _cacheService.DeleteByPatternAsync(RedisCacheKey.VEHICLE_SEARCH_CACHE_KEY);
-            
-            _logger.LogInformation($"Invalidated vehicle caches. Specific ID: {specificVehicleId}");
         }
     }
 } 

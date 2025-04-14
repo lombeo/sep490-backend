@@ -51,128 +51,121 @@ namespace Sep490_Backend.Services.DataService
             var user = StaticVariable.UserMemory.FirstOrDefault(u => u.Id == model.ActionBy);
             bool isExecutiveBoard = user != null && user.Role == RoleConstValue.EXECUTIVE_BOARD;
 
-            // Xác định các key cache
-            string generalCacheKey = RedisCacheKey.CONTRACT_CACHE_KEY;
-            string userCacheKey = string.Format(RedisCacheKey.CONTRACT_BY_USER_CACHE_KEY, model.ActionBy);
+            // Use only the main cache key
+            string cacheKey = RedisCacheKey.CONTRACT_CACHE_KEY;
             
-            // Thử lấy từ cache của user trước
-            var userCache = await _cacheService.GetAsync<List<ContractDTO>>(userCacheKey);
-            if (userCache != null)
+            // Try to get from main cache
+            var allContracts = await _cacheService.GetAsync<List<ContractDTO>>(cacheKey);
+            
+            if (allContracts != null)
             {
-                var filteredData = ApplyContractFilters(userCache, model);
-                model.Total = filteredData.Count();
+                // If user is not Executive Board, filter contracts by user's project access
+                var filteredContracts = allContracts;
                 
+                if (!isExecutiveBoard)
+                {
+                    // Get projects the user has access to
+                    var userProjectIds = await _context.ProjectUsers
+                        .Where(pu => pu.UserId == model.ActionBy && !pu.Deleted)
+                        .Select(pu => pu.ProjectId)
+                        .ToListAsync();
+                        
+                    // Filter contracts by those projects
+                    filteredContracts = filteredContracts.Where(c => 
+                        c.Project != null && userProjectIds.Contains(c.Project.Id)).ToList();
+                }
+                
+                // Apply search filters
+                var filteredResult = ApplyContractFilters(filteredContracts, model);
+                
+                // Set total count for pagination
+                model.Total = filteredResult.Count();
+                
+                // Apply pagination if needed
                 if (model.PageSize > 0)
                 {
-                    filteredData = filteredData.Skip(model.Skip).Take(model.PageSize).ToList();
+                    filteredResult = filteredResult.Skip(model.Skip).Take(model.PageSize).ToList();
                 }
                 
-                return filteredData;
+                return filteredResult;
             }
 
-            // Nếu không có trong cache của user, thử lấy từ cache chung
-            var data = await _cacheService.GetAsync<List<ContractDTO>>(generalCacheKey);
-            if (data == null)
+            // If not in cache, get from database
+            
+            // Get the list of projects the user has access to
+            List<ProjectDTO> projects = await ListProject(new SearchProjectDTO()
             {
-                // Get the list of all projects if the user is an Executive Board member
-                // Otherwise, get the list of projects the user has access to
-                List<ProjectDTO> projects;
-                if (isExecutiveBoard)
-                {
-                    // Executive Board members can see all projects
-                    projects = await ListProject(new SearchProjectDTO()
+                ActionBy = model.ActionBy,
+                PageSize = int.MaxValue
+            });
+            
+            var projectIds = projects.Select(p => p.Id).ToList();
+            
+            // Get contracts for those projects
+            var contracts = await _context.Contracts
+                .Where(t => !t.Deleted && projectIds.Contains(t.ProjectId))
+                .OrderByDescending(t => t.UpdatedAt)
+                .ToListAsync();
+            
+            // Get all contract details for these contracts
+            var allContractIds = contracts.Select(c => c.Id).ToList();
+            var allContractDetails = await _context.Set<ContractDetail>()
+                .Where(cd => !cd.Deleted && allContractIds.Contains(cd.ContractId))
+                .ToListAsync();
+            
+            // Map to DTOs
+            var contractDTOs = contracts.Select(t => new ContractDTO
+            {
+                Id = t.Id,
+                ContractCode = t.ContractCode,
+                ContractName = t.ContractName,
+                Project = projects.FirstOrDefault(p => p.Id == t.ProjectId) ?? new ProjectDTO(),
+                StartDate = t.StartDate,
+                EndDate = t.EndDate,
+                EstimatedDays = t.EstimatedDays,
+                Status = t.Status,
+                Tax = t.Tax,
+                SignDate = t.SignDate,
+                Attachments = t.Attachments != null ? 
+                    System.Text.Json.JsonSerializer.Deserialize<List<AttachmentInfo>>(t.Attachments.RootElement.ToString()) 
+                    : null,
+                UpdatedAt = t.UpdatedAt,
+                Updater = t.Updater,
+                CreatedAt = t.CreatedAt,
+                Creator = t.Creator,
+                Deleted = t.Deleted,
+                // Add ContractDetails for each Contract
+                ContractDetails = allContractDetails
+                    .Where(cd => cd.ContractId == t.Id)
+                    .Select(cd => new ContractDetailDTO
                     {
-                        ActionBy = model.ActionBy,
-                        PageSize = int.MaxValue
-                    });
-                }
-                else 
-                {
-                    // For regular users, get all projects they're associated with
-                    projects = await ListProject(new SearchProjectDTO()
-                    {
-                        ActionBy = model.ActionBy,
-                        PageSize = int.MaxValue
-                    });
-                }
-                
-                var projectIds = projects.Select(p => p.Id).ToList();
-                
-                // Lấy danh sách Contract thuộc các Project mà người dùng có quyền truy cập
-                // Now with one-to-one relationship, each project has at most one contract
-                var contracts = await _context.Contracts
-                    .Where(t => !t.Deleted && projectIds.Contains(t.ProjectId))
-                    .ToListAsync();
-                
-                // Lấy tất cả ContractDetail không bị xóa
-                var allContractIds = contracts.Select(c => c.Id).ToList();
-                var allContractDetails = await _context.Set<ContractDetail>()
-                    .Where(cd => !cd.Deleted && allContractIds.Contains(cd.ContractId))
-                    .ToListAsync();
-                
-                data = contracts.Select(t => new ContractDTO
-                {
-                    Id = t.Id,
-                    ContractCode = t.ContractCode,
-                    ContractName = t.ContractName,
-                    Project = projects.FirstOrDefault(p => p.Id == t.ProjectId) ?? new ProjectDTO(),
-                    StartDate = t.StartDate,
-                    EndDate = t.EndDate,
-                    EstimatedDays = t.EstimatedDays,
-                    Status = t.Status,
-                    Tax = t.Tax,
-                    SignDate = t.SignDate,
-                    Attachments = t.Attachments != null ? 
-                        System.Text.Json.JsonSerializer.Deserialize<List<AttachmentInfo>>(t.Attachments.RootElement.ToString()) 
-                        : null,
-                    UpdatedAt = t.UpdatedAt,
-                    Updater = t.Updater,
-                    CreatedAt = t.CreatedAt,
-                    Creator = t.Creator,
-                    Deleted = t.Deleted,
-                    // Thêm danh sách ContractDetail cho mỗi Contract
-                    ContractDetails = allContractDetails
-                        .Where(cd => cd.ContractId == t.Id)
-                        .Select(cd => new ContractDetailDTO
-                        {
-                            WorkCode = cd.WorkCode,
-                            Index = cd.Index,
-                            ContractId = cd.ContractId,
-                            ParentIndex = cd.ParentIndex,
-                            WorkName = cd.WorkName,
-                            Unit = cd.Unit,
-                            Quantity = cd.Quantity,
-                            UnitPrice = cd.UnitPrice,
-                            Total = cd.Total,
-                            CreatedAt = cd.CreatedAt,
-                            Creator = cd.Creator,
-                            UpdatedAt = cd.UpdatedAt,
-                            Updater = cd.Updater,
-                            Deleted = cd.Deleted
-                        }).ToList()
-                }).OrderByDescending(t => t.UpdatedAt).ToList();
+                        WorkCode = cd.WorkCode,
+                        Index = cd.Index,
+                        ContractId = cd.ContractId,
+                        ParentIndex = cd.ParentIndex,
+                        WorkName = cd.WorkName,
+                        Unit = cd.Unit,
+                        Quantity = cd.Quantity,
+                        UnitPrice = cd.UnitPrice,
+                        Total = cd.Total,
+                        CreatedAt = cd.CreatedAt,
+                        Creator = cd.Creator,
+                        UpdatedAt = cd.UpdatedAt,
+                        Updater = cd.Updater,
+                        Deleted = cd.Deleted
+                    }).ToList()
+            }).ToList();
 
-                // Lưu vào cache chung
-                _ = _cacheService.SetAsync(generalCacheKey, data, TimeSpan.FromMinutes(30));
-            }
-            else if (!isExecutiveBoard)
-            {
-                // Nếu user không phải Executive Board, lọc theo quyền truy cập của người dùng
-                var projectIds = await _context.ProjectUsers
-                    .Where(pu => pu.UserId == model.ActionBy && !pu.Deleted)
-                    .Select(pu => pu.ProjectId)
-                    .ToListAsync();
-                    
-                data = data.Where(c => projectIds.Contains(c.Project.Id)).ToList();
-            }
+            // Save all contracts to main cache
+            await _cacheService.SetAsync(cacheKey, contractDTOs, TimeSpan.FromHours(1));
             
-            // Lưu vào cache của user
-            _ = _cacheService.SetAsync(userCacheKey, data, TimeSpan.FromMinutes(30));
+            // Apply search filters
+            var result = ApplyContractFilters(contractDTOs, model);
             
-            // Áp dụng bộ lọc theo điều kiện search
-            var result = ApplyContractFilters(data, model);
+            // Set total count for pagination
             model.Total = result.Count();
             
+            // Apply pagination if needed
             if (model.PageSize > 0)
             {
                 result = result.Skip(model.Skip).Take(model.PageSize).ToList();
@@ -288,303 +281,276 @@ namespace Sep490_Backend.Services.DataService
             var user = StaticVariable.UserMemory.FirstOrDefault(u => u.Id == model.ActionBy);
             bool isExecutiveBoard = user != null && user.Role == RoleConstValue.EXECUTIVE_BOARD;
 
-            // Tạo cache key riêng cho từng user để lưu trữ danh sách project theo phân quyền
-            string userProjectCacheKey = string.Format(RedisCacheKey.PROJECT_BY_USER_CACHE_KEY, model.ActionBy);
+            // Use the main cache key
+            string projectCacheKey = RedisCacheKey.PROJECT_CACHE_KEY;
             
-            // Thử lấy danh sách project từ cache theo user
-            var userProjects = await _cacheService.GetAsync<List<ProjectDTO>>(userProjectCacheKey);
+            // Get projects from the main cache
+            var allProjects = await _cacheService.GetAsync<List<ProjectDTO>>(projectCacheKey);
             
-            if (userProjects == null)
+            if (allProjects != null)
             {
-                // Không có trong cache, cần tạo mới
+                // Filter projects based on user's access rights
+                var filteredProjects = FilterProjectsByUserAccess(allProjects, model.ActionBy, isExecutiveBoard);
                 
-                // 1. Lấy danh sách project từ cache chung hoặc từ database
-                string projectCacheKey = RedisCacheKey.PROJECT_CACHE_KEY;
-                var allProjects = await _cacheService.GetAsync<List<Project>>(projectCacheKey);
-                
-                if (allProjects == null)
+                // Apply search filters
+                if (!string.IsNullOrEmpty(model.KeyWord))
                 {
-                    // Lấy từ database và cache lại
-                    allProjects = await _context.Projects
-                        .Where(t => !t.Deleted)
-                        .ToListAsync();
-                    
-                    _ = _cacheService.SetAsync(projectCacheKey, allProjects);
+                    filteredProjects = filteredProjects.Where(p => 
+                        p.ProjectName.Contains(model.KeyWord) || 
+                        p.ProjectCode.Contains(model.KeyWord) || 
+                        (p.Customer != null && p.Customer.CustomerName.Contains(model.KeyWord))
+                    ).ToList();
                 }
                 
-                // 2. Lấy danh sách phân quyền project từ cache hoặc từ database
-                string projectUserCacheKey = RedisCacheKey.PROJECT_USER_CACHE_KEY;
-                var allProjectPermissions = await _cacheService.GetAsync<List<ProjectUser>>(projectUserCacheKey);
-                
-                if (allProjectPermissions == null)
+                if (model.CustomerId > 0)
                 {
-                    // Lấy từ database và cache lại
-                    allProjectPermissions = await _context.ProjectUsers
-                        .Where(pu => !pu.Deleted)
-                        .ToListAsync();
-                    
-                    _ = _cacheService.SetAsync(projectUserCacheKey, allProjectPermissions);
+                    filteredProjects = filteredProjects.Where(p => p.Customer?.Id == model.CustomerId).ToList();
                 }
                 
-                // 3. Lấy thông tin về customer
-                var allCustomers = await _context.Customers.Where(c => !c.Deleted).ToListAsync();
-                
-                // 4. Xác định những project mà user có quyền xem
-                userProjects = new List<ProjectDTO>();
-                
-                if (isExecutiveBoard)
+                if (model.Status.HasValue)
                 {
-                    foreach (var project in allProjects)
-                    {
-                        // Danh sách người có quyền xem project
-                        var viewerIds = allProjectPermissions
-                            .Where(pu => pu.ProjectId == project.Id && !pu.IsCreator && !pu.Deleted)
-                            .Select(pu => pu.UserId)
-                            .ToList();
-                        
-                        var customerEntity = allCustomers.FirstOrDefault(c => c.Id == project.CustomerId);
-                        
-                        // Tạo Customer mới với Projects = null để tránh vòng lặp tham chiếu
-                        var customer = customerEntity != null ? 
-                            new Customer {
-                                Id = customerEntity.Id,
-                                CustomerName = customerEntity.CustomerName,
-                                DirectorName = customerEntity.DirectorName,
-                                Phone = customerEntity.Phone,
-                                Email = customerEntity.Email,
-                                Address = customerEntity.Address,
-                                Description = customerEntity.Description,
-                                CustomerCode = customerEntity.CustomerCode,
-                                TaxCode = customerEntity.TaxCode,
-                                Fax = customerEntity.Fax,
-                                BankAccount = customerEntity.BankAccount,
-                                BankName = customerEntity.BankName,
-                                CreatedAt = customerEntity.CreatedAt,
-                                Creator = customerEntity.Creator,
-                                UpdatedAt = customerEntity.UpdatedAt,
-                                Updater = customerEntity.Updater,
-                                Deleted = customerEntity.Deleted,
-                                Projects = null // Ngăn tham chiếu vòng lặp
-                            } : new Customer();
-                        
-                        userProjects.Add(new ProjectDTO
-                        {
-                            Id = project.Id,
-                            ProjectCode = project.ProjectCode,
-                            ProjectName = project.ProjectName,
-                            Customer = customer,
-                            ConstructType = project.ConstructType,
-                            Location = project.Location,
-                            Area = project.Area,
-                            Purpose = project.Purpose,
-                            TechnicalReqs = project.TechnicalReqs,
-                            StartDate = project.StartDate,
-                            EndDate = project.EndDate,
-                            Budget = project.Budget,
-                            Status = project.Status,
-                            Attachments = project.Attachments != null ? 
-                                JsonSerializer.Deserialize<List<AttachmentInfo>>(project.Attachments.RootElement.ToString()) 
-                                : null,
-                            Description = project.Description,
-                            UpdatedAt = project.UpdatedAt,
-                            Updater = project.Updater,
-                            CreatedAt = project.CreatedAt,
-                            Creator = project.Creator,
-                            Deleted = project.Deleted,
-                            IsCreator = false,
-                            ViewerUserIds = viewerIds
-                        });
-                    }
-                }
-                else
-                {
-                    foreach (var project in allProjects)
-                    {
-                        // Xác định nếu người dùng hiện tại là người tạo
-                        var isCreator = allProjectPermissions.Any(pu => 
-                            pu.ProjectId == project.Id && 
-                            pu.IsCreator && 
-                            pu.UserId == model.ActionBy);
-                        
-                        // Xác định nếu người dùng hiện tại là người được chỉ định xem
-                        var isViewer = allProjectPermissions.Any(pu => 
-                            pu.ProjectId == project.Id && 
-                            !pu.IsCreator && 
-                            pu.UserId == model.ActionBy && 
-                            !pu.Deleted);
-                        
-                        // Chỉ đưa vào danh sách những project mà người dùng có quyền
-                        if (isCreator || isViewer)
-                        {
-                            // Danh sách người có quyền xem project
-                            var viewerIds = allProjectPermissions
-                                .Where(pu => pu.ProjectId == project.Id && !pu.IsCreator && !pu.Deleted)
-                                .Select(pu => pu.UserId)
-                                .ToList();
-                            
-                            var customerEntity = allCustomers.FirstOrDefault(c => c.Id == project.CustomerId);
-                            
-                            // Tạo Customer mới với Projects = null để tránh vòng lặp tham chiếu
-                            var customer = customerEntity != null ? 
-                                new Customer {
-                                    Id = customerEntity.Id,
-                                    CustomerName = customerEntity.CustomerName,
-                                    DirectorName = customerEntity.DirectorName,
-                                    Phone = customerEntity.Phone,
-                                    Email = customerEntity.Email,
-                                    Address = customerEntity.Address,
-                                    Description = customerEntity.Description,
-                                    CustomerCode = customerEntity.CustomerCode,
-                                    TaxCode = customerEntity.TaxCode,
-                                    Fax = customerEntity.Fax,
-                                    BankAccount = customerEntity.BankAccount,
-                                    BankName = customerEntity.BankName,
-                                    CreatedAt = customerEntity.CreatedAt,
-                                    Creator = customerEntity.Creator,
-                                    UpdatedAt = customerEntity.UpdatedAt,
-                                    Updater = customerEntity.Updater,
-                                    Deleted = customerEntity.Deleted,
-                                    Projects = null // Ngăn tham chiếu vòng lặp
-                                } : new Customer();
-                            
-                            userProjects.Add(new ProjectDTO
-                            {
-                                Id = project.Id,
-                                ProjectCode = project.ProjectCode,
-                                ProjectName = project.ProjectName,
-                                Customer = customer,
-                                ConstructType = project.ConstructType,
-                                Location = project.Location,
-                                Area = project.Area,
-                                Purpose = project.Purpose,
-                                TechnicalReqs = project.TechnicalReqs,
-                                StartDate = project.StartDate,
-                                EndDate = project.EndDate,
-                                Budget = project.Budget,
-                                Status = project.Status,
-                                Attachments = project.Attachments != null ? 
-                                    JsonSerializer.Deserialize<List<AttachmentInfo>>(project.Attachments.RootElement.ToString()) 
-                                    : null,
-                                Description = project.Description,
-                                UpdatedAt = project.UpdatedAt,
-                                Updater = project.Updater,
-                                CreatedAt = project.CreatedAt,
-                                Creator = project.Creator,
-                                Deleted = project.Deleted,
-                                IsCreator = isCreator,
-                                ViewerUserIds = viewerIds
-                            });
-                        }
-                    }
+                    filteredProjects = filteredProjects.Where(p => p.Status == model.Status.Value).ToList();
                 }
                 
-                userProjects = userProjects.OrderByDescending(t => t.UpdatedAt).ToList();
+                // Apply pagination
+                model.Total = filteredProjects.Count;
+                if (model.PageSize > 0)
+                {
+                    filteredProjects = filteredProjects
+                        .Skip(model.Skip)
+                        .Take(model.PageSize)
+                        .ToList();
+                }
                 
-                // Cache danh sách project của người dùng
-                _ = _cacheService.SetAsync(userProjectCacheKey, userProjects, TimeSpan.FromMinutes(30)); // Cache ngắn hạn
+                return filteredProjects;
             }
             
-            // Áp dụng các bộ lọc
-            var filteredData = userProjects;
+            // If not in cache, load from database and build DTOs
             
-            if (!string.IsNullOrWhiteSpace(model.KeyWord))
+            // 1. Get all projects
+            var projectEntities = await _context.Projects
+                .Where(t => !t.Deleted)
+                .OrderByDescending(t => t.UpdatedAt)
+                .ToListAsync();
+            
+            // 2. Get project permissions
+            var projectUserEntities = await _context.ProjectUsers
+                .Where(pu => !pu.Deleted)
+                .ToListAsync();
+            
+            // 3. Get customer information
+            var allCustomers = await _context.Customers
+                .Where(c => !c.Deleted)
+                .ToListAsync();
+            
+            // 4. Build DTOs for all projects
+            var projectDTOs = new List<ProjectDTO>();
+            
+            foreach (var project in projectEntities)
             {
-                filteredData = filteredData.Where(t => t.ProjectCode.ToLower().Trim().Contains(model.KeyWord.ToLower().Trim())
-                                        || t.ProjectName.ToLower().Trim().Contains(model.KeyWord.ToLower().Trim())
-                                        || t.Customer.CustomerCode.ToLower().Trim().Contains(model.KeyWord.ToLower().Trim())
-                                        || (t.Location ?? "").ToLower().Trim().Contains(model.KeyWord.ToLower().Trim())
-                                        || t.Customer.CustomerName.ToLower().Trim().Contains(model.KeyWord.ToLower().Trim())).ToList();
+                // Get viewers for this project
+                var viewerIds = projectUserEntities
+                    .Where(pu => pu.ProjectId == project.Id && !pu.IsCreator && !pu.Deleted)
+                    .Select(pu => pu.UserId)
+                    .ToList();
+                
+                // Get creator information
+                var isCreator = projectUserEntities.Any(pu => 
+                    pu.ProjectId == project.Id && 
+                    pu.IsCreator && 
+                    pu.UserId == model.ActionBy);
+                
+                // Get customer information
+                var customerEntity = allCustomers.FirstOrDefault(c => c.Id == project.CustomerId);
+                
+                // Create customer object with null Projects property to avoid circular references
+                var customer = customerEntity != null ? 
+                    new Customer {
+                        Id = customerEntity.Id,
+                        CustomerName = customerEntity.CustomerName,
+                        DirectorName = customerEntity.DirectorName,
+                        Phone = customerEntity.Phone,
+                        Email = customerEntity.Email,
+                        Address = customerEntity.Address,
+                        Description = customerEntity.Description,
+                        CustomerCode = customerEntity.CustomerCode,
+                        TaxCode = customerEntity.TaxCode,
+                        Fax = customerEntity.Fax,
+                        BankAccount = customerEntity.BankAccount,
+                        BankName = customerEntity.BankName,
+                        CreatedAt = customerEntity.CreatedAt,
+                        Creator = customerEntity.Creator,
+                        UpdatedAt = customerEntity.UpdatedAt,
+                        Updater = customerEntity.Updater,
+                        Deleted = customerEntity.Deleted,
+                        Projects = null // Prevent circular references
+                    } : new Customer();
+                
+                // Create project DTO
+                projectDTOs.Add(new ProjectDTO
+                {
+                    Id = project.Id,
+                    ProjectCode = project.ProjectCode,
+                    ProjectName = project.ProjectName,
+                    Customer = customer,
+                    ConstructType = project.ConstructType,
+                    Location = project.Location,
+                    Area = project.Area,
+                    Purpose = project.Purpose,
+                    TechnicalReqs = project.TechnicalReqs,
+                    StartDate = project.StartDate,
+                    EndDate = project.EndDate,
+                    Budget = project.Budget,
+                    Status = project.Status,
+                    Attachments = project.Attachments != null ? 
+                        JsonSerializer.Deserialize<List<AttachmentInfo>>(project.Attachments.RootElement.ToString()) 
+                        : null,
+                    Description = project.Description,
+                    UpdatedAt = project.UpdatedAt,
+                    Updater = project.Updater,
+                    CreatedAt = project.CreatedAt,
+                    Creator = project.Creator,
+                    Deleted = project.Deleted,
+                    IsCreator = isCreator,
+                    ViewerUserIds = viewerIds
+                });
             }
-            if (model.CustomerId != 0)
+            
+            // Cache all projects
+            await _cacheService.SetAsync(projectCacheKey, projectDTOs, TimeSpan.FromHours(1));
+            
+            // Filter projects by user access
+            var userProjects = FilterProjectsByUserAccess(projectDTOs, model.ActionBy, isExecutiveBoard);
+            
+            // Apply search filters
+            if (!string.IsNullOrEmpty(model.KeyWord))
             {
-                filteredData = filteredData.Where(t => t.Customer.Id == model.CustomerId).ToList();
+                userProjects = userProjects.Where(p => 
+                    p.ProjectName.Contains(model.KeyWord) || 
+                    p.ProjectCode.Contains(model.KeyWord) || 
+                    (p.Customer != null && p.Customer.CustomerName.Contains(model.KeyWord))
+                ).ToList();
             }
-            if (model.Status != null)
+            
+            if (model.CustomerId > 0)
             {
-                filteredData = filteredData.Where(t => t.Status == model.Status).ToList();
+                userProjects = userProjects.Where(p => p.Customer?.Id == model.CustomerId).ToList();
             }
-
-            model.Total = filteredData.Count();
-
+            
+            if (model.Status.HasValue)
+            {
+                userProjects = userProjects.Where(p => p.Status == model.Status.Value).ToList();
+            }
+            
+            // Apply pagination
+            model.Total = userProjects.Count;
             if (model.PageSize > 0)
             {
-                filteredData = filteredData.Skip(model.Skip).Take(model.PageSize).ToList();
+                userProjects = userProjects
+                    .Skip(model.Skip)
+                    .Take(model.PageSize)
+                    .ToList();
             }
+            
+            return userProjects;
+        }
 
-            return filteredData;
+        // Helper method to filter projects based on user access
+        private List<ProjectDTO> FilterProjectsByUserAccess(List<ProjectDTO> projects, int userId, bool isExecutiveBoard)
+        {
+            // If user is Executive Board, they can see all projects
+            if (isExecutiveBoard)
+            {
+                return projects;
+            }
+            
+            // Otherwise, filter projects by user access
+            return projects.Where(p => 
+                // User is creator
+                (p.Creator == userId || p.IsCreator) ||
+                // User is in viewers list
+                (p.ViewerUserIds != null && p.ViewerUserIds.Contains(userId))
+            ).ToList();
         }
 
         public async Task<List<SiteSurvey>> ListSiteSurvey(SearchSiteSurveyDTO model)
         {
-            if (!_helpService.IsInRole(model.ActionBy, new List<string> { RoleConstValue.TECHNICAL_MANAGER, RoleConstValue.EXECUTIVE_BOARD }))
+            // Check if user is authorized to perform this action
+            if (!_helpService.IsInRole(model.ActionBy, new List<string> 
+            { 
+                RoleConstValue.TECHNICAL_MANAGER, 
+                RoleConstValue.EXECUTIVE_BOARD 
+            }))
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
-            
+
             var user = StaticVariable.UserMemory.FirstOrDefault(u => u.Id == model.ActionBy);
             bool isExecutiveBoard = user != null && user.Role == RoleConstValue.EXECUTIVE_BOARD;
+
+            // Only use the main cache key
+            string cacheKey = RedisCacheKey.SITE_SURVEY_CACHE_KEY;
             
-            // Xác định các key cache
-            string generalCacheKey = RedisCacheKey.SITE_SURVEY_CACHE_KEY;
-            string userCacheKey = string.Format("SITE_SURVEY:USER:{0}", model.ActionBy);
+            // Try to get from cache
+            var cachedData = await _cacheService.GetAsync<List<SiteSurvey>>(cacheKey);
             
-            // Thử lấy từ cache của user trước
-            var userCache = await _cacheService.GetAsync<List<SiteSurvey>>(userCacheKey);
-            if (userCache != null)
+            if (cachedData != null)
             {
-                var filteredData = ApplyFilters(userCache, model);
+                // Apply filters to cached data
+                var filteredData = ApplyFilters(cachedData, model);
+                
+                // If not Executive Board, filter by user's project access
+                if (!isExecutiveBoard)
+                {
+                    var userProjects = await _context.ProjectUsers
+                        .Where(pu => pu.UserId == model.ActionBy && !pu.Deleted)
+                        .Select(pu => pu.ProjectId)
+                        .ToListAsync();
+                        
+                    filteredData = filteredData.Where(s => userProjects.Contains(s.ProjectId)).ToList();
+                }
+                
+                // Set total count for pagination
                 model.Total = filteredData.Count();
                 
+                // Apply pagination if needed
                 if (model.PageSize > 0)
                 {
-                    filteredData = filteredData.Skip(model.Skip).Take(model.PageSize).ToList();
+                    int skip = (model.PageIndex - 1) * model.PageSize;
+                    filteredData = filteredData.Skip(skip).Take(model.PageSize).ToList();
                 }
                 
                 return filteredData;
             }
+
+            // If not in cache, get from database
+            var query = _context.SiteSurveys.Where(s => !s.Deleted);
             
-            // Nếu không có trong cache chung, query từ database
-            var data = await _context.SiteSurveys.Where(t => !t.Deleted).OrderByDescending(t => t.UpdatedAt).ToListAsync();
-                
-            // Si es Executive Board, devolver todos los sitios de estudio
-            if (isExecutiveBoard)
+            // If not Executive Board, filter by user's project access
+            if (!isExecutiveBoard)
             {
-                // Cache todos los sitios para este usuario
-                _ = _cacheService.SetAsync(userCacheKey, data, TimeSpan.FromMinutes(30));
-                
-                var filteredData = ApplyFilters(data, model);
-                model.Total = filteredData.Count();
-                
-                if (model.PageSize > 0)
-                {
-                    filteredData = filteredData.Skip(model.Skip).Take(model.PageSize).ToList();
-                }
-                
-                return filteredData;
+                var userProjects = await _context.ProjectUsers
+                    .Where(pu => pu.UserId == model.ActionBy && !pu.Deleted)
+                    .Select(pu => pu.ProjectId)
+                    .ToListAsync();
+                    
+                query = query.Where(s => userProjects.Contains(s.ProjectId));
             }
             
-            // Lọc dữ liệu theo quyền truy cập của người dùng
-            // Chỉ lấy các SiteSurvey thuộc project mà người dùng là thành viên
-            
-            // Lấy danh sách project mà người dùng có quyền truy cập
-            var projectIds = await _context.ProjectUsers
-                .Where(pu => pu.UserId == model.ActionBy && !pu.Deleted)
-                .Select(pu => pu.ProjectId)
-                .ToListAsync();
-            
-            // Lọc các SiteSurvey thuộc các project của người dùng
-            var filteredSurveys = data.Where(s => projectIds.Contains(s.ProjectId)).ToList();
-            
-            // Cache cho user
-            _ = _cacheService.SetAsync(userCacheKey, filteredSurveys, TimeSpan.FromMinutes(30));
-            
-            // Áp dụng bộ lọc
-            var result = ApplyFilters(filteredSurveys, model);
+            // Execute query and get all site surveys
+            var siteSurveys = await query.ToListAsync();
+
+            // Cache all site surveys for future use
+            await _cacheService.SetAsync(cacheKey, siteSurveys, TimeSpan.FromHours(1));
+
+            // Apply filters and pagination for this specific request
+            var result = ApplyFilters(siteSurveys, model);
             model.Total = result.Count();
             
             if (model.PageSize > 0)
             {
-                result = result.Skip(model.Skip).Take(model.PageSize).ToList();
+                int skip = (model.PageIndex - 1) * model.PageSize;
+                result = result.Skip(skip).Take(model.PageSize).ToList();
             }
             
             return result;
@@ -764,7 +730,7 @@ namespace Sep490_Backend.Services.DataService
 
         public async Task<List<ConstructionPlanDTO>> ListConstructionPlan(ConstructionPlanQuery model)
         {
-            // Check if user is authorized to perform this action
+            // Verify access rights
             if (!_helpService.IsInRole(model.ActionBy, new List<string> 
             { 
                 RoleConstValue.CONSTRUCTION_MANAGER, 
@@ -779,38 +745,34 @@ namespace Sep490_Backend.Services.DataService
             var user = StaticVariable.UserMemory.FirstOrDefault(u => u.Id == model.ActionBy);
             bool isExecutiveBoard = user != null && user.Role == RoleConstValue.EXECUTIVE_BOARD;
 
-            // Define cache keys
-            string generalCacheKey = RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY;
-            string userCacheKey = string.Format(RedisCacheKey.CONSTRUCTION_PLAN_BY_USER_CACHE_KEY, model.ActionBy);
+            // Only use the main cache key
+            string cacheKey = RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY;
             
-            // Try to get from user-specific cache first
-            var userCache = await _cacheService.GetAsync<List<ConstructionPlanDTO>>(userCacheKey);
-            if (userCache != null)
+            // Try to get data from cache
+            var cachedData = await _cacheService.GetAsync<List<ConstructionPlanDTO>>(cacheKey);
+            
+            if (cachedData != null)
             {
-                var filteredData = ApplyConstructionPlanFilters(userCache, model);
-                model.Total = filteredData.Count();
+                // Apply filters to the cached data
+                var filteredData = ApplyConstructionPlanFilters(cachedData, model);
                 
-                if (model.PageSize > 0)
+                // Filter by user access if not Executive Board
+                if (!isExecutiveBoard)
                 {
-                    int pageSize = model.PageSize == 0 ? 10 : model.PageSize;
-                    int skip = (model.PageIndex - 1) * pageSize;
-                    filteredData = filteredData.Skip(skip).Take(pageSize).ToList();
+                    // Get projects the user has access to
+                    var userProjects = await _context.ProjectUsers
+                        .Where(pu => pu.UserId == model.ActionBy && !pu.Deleted)
+                        .Select(pu => pu.ProjectId)
+                        .ToListAsync();
+                        
+                    // Filter construction plans by those projects
+                    filteredData = filteredData.Where(cp => userProjects.Contains(cp.ProjectId)).ToList();
                 }
                 
-                return filteredData;
-            }
-
-            // If not in user cache, try general cache
-            var generalCache = await _cacheService.GetAsync<List<ConstructionPlanDTO>>(generalCacheKey);
-            
-            if (generalCache != null)
-            {
-                // Create user-specific cache with shorter expiration
-                _ = _cacheService.SetAsync(userCacheKey, generalCache, TimeSpan.FromMinutes(30));
-                
-                var filteredData = ApplyConstructionPlanFilters(generalCache, model);
+                // Set total count for pagination
                 model.Total = filteredData.Count();
                 
+                // Apply pagination if requested
                 if (model.PageSize > 0)
                 {
                     int pageSize = model.PageSize == 0 ? 10 : model.PageSize;
@@ -822,10 +784,24 @@ namespace Sep490_Backend.Services.DataService
             }
 
             // If not in cache, get from database
-            var constructionPlans = await _context.ConstructionPlans
+            var query = _context.ConstructionPlans
                 .Include(cp => cp.Project)
                 .Include(cp => cp.Reviewers)
-                .Where(cp => !cp.Deleted)
+                .Where(cp => !cp.Deleted);
+                
+            // Apply user access filter to database query if not Executive Board
+            if (!isExecutiveBoard)
+            {
+                var userProjects = await _context.ProjectUsers
+                    .Where(pu => pu.UserId == model.ActionBy && !pu.Deleted)
+                    .Select(pu => pu.ProjectId)
+                    .ToListAsync();
+                    
+                query = query.Where(cp => userProjects.Contains(cp.ProjectId));
+            }
+            
+            // Execute query and get all plans
+            var constructionPlans = await query
                 .OrderByDescending(cp => cp.CreatedAt)
                 .ToListAsync();
 
@@ -853,11 +829,10 @@ namespace Sep490_Backend.Services.DataService
                 constructionPlanDTOs.Add(dto);
             }
 
-            // Cache the results
-            _ = _cacheService.SetAsync(generalCacheKey, constructionPlanDTOs, TimeSpan.FromHours(1));
-            _ = _cacheService.SetAsync(userCacheKey, constructionPlanDTOs, TimeSpan.FromMinutes(30));
+            // Cache all construction plans (not filtered) for future use
+            await _cacheService.SetAsync(cacheKey, constructionPlanDTOs, TimeSpan.FromHours(1));
 
-            // Apply filters and pagination
+            // Apply filters and pagination for this specific request
             var result = ApplyConstructionPlanFilters(constructionPlanDTOs, model);
             model.Total = result.Count();
             
