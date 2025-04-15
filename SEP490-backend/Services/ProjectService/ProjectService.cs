@@ -227,7 +227,19 @@ namespace Sep490_Backend.Services.ProjectService
                 return true;
             }
             
-            // Otherwise, check if user is a member of the project
+            // Check if user is the creator of the project
+            if (project.Creator == userId || project.IsCreator)
+            {
+                return true;
+            }
+            
+            // Check if user is in ViewerUserIds list
+            if (project.ViewerUserIds != null && project.ViewerUserIds.Contains(userId))
+            {
+                return true;
+            }
+            
+            // Check if user is a member of the project through ProjectUsers
             return project.ProjectUsers != null && 
                   project.ProjectUsers.Any(pu => pu.UserId == userId && !pu.Deleted);
         }
@@ -243,7 +255,7 @@ namespace Sep490_Backend.Services.ProjectService
                 return true;
             }
             
-            // Otherwise, check if user is a member of the project
+            // Otherwise, check if user is a creator or viewer of the project
             return await _context.ProjectUsers
                 .AnyAsync(pu => pu.ProjectId == projectId && pu.UserId == userId && !pu.Deleted);
         }
@@ -270,24 +282,75 @@ namespace Sep490_Backend.Services.ProjectService
         // Assume this is a method to map a project entity to a DTO
         private async Task<ProjectDTO> MapProjectToDTO(Project project, int actionBy)
         {
-            // Implement the mapping logic here based on your existing code
-            // This method should map a Project entity to a ProjectDTO
-            // ... existing implementation ...
+            // Get the project users including viewers (users who aren't creators)
+            var projectUsers = await _context.ProjectUsers
+                .Where(pu => pu.ProjectId == project.Id && !pu.Deleted)
+                .ToListAsync();
+                
+            // Get viewer user IDs
+            var viewerUserIds = projectUsers
+                .Where(pu => !pu.IsCreator)
+                .Select(pu => pu.UserId)
+                .ToList();
+                
+            // Check if this user is the creator
+            bool isCreator = projectUsers.Any(pu => pu.UserId == actionBy && pu.IsCreator);
             
-            // Placeholder implementation
+            // Get customer information
+            var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == project.CustomerId);
+            
             return new ProjectDTO
             {
                 Id = project.Id,
+                ProjectCode = project.ProjectCode,
                 ProjectName = project.ProjectName,
+                Customer = customer != null ? new Customer
+                {
+                    Id = customer.Id,
+                    CustomerName = customer.CustomerName,
+                    DirectorName = customer.DirectorName,
+                    Phone = customer.Phone,
+                    Email = customer.Email,
+                    Address = customer.Address,
+                    Description = customer.Description,
+                    CustomerCode = customer.CustomerCode,
+                    TaxCode = customer.TaxCode,
+                    Fax = customer.Fax,
+                    BankAccount = customer.BankAccount,
+                    BankName = customer.BankName,
+                    CreatedAt = customer.CreatedAt,
+                    Creator = customer.Creator,
+                    UpdatedAt = customer.UpdatedAt,
+                    Updater = customer.Updater,
+                    Deleted = customer.Deleted,
+                    Projects = null // Prevent circular references
+                } : new Customer(),
+                ConstructType = project.ConstructType,
+                Location = project.Location,
+                Area = project.Area,
+                Purpose = project.Purpose,
+                TechnicalReqs = project.TechnicalReqs,
+                StartDate = project.StartDate,
+                EndDate = project.EndDate,
+                Budget = project.Budget,
+                Status = project.Status,
+                Attachments = project.Attachments != null ? 
+                    JsonSerializer.Deserialize<List<AttachmentInfo>>(project.Attachments.RootElement.ToString()) 
+                    : null,
                 Description = project.Description,
-                // Map other properties as needed
-                ProjectUsers = project.ProjectUsers?.Select(pu => new DTO.Project.ProjectUserDTO
+                UpdatedAt = project.UpdatedAt,
+                Updater = project.Updater,
+                CreatedAt = project.CreatedAt,
+                Creator = project.Creator,
+                Deleted = project.Deleted,
+                IsCreator = isCreator,
+                ViewerUserIds = viewerUserIds,
+                ProjectUsers = projectUsers.Select(pu => new DTO.Project.ProjectUserDTO
                 {
                     Id = pu.Id,
                     UserId = pu.UserId,
                     ProjectId = pu.ProjectId,
-                    IsCreator = pu.IsCreator,
-                    // Map other properties as needed
+                    IsCreator = pu.IsCreator
                 }).ToList()
             };
         }

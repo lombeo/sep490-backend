@@ -289,6 +289,28 @@ namespace Sep490_Backend.Services.DataService
             
             if (allProjects != null)
             {
+                // Get the current user's project associations
+                var userProjectAssociations = await _context.ProjectUsers
+                    .Where(pu => pu.UserId == model.ActionBy && !pu.Deleted)
+                    .ToListAsync();
+                
+                // Update IsCreator flag and ViewerUserIds for the current user
+                foreach (var project in allProjects)
+                {
+                    // Check if this user is the creator or viewer in ProjectUsers table
+                    var projectUserRecord = userProjectAssociations.FirstOrDefault(pu => pu.ProjectId == project.Id);
+                    
+                    // Update IsCreator flag if user is associated with this project
+                    project.IsCreator = projectUserRecord != null && projectUserRecord.IsCreator;
+                    
+                    // Ensure the current user is in the ViewerUserIds list if they're associated with this project
+                    if (projectUserRecord != null && !projectUserRecord.IsCreator && 
+                        project.ViewerUserIds != null && !project.ViewerUserIds.Contains(model.ActionBy))
+                    {
+                        project.ViewerUserIds.Add(model.ActionBy);
+                    }
+                }
+                
                 // Filter projects based on user's access rights
                 var filteredProjects = FilterProjectsByUserAccess(allProjects, model.ActionBy, isExecutiveBoard);
                 
@@ -466,8 +488,8 @@ namespace Sep490_Backend.Services.DataService
             
             // Otherwise, filter projects by user access
             return projects.Where(p => 
-                // User is creator
-                (p.Creator == userId || p.IsCreator) ||
+                // User is creator - checking either the Creator field OR the IsCreator flag
+                p.Creator == userId || p.IsCreator || 
                 // User is in viewers list
                 (p.ViewerUserIds != null && p.ViewerUserIds.Contains(userId))
             ).ToList();

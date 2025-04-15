@@ -353,6 +353,15 @@ namespace Sep490_Backend.Migrations
                     b.Property<JsonDocument>("Attachments")
                         .HasColumnType("jsonb");
 
+                    b.Property<string>("CompanyRepName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("CompanyRepTitle")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CompletionDate")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<string>("ContractCode")
                         .IsRequired()
                         .HasColumnType("text");
@@ -361,14 +370,29 @@ namespace Sep490_Backend.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("ContractNumber")
+                        .HasColumnType("text");
+
                     b.Property<DateTime?>("CreatedAt")
+                        .IsRequired()
                         .HasColumnType("timestamp without time zone");
 
                     b.Property<int>("Creator")
                         .HasColumnType("integer");
 
+                    b.Property<string>("CustomerRepName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("CustomerRepTitle")
+                        .HasColumnType("text");
+
                     b.Property<bool>("Deleted")
-                        .HasColumnType("boolean");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
 
                     b.Property<DateTime>("EndDate")
                         .HasColumnType("timestamp without time zone");
@@ -382,6 +406,9 @@ namespace Sep490_Backend.Migrations
                     b.Property<DateTime>("SignDate")
                         .HasColumnType("timestamp without time zone");
 
+                    b.Property<DateTime>("SignedDate")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<DateTime>("StartDate")
                         .HasColumnType("timestamp without time zone");
 
@@ -389,22 +416,23 @@ namespace Sep490_Backend.Migrations
                         .HasColumnType("integer");
 
                     b.Property<decimal>("Tax")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric");
 
                     b.Property<DateTime?>("UpdatedAt")
+                        .IsRequired()
                         .HasColumnType("timestamp without time zone");
 
                     b.Property<int>("Updater")
                         .HasColumnType("integer");
 
+                    b.Property<decimal>("Value")
+                        .HasColumnType("numeric");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("ProjectId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_Contracts_ProjectId_Unique")
-                        .HasFilter("\"Deleted\" = false");
+                    b.HasIndex("ProjectId");
 
-                    b.ToTable("Contracts", (string)null);
+                    b.ToTable("contracts", (string)null);
                 });
 
             modelBuilder.Entity("Sep490_Backend.Infra.Entities.ContractDetail", b =>
@@ -1457,8 +1485,8 @@ namespace Sep490_Backend.Migrations
             modelBuilder.Entity("Sep490_Backend.Infra.Entities.Contract", b =>
                 {
                     b.HasOne("Sep490_Backend.Infra.Entities.Project", "Project")
-                        .WithOne("Contract")
-                        .HasForeignKey("Sep490_Backend.Infra.Entities.Contract", "ProjectId")
+                        .WithMany("Contracts")
+                        .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -1685,7 +1713,7 @@ namespace Sep490_Backend.Migrations
                 {
                     b.Navigation("ConstructionPlans");
 
-                    b.Navigation("Contract");
+                    b.Navigation("Contracts");
 
                     b.Navigation("ProjectUsers");
 

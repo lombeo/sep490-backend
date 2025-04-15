@@ -15,8 +15,8 @@ using Sep490_Backend.Infra;
 namespace Sep490_Backend.Migrations
 {
     [DbContext(typeof(BackendContext))]
-    [Migration("20250401131855_AddPicProfileAndAddressToUser")]
-    partial class AddPicProfileAndAddressToUser
+    [Migration("20250415135952_re-migrate-for-iter3")]
+    partial class remigrateforiter3
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -166,11 +166,14 @@ namespace Sep490_Backend.Migrations
 
                     b.HasIndex("EndDate");
 
-                    b.HasIndex("ParentIndex");
-
                     b.HasIndex("PlanId");
 
                     b.HasIndex("StartDate");
+
+                    b.HasIndex("ParentIndex", "PlanId");
+
+                    b.HasIndex("PlanId", "Index")
+                        .IsUnique();
 
                     b.ToTable("ConstructPlanItems", (string)null);
                 });
@@ -253,6 +256,79 @@ namespace Sep490_Backend.Migrations
                     b.HasIndex("WorkCode");
 
                     b.ToTable("ConstructPlanItemDetails", (string)null);
+                });
+
+            modelBuilder.Entity("Sep490_Backend.Infra.Entities.ConstructionLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Advice")
+                        .HasColumnType("text");
+
+                    b.Property<JsonDocument>("Attachments")
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("Creator")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("Deleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<JsonDocument>("Images")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("LogCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("LogDate")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("LogName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Problem")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("Progress")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("Quality")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("Safety")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("Updater")
+                        .HasColumnType("integer");
+
+                    b.Property<JsonDocument>("Weather")
+                        .HasColumnType("jsonb");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.ToTable("ConstructionLogs", (string)null);
                 });
 
             modelBuilder.Entity("Sep490_Backend.Infra.Entities.ConstructionPlan", b =>
@@ -353,6 +429,15 @@ namespace Sep490_Backend.Migrations
                     b.Property<JsonDocument>("Attachments")
                         .HasColumnType("jsonb");
 
+                    b.Property<string>("CompanyRepName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("CompanyRepTitle")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CompletionDate")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<string>("ContractCode")
                         .IsRequired()
                         .HasColumnType("text");
@@ -361,14 +446,29 @@ namespace Sep490_Backend.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("ContractNumber")
+                        .HasColumnType("text");
+
                     b.Property<DateTime?>("CreatedAt")
+                        .IsRequired()
                         .HasColumnType("timestamp without time zone");
 
                     b.Property<int>("Creator")
                         .HasColumnType("integer");
 
+                    b.Property<string>("CustomerRepName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("CustomerRepTitle")
+                        .HasColumnType("text");
+
                     b.Property<bool>("Deleted")
-                        .HasColumnType("boolean");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
 
                     b.Property<DateTime>("EndDate")
                         .HasColumnType("timestamp without time zone");
@@ -382,6 +482,9 @@ namespace Sep490_Backend.Migrations
                     b.Property<DateTime>("SignDate")
                         .HasColumnType("timestamp without time zone");
 
+                    b.Property<DateTime>("SignedDate")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<DateTime>("StartDate")
                         .HasColumnType("timestamp without time zone");
 
@@ -389,22 +492,23 @@ namespace Sep490_Backend.Migrations
                         .HasColumnType("integer");
 
                     b.Property<decimal>("Tax")
-                        .HasColumnType("numeric(18,2)");
+                        .HasColumnType("numeric");
 
                     b.Property<DateTime?>("UpdatedAt")
+                        .IsRequired()
                         .HasColumnType("timestamp without time zone");
 
                     b.Property<int>("Updater")
                         .HasColumnType("integer");
 
+                    b.Property<decimal>("Value")
+                        .HasColumnType("numeric");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("ProjectId")
-                        .IsUnique()
-                        .HasDatabaseName("IX_Contracts_ProjectId_Unique")
-                        .HasFilter("\"Deleted\" = false");
+                    b.HasIndex("ProjectId");
 
-                    b.ToTable("Contracts", (string)null);
+                    b.ToTable("contracts", (string)null);
                 });
 
             modelBuilder.Entity("Sep490_Backend.Infra.Entities.ContractDetail", b =>
@@ -579,6 +683,100 @@ namespace Sep490_Backend.Migrations
                     b.HasIndex("Deleted");
 
                     b.ToTable("EmailTemplates", (string)null);
+                });
+
+            modelBuilder.Entity("Sep490_Backend.Infra.Entities.LogResource", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("Creator")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("Deleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime?>("EndTime")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("LogId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ResourceId")
+                        .HasColumnType("text");
+
+                    b.Property<int>("ResourceType")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("StartTime")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("TaskIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("Updater")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LogId");
+
+                    b.ToTable("LogResources", (string)null);
+                });
+
+            modelBuilder.Entity("Sep490_Backend.Infra.Entities.LogWorkAmount", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("Creator")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("Deleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("LogId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TaskIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("Updater")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("WorkAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LogId");
+
+                    b.ToTable("LogWorkAmounts", (string)null);
                 });
 
             modelBuilder.Entity("Sep490_Backend.Infra.Entities.Material", b =>
@@ -850,6 +1048,9 @@ namespace Sep490_Backend.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<DateTime>("RequestDate")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<string>("RequestName")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
@@ -924,7 +1125,13 @@ namespace Sep490_Backend.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<int?>("ProjectId")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ResourceId")
                         .HasColumnType("integer");
 
                     b.Property<int>("ResourceType")
@@ -1351,17 +1558,17 @@ namespace Sep490_Backend.Migrations
 
             modelBuilder.Entity("Sep490_Backend.Infra.Entities.ConstructPlanItem", b =>
                 {
-                    b.HasOne("Sep490_Backend.Infra.Entities.ConstructPlanItem", "ParentItem")
-                        .WithMany("ChildItems")
-                        .HasForeignKey("ParentIndex")
-                        .HasPrincipalKey("Index")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("Sep490_Backend.Infra.Entities.ConstructionPlan", "ConstructionPlan")
                         .WithMany("ConstructPlanItems")
                         .HasForeignKey("PlanId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("Sep490_Backend.Infra.Entities.ConstructPlanItem", "ParentItem")
+                        .WithMany("ChildItems")
+                        .HasForeignKey("ParentIndex", "PlanId")
+                        .HasPrincipalKey("Index", "PlanId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("ConstructionPlan");
 
@@ -1423,6 +1630,17 @@ namespace Sep490_Backend.Migrations
                     b.Navigation("Vehicle");
                 });
 
+            modelBuilder.Entity("Sep490_Backend.Infra.Entities.ConstructionLog", b =>
+                {
+                    b.HasOne("Sep490_Backend.Infra.Entities.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                });
+
             modelBuilder.Entity("Sep490_Backend.Infra.Entities.ConstructionPlan", b =>
                 {
                     b.HasOne("Sep490_Backend.Infra.Entities.Project", "Project")
@@ -1448,8 +1666,8 @@ namespace Sep490_Backend.Migrations
             modelBuilder.Entity("Sep490_Backend.Infra.Entities.Contract", b =>
                 {
                     b.HasOne("Sep490_Backend.Infra.Entities.Project", "Project")
-                        .WithOne("Contract")
-                        .HasForeignKey("Sep490_Backend.Infra.Entities.Contract", "ProjectId")
+                        .WithMany("Contracts")
+                        .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -1472,6 +1690,28 @@ namespace Sep490_Backend.Migrations
                     b.Navigation("Contract");
 
                     b.Navigation("ParentItem");
+                });
+
+            modelBuilder.Entity("Sep490_Backend.Infra.Entities.LogResource", b =>
+                {
+                    b.HasOne("Sep490_Backend.Infra.Entities.ConstructionLog", "ConstructionLog")
+                        .WithMany("LogResources")
+                        .HasForeignKey("LogId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ConstructionLog");
+                });
+
+            modelBuilder.Entity("Sep490_Backend.Infra.Entities.LogWorkAmount", b =>
+                {
+                    b.HasOne("Sep490_Backend.Infra.Entities.ConstructionLog", "ConstructionLog")
+                        .WithMany("LogWorkAmounts")
+                        .HasForeignKey("LogId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ConstructionLog");
                 });
 
             modelBuilder.Entity("Sep490_Backend.Infra.Entities.Project", b =>
@@ -1642,6 +1882,13 @@ namespace Sep490_Backend.Migrations
                     b.Navigation("ConstructPlanItemDetails");
                 });
 
+            modelBuilder.Entity("Sep490_Backend.Infra.Entities.ConstructionLog", b =>
+                {
+                    b.Navigation("LogResources");
+
+                    b.Navigation("LogWorkAmounts");
+                });
+
             modelBuilder.Entity("Sep490_Backend.Infra.Entities.ConstructionPlan", b =>
                 {
                     b.Navigation("ConstructPlanItems");
@@ -1676,8 +1923,7 @@ namespace Sep490_Backend.Migrations
                 {
                     b.Navigation("ConstructionPlans");
 
-                    b.Navigation("Contract")
-                        .IsRequired();
+                    b.Navigation("Contracts");
 
                     b.Navigation("ProjectUsers");
 
@@ -1706,8 +1952,7 @@ namespace Sep490_Backend.Migrations
 
                     b.Navigation("ResourceAllocations");
 
-                    b.Navigation("Vehicle")
-                        .IsRequired();
+                    b.Navigation("Vehicle");
                 });
 
             modelBuilder.Entity("Sep490_Backend.Infra.Entities.Vehicle", b =>

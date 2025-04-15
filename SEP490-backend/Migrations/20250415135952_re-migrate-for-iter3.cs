@@ -10,11 +10,14 @@ using Sep490_Backend.DTO.ResourceReqs;
 namespace Sep490_Backend.Migrations
 {
     /// <inheritdoc />
-    public partial class fixdatabase : Migration
+    public partial class remigrateforiter3 : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.AlterDatabase()
+                .Annotation("Npgsql:PostgresExtension:hstore", ",,");
+
             migrationBuilder.CreateTable(
                 name: "ActionLogs",
                 columns: table => new
@@ -100,7 +103,7 @@ namespace Sep490_Backend.Migrations
                     Attachment = table.Column<string>(type: "text", nullable: true),
                     ExpireDate = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
                     ProductionDate = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    Description = table.Column<string>(type: "text", nullable: false),
+                    Description = table.Column<string>(type: "text", nullable: true),
                     UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
                     Deleted = table.Column<bool>(type: "boolean", nullable: false),
@@ -110,6 +113,31 @@ namespace Sep490_Backend.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Materials", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "ResourceInventory",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    Description = table.Column<string>(type: "text", nullable: false),
+                    ResourceId = table.Column<int>(type: "integer", nullable: true),
+                    ProjectId = table.Column<int>(type: "integer", nullable: true),
+                    ResourceType = table.Column<int>(type: "integer", nullable: false),
+                    Quantity = table.Column<int>(type: "integer", nullable: false),
+                    Unit = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    Status = table.Column<bool>(type: "boolean", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
+                    Deleted = table.Column<bool>(type: "boolean", nullable: false),
+                    Creator = table.Column<int>(type: "integer", nullable: false),
+                    Updater = table.Column<int>(type: "integer", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ResourceInventory", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -150,13 +178,49 @@ namespace Sep490_Backend.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "ConstructionLogs",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    LogCode = table.Column<string>(type: "text", nullable: false),
+                    LogName = table.Column<string>(type: "text", nullable: false),
+                    LogDate = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
+                    Safety = table.Column<int>(type: "integer", nullable: true),
+                    Quality = table.Column<int>(type: "integer", nullable: true),
+                    Progress = table.Column<int>(type: "integer", nullable: true),
+                    Problem = table.Column<string>(type: "text", nullable: true),
+                    Advice = table.Column<string>(type: "text", nullable: true),
+                    Note = table.Column<string>(type: "text", nullable: true),
+                    Images = table.Column<JsonDocument>(type: "jsonb", nullable: true),
+                    Attachments = table.Column<JsonDocument>(type: "jsonb", nullable: true),
+                    Weather = table.Column<JsonDocument>(type: "jsonb", nullable: true),
+                    ProjectId = table.Column<int>(type: "integer", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
+                    Deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    Creator = table.Column<int>(type: "integer", nullable: false),
+                    Updater = table.Column<int>(type: "integer", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ConstructionLogs", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_ConstructionLogs_Projects_ProjectId",
+                        column: x => x.ProjectId,
+                        principalTable: "Projects",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "ConstructionPlans",
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     PlanName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
-                    Reviewer = table.Column<Dictionary<int, bool>>(type: "jsonb", nullable: true),
+                    Reviewer = table.Column<string>(type: "jsonb", nullable: true),
                     ProjectId = table.Column<int>(type: "integer", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
@@ -176,7 +240,7 @@ namespace Sep490_Backend.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Contracts",
+                name: "contracts",
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "integer", nullable: false)
@@ -188,24 +252,89 @@ namespace Sep490_Backend.Migrations
                     EndDate = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
                     EstimatedDays = table.Column<int>(type: "integer", nullable: false),
                     Status = table.Column<int>(type: "integer", nullable: false),
-                    Tax = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
+                    Tax = table.Column<decimal>(type: "numeric", nullable: false),
                     SignDate = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
                     Attachments = table.Column<JsonDocument>(type: "jsonb", nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    Deleted = table.Column<bool>(type: "boolean", nullable: false),
+                    ContractNumber = table.Column<string>(type: "text", nullable: true),
+                    SignedDate = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
+                    CompletionDate = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
+                    Value = table.Column<decimal>(type: "numeric", nullable: false),
+                    CustomerRepName = table.Column<string>(type: "text", nullable: true),
+                    CustomerRepTitle = table.Column<string>(type: "text", nullable: true),
+                    CompanyRepName = table.Column<string>(type: "text", nullable: true),
+                    CompanyRepTitle = table.Column<string>(type: "text", nullable: true),
+                    Description = table.Column<string>(type: "text", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
+                    Deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
                     Creator = table.Column<int>(type: "integer", nullable: false),
                     Updater = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Contracts", x => x.Id);
+                    table.PrimaryKey("PK_contracts", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Contracts_Projects_ProjectId",
+                        name: "FK_contracts_Projects_ProjectId",
                         column: x => x.ProjectId,
                         principalTable: "Projects",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "LogResources",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    LogId = table.Column<int>(type: "integer", nullable: false),
+                    TaskIndex = table.Column<int>(type: "integer", nullable: false),
+                    ResourceType = table.Column<int>(type: "integer", nullable: false),
+                    Quantity = table.Column<int>(type: "integer", nullable: false),
+                    ResourceId = table.Column<string>(type: "text", nullable: true),
+                    StartTime = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
+                    EndTime = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
+                    Deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    Creator = table.Column<int>(type: "integer", nullable: false),
+                    Updater = table.Column<int>(type: "integer", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LogResources", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_LogResources_ConstructionLogs_LogId",
+                        column: x => x.LogId,
+                        principalTable: "ConstructionLogs",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "LogWorkAmounts",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    LogId = table.Column<int>(type: "integer", nullable: false),
+                    TaskIndex = table.Column<int>(type: "integer", nullable: false),
+                    WorkAmount = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
+                    Deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    Creator = table.Column<int>(type: "integer", nullable: false),
+                    Updater = table.Column<int>(type: "integer", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LogWorkAmounts", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_LogWorkAmounts_ConstructionLogs_LogId",
+                        column: x => x.LogId,
+                        principalTable: "ConstructionLogs",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -221,11 +350,9 @@ namespace Sep490_Backend.Migrations
                     Quantity = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
                     UnitPrice = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
                     TotalPrice = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
-                    PlanQuantity = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
-                    PlanTotalPrice = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
                     StartDate = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
                     EndDate = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
-                    QA = table.Column<List<int>>(type: "integer[]", nullable: true),
+                    ItemRelations = table.Column<Dictionary<string, string>>(type: "hstore", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
                     Deleted = table.Column<bool>(type: "boolean", nullable: false),
@@ -235,11 +362,12 @@ namespace Sep490_Backend.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_ConstructPlanItems", x => x.WorkCode);
+                    table.UniqueConstraint("AK_ConstructPlanItems_Index_PlanId", x => new { x.Index, x.PlanId });
                     table.ForeignKey(
-                        name: "FK_ConstructPlanItems_ConstructPlanItems_ParentIndex",
-                        column: x => x.ParentIndex,
+                        name: "FK_ConstructPlanItems_ConstructPlanItems_ParentIndex_PlanId",
+                        columns: x => new { x.ParentIndex, x.PlanId },
                         principalTable: "ConstructPlanItems",
-                        principalColumn: "WorkCode",
+                        principalColumns: new[] { "Index", "PlanId" },
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_ConstructPlanItems_ConstructionPlans_PlanId",
@@ -278,63 +406,9 @@ namespace Sep490_Backend.Migrations
                         principalColumn: "WorkCode",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_ContractDetails_Contracts_ContractId",
+                        name: "FK_ContractDetails_contracts_ContractId",
                         column: x => x.ContractId,
-                        principalTable: "Contracts",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "ConstructPlanItemDetails",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    PlanItemId = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
-                    WorkCode = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
-                    ResourceType = table.Column<int>(type: "integer", nullable: false),
-                    Quantity = table.Column<int>(type: "integer", nullable: false),
-                    Unit = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
-                    UnitPrice = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
-                    Total = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
-                    Deleted = table.Column<bool>(type: "boolean", nullable: false),
-                    Creator = table.Column<int>(type: "integer", nullable: false),
-                    Updater = table.Column<int>(type: "integer", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ConstructPlanItemDetails", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_ConstructPlanItemDetails_ConstructPlanItems_PlanItemId",
-                        column: x => x.PlanItemId,
-                        principalTable: "ConstructPlanItems",
-                        principalColumn: "WorkCode",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "ConstructPlanItemDetailMaterials",
-                columns: table => new
-                {
-                    MaterialId = table.Column<int>(type: "integer", nullable: false),
-                    ConstructPlanItemDetailId = table.Column<int>(type: "integer", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ConstructPlanItemDetailMaterials", x => new { x.MaterialId, x.ConstructPlanItemDetailId });
-                    table.ForeignKey(
-                        name: "FK_ConstructPlanItemDetailMaterials_ConstructPlanItemDetails_ConstructPlanItemDetailId",
-                        column: x => x.ConstructPlanItemDetailId,
-                        principalTable: "ConstructPlanItemDetails",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_ConstructPlanItemDetailMaterials_Materials_MaterialId",
-                        column: x => x.MaterialId,
-                        principalTable: "Materials",
+                        principalTable: "contracts",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -410,8 +484,9 @@ namespace Sep490_Backend.Migrations
                     Gender = table.Column<bool>(type: "boolean", nullable: false),
                     Dob = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
                     IsVerify = table.Column<bool>(type: "boolean", nullable: false),
-                    TeamId = table.Column<int>(type: "integer", nullable: false),
-                    ConstructionTeamId = table.Column<int>(type: "integer", nullable: false),
+                    TeamId = table.Column<int>(type: "integer", nullable: true),
+                    PicProfile = table.Column<string>(type: "text", nullable: true),
+                    Address = table.Column<string>(type: "text", nullable: true),
                     UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
                     Deleted = table.Column<bool>(type: "boolean", nullable: false),
@@ -422,65 +497,11 @@ namespace Sep490_Backend.Migrations
                 {
                     table.PrimaryKey("PK_Users", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Users_ConstructionTeams_ConstructionTeamId",
-                        column: x => x.ConstructionTeamId,
-                        principalTable: "ConstructionTeams",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
                         name: "FK_Users_ConstructionTeams_TeamId",
                         column: x => x.TeamId,
                         principalTable: "ConstructionTeams",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "ConstructPlanItemDetailUsers",
-                columns: table => new
-                {
-                    UserId = table.Column<int>(type: "integer", nullable: false),
-                    ResourceAllocationId = table.Column<int>(type: "integer", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ConstructPlanItemDetailUsers", x => new { x.UserId, x.ResourceAllocationId });
-                    table.ForeignKey(
-                        name: "FK_ConstructPlanItemDetailUsers_ConstructPlanItemDetails_ResourceAllocationId",
-                        column: x => x.ResourceAllocationId,
-                        principalTable: "ConstructPlanItemDetails",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_ConstructPlanItemDetailUsers_Users_UserId",
-                        column: x => x.UserId,
-                        principalTable: "Users",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "ConstructPlanItemQAs",
-                columns: table => new
-                {
-                    QAItemWorkCode = table.Column<string>(type: "text", nullable: false),
-                    QAMemberId = table.Column<int>(type: "integer", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ConstructPlanItemQAs", x => new { x.QAItemWorkCode, x.QAMemberId });
-                    table.ForeignKey(
-                        name: "FK_ConstructPlanItemQAs_ConstructPlanItems_QAItemWorkCode",
-                        column: x => x.QAItemWorkCode,
-                        principalTable: "ConstructPlanItems",
-                        principalColumn: "WorkCode",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_ConstructPlanItemQAs_Users_QAMemberId",
-                        column: x => x.QAMemberId,
-                        principalTable: "Users",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -552,6 +573,7 @@ namespace Sep490_Backend.Migrations
                     PriorityLevel = table.Column<int>(type: "integer", nullable: false),
                     Status = table.Column<int>(type: "integer", nullable: false),
                     Attachments = table.Column<JsonDocument>(type: "jsonb", nullable: true),
+                    RequestDate = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
                     UserId = table.Column<int>(type: "integer", nullable: true),
                     UserId1 = table.Column<int>(type: "integer", nullable: true),
                     UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
@@ -750,27 +772,76 @@ namespace Sep490_Backend.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "ConstructPlanItemDetailVehicles",
+                name: "ConstructPlanItemDetails",
                 columns: table => new
                 {
-                    VehicleId = table.Column<int>(type: "integer", nullable: false),
-                    ConstructPlanItemDetailId = table.Column<int>(type: "integer", nullable: false)
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    PlanItemId = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    WorkCode = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    ResourceType = table.Column<int>(type: "integer", nullable: false),
+                    Quantity = table.Column<int>(type: "integer", nullable: false),
+                    Unit = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
+                    UnitPrice = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
+                    Total = table.Column<decimal>(type: "numeric(18,2)", nullable: false),
+                    ResourceId = table.Column<int>(type: "integer", nullable: true),
+                    MaterialId = table.Column<int>(type: "integer", nullable: true),
+                    UserId = table.Column<int>(type: "integer", nullable: true),
+                    VehicleId = table.Column<int>(type: "integer", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
+                    Deleted = table.Column<bool>(type: "boolean", nullable: false),
+                    Creator = table.Column<int>(type: "integer", nullable: false),
+                    Updater = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_ConstructPlanItemDetailVehicles", x => new { x.VehicleId, x.ConstructPlanItemDetailId });
+                    table.PrimaryKey("PK_ConstructPlanItemDetails", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_ConstructPlanItemDetailVehicles_ConstructPlanItemDetails_ConstructPlanItemDetailId",
-                        column: x => x.ConstructPlanItemDetailId,
-                        principalTable: "ConstructPlanItemDetails",
-                        principalColumn: "Id",
+                        name: "FK_ConstructPlanItemDetails_ConstructPlanItems_PlanItemId",
+                        column: x => x.PlanItemId,
+                        principalTable: "ConstructPlanItems",
+                        principalColumn: "WorkCode",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "FK_ConstructPlanItemDetailVehicles_Vehicles_VehicleId",
-                        column: x => x.VehicleId,
+                        name: "FK_ConstructPlanItemDetails_ConstructionTeams_ResourceId",
+                        column: x => x.ResourceId,
+                        principalTable: "ConstructionTeams",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "FK_ConstructPlanItemDetails_Materials_MaterialId",
+                        column: x => x.MaterialId,
+                        principalTable: "Materials",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_ConstructPlanItemDetails_Materials_ResourceId",
+                        column: x => x.ResourceId,
+                        principalTable: "Materials",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "FK_ConstructPlanItemDetails_Users_ResourceId",
+                        column: x => x.ResourceId,
+                        principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "FK_ConstructPlanItemDetails_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_ConstructPlanItemDetails_Vehicles_ResourceId",
+                        column: x => x.ResourceId,
                         principalTable: "Vehicles",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "FK_ConstructPlanItemDetails_Vehicles_VehicleId",
+                        column: x => x.VehicleId,
+                        principalTable: "Vehicles",
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateIndex(
@@ -782,6 +853,11 @@ namespace Sep490_Backend.Migrations
                 name: "IX_ActionLogs_LogType",
                 table: "ActionLogs",
                 column: "LogType");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ConstructionLogs_ProjectId",
+                table: "ConstructionLogs",
+                column: "ProjectId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_ConstructionPlanReviewers_ReviewerId",
@@ -815,9 +891,9 @@ namespace Sep490_Backend.Migrations
                 column: "TeamName");
 
             migrationBuilder.CreateIndex(
-                name: "IX_ConstructPlanItemDetailMaterials_ConstructPlanItemDetailId",
-                table: "ConstructPlanItemDetailMaterials",
-                column: "ConstructPlanItemDetailId");
+                name: "IX_ConstructPlanItemDetails_MaterialId",
+                table: "ConstructPlanItemDetails",
+                column: "MaterialId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_ConstructPlanItemDetails_PlanItemId",
@@ -825,9 +901,24 @@ namespace Sep490_Backend.Migrations
                 column: "PlanItemId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_ConstructPlanItemDetails_ResourceId",
+                table: "ConstructPlanItemDetails",
+                column: "ResourceId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_ConstructPlanItemDetails_ResourceType",
                 table: "ConstructPlanItemDetails",
                 column: "ResourceType");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ConstructPlanItemDetails_UserId",
+                table: "ConstructPlanItemDetails",
+                column: "UserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ConstructPlanItemDetails_VehicleId",
+                table: "ConstructPlanItemDetails",
+                column: "VehicleId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_ConstructPlanItemDetails_WorkCode",
@@ -835,34 +926,25 @@ namespace Sep490_Backend.Migrations
                 column: "WorkCode");
 
             migrationBuilder.CreateIndex(
-                name: "IX_ConstructPlanItemDetailUsers_ResourceAllocationId",
-                table: "ConstructPlanItemDetailUsers",
-                column: "ResourceAllocationId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ConstructPlanItemDetailVehicles_ConstructPlanItemDetailId",
-                table: "ConstructPlanItemDetailVehicles",
-                column: "ConstructPlanItemDetailId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ConstructPlanItemQAs_QAMemberId",
-                table: "ConstructPlanItemQAs",
-                column: "QAMemberId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_ConstructPlanItems_EndDate",
                 table: "ConstructPlanItems",
                 column: "EndDate");
 
             migrationBuilder.CreateIndex(
-                name: "IX_ConstructPlanItems_ParentIndex",
+                name: "IX_ConstructPlanItems_ParentIndex_PlanId",
                 table: "ConstructPlanItems",
-                column: "ParentIndex");
+                columns: new[] { "ParentIndex", "PlanId" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_ConstructPlanItems_PlanId",
                 table: "ConstructPlanItems",
                 column: "PlanId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ConstructPlanItems_PlanId_Index",
+                table: "ConstructPlanItems",
+                columns: new[] { "PlanId", "Index" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_ConstructPlanItems_StartDate",
@@ -880,14 +962,24 @@ namespace Sep490_Backend.Migrations
                 column: "ParentIndex");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Contracts_ProjectId",
-                table: "Contracts",
+                name: "IX_contracts_ProjectId",
+                table: "contracts",
                 column: "ProjectId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_EmailTemplates_Deleted",
                 table: "EmailTemplates",
                 column: "Deleted");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LogResources_LogId",
+                table: "LogResources",
+                column: "LogId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LogWorkAmounts_LogId",
+                table: "LogWorkAmounts",
+                column: "LogId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Projects_CustomerId",
@@ -951,6 +1043,16 @@ namespace Sep490_Backend.Migrations
                 column: "UserId1");
 
             migrationBuilder.CreateIndex(
+                name: "IX_ResourceInventory_Name",
+                table: "ResourceInventory",
+                column: "Name");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ResourceInventory_ResourceType",
+                table: "ResourceInventory",
+                column: "ResourceType");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_ResourceMobilizationReqs_Creator",
                 table: "ResourceMobilizationReqs",
                 column: "Creator");
@@ -1005,11 +1107,6 @@ namespace Sep490_Backend.Migrations
                 name: "IX_SiteSurveys_UserId1",
                 table: "SiteSurveys",
                 column: "UserId1");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Users_ConstructionTeamId",
-                table: "Users",
-                column: "ConstructionTeamId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Users_Deleted",
@@ -1099,22 +1196,19 @@ namespace Sep490_Backend.Migrations
                 name: "ConstructionTeamPlanItems");
 
             migrationBuilder.DropTable(
-                name: "ConstructPlanItemDetailMaterials");
-
-            migrationBuilder.DropTable(
-                name: "ConstructPlanItemDetailUsers");
-
-            migrationBuilder.DropTable(
-                name: "ConstructPlanItemDetailVehicles");
-
-            migrationBuilder.DropTable(
-                name: "ConstructPlanItemQAs");
+                name: "ConstructPlanItemDetails");
 
             migrationBuilder.DropTable(
                 name: "ContractDetails");
 
             migrationBuilder.DropTable(
                 name: "EmailTemplates");
+
+            migrationBuilder.DropTable(
+                name: "LogResources");
+
+            migrationBuilder.DropTable(
+                name: "LogWorkAmounts");
 
             migrationBuilder.DropTable(
                 name: "ProjectUsers");
@@ -1126,25 +1220,28 @@ namespace Sep490_Backend.Migrations
                 name: "ResourceAllocationReqs");
 
             migrationBuilder.DropTable(
+                name: "ResourceInventory");
+
+            migrationBuilder.DropTable(
                 name: "ResourceMobilizationReqs");
 
             migrationBuilder.DropTable(
                 name: "SiteSurveys");
 
             migrationBuilder.DropTable(
-                name: "Materials");
+                name: "ConstructPlanItems");
 
             migrationBuilder.DropTable(
-                name: "ConstructPlanItemDetails");
+                name: "Materials");
 
             migrationBuilder.DropTable(
                 name: "Vehicles");
 
             migrationBuilder.DropTable(
-                name: "Contracts");
+                name: "contracts");
 
             migrationBuilder.DropTable(
-                name: "ConstructPlanItems");
+                name: "ConstructionLogs");
 
             migrationBuilder.DropTable(
                 name: "ConstructionPlans");

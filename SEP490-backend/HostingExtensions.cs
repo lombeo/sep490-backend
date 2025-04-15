@@ -31,7 +31,6 @@ using Sep490_Backend.Services.ResourceReqService;
 using Sep490_Backend.Services.ConstructionPlanService;
 using Sep490_Backend.Services.VehicleService;
 using Sep490_Backend.Services.ActionLogService;
-using Sep490_Backend.Services.ConstructionLogService;
 using System.Net;
 
 namespace Sep490_Backend
@@ -117,7 +116,6 @@ namespace Sep490_Backend
             builder.Services.AddScoped<IConstructionPlanService, ConstructionPlanService>();
             builder.Services.AddScoped<IVehicleService, VehicleService>();
             builder.Services.AddScoped<IActionLogService, ActionLogService>();
-            builder.Services.AddScoped<IConstructionLogService, ConstructionLogService>();
             builder.Services.AddHostedService<DefaultBackgroundService>();
 
             builder.Services.AddEndpointsApiExplorer();
