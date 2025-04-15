@@ -55,8 +55,14 @@ namespace Sep490_Backend.Services.SiteSurveyService
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
 
+            // Clear the change tracker to start with a clean state
+            _context.ChangeTracker.Clear();
+
             // Tìm SiteSurvey cần xóa
-            var data = await _context.SiteSurveys.FirstOrDefaultAsync(t => t.Id == id && !t.Deleted);
+            var data = await _context.SiteSurveys
+                .AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Id == id && !t.Deleted);
+                
             if (data == null)
             {
                 throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
@@ -93,11 +99,27 @@ namespace Sep490_Backend.Services.SiteSurveyService
                 }
             }
 
-            // Sử dụng extension method để xóa mềm
-            await _context.SoftDeleteAsync(data, actionBy);
+            // Attach the entity and mark it as modified to perform soft delete
+            var siteSurveyToUpdate = new SiteSurvey
+            {
+                Id = data.Id,
+                Deleted = true,
+                UpdatedAt = DateTime.UtcNow,
+                Updater = actionBy
+            };
+            
+            _context.SiteSurveys.Attach(siteSurveyToUpdate);
+            _context.Entry(siteSurveyToUpdate).Property(x => x.Deleted).IsModified = true;
+            _context.Entry(siteSurveyToUpdate).Property(x => x.UpdatedAt).IsModified = true;
+            _context.Entry(siteSurveyToUpdate).Property(x => x.Updater).IsModified = true;
+            
+            await _context.SaveChangesAsync();
+            
+            // Clear tracking after save
+            _context.ChangeTracker.Clear();
 
             // Xóa cache cho SiteSurvey
-            await InvalidateSiteSurveyCaches(data.ProjectId);
+            await InvalidateSiteSurveyCaches(data.Id, data.ProjectId);
 
             return data.Id;
         }
@@ -105,69 +127,143 @@ namespace Sep490_Backend.Services.SiteSurveyService
         /// <summary>
         /// Xóa cache liên quan đến SiteSurvey
         /// </summary>
-        private async Task InvalidateSiteSurveyCaches(int projectId)
+        private async Task InvalidateSiteSurveyCaches(int siteSurveyId, int projectId)
         {
-            // Xóa cache chung cho tất cả SiteSurvey
-            await _cacheService.DeleteAsync(RedisCacheKey.SITE_SURVEY_CACHE_KEY);
+            // Specific cache keys
+            var specificCacheKeys = new List<string>
+            {
+                string.Format(RedisCacheKey.SITE_SURVEY_BY_ID_CACHE_KEY, siteSurveyId),
+                string.Format(RedisCacheKey.SITE_SURVEY_BY_PROJECT_CACHE_KEY, projectId)
+            };
             
-            // Xóa cache liên quan đến Project
-            await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_CACHE_KEY);
+            // Main cache keys to invalidate
+            var mainCacheKeys = new[]
+            {
+                RedisCacheKey.SITE_SURVEY_CACHE_KEY,
+                RedisCacheKey.SITE_SURVEY_LIST_CACHE_KEY,
+                RedisCacheKey.PROJECT_CACHE_KEY 
+            };
             
-            // Nếu có cache cho SiteSurvey theo ProjectId, xóa nó
-            var projectSpecificCacheKey = $"SITE_SURVEY:PROJECT:{projectId}";
-            await _cacheService.DeleteAsync(projectSpecificCacheKey);
+            // Delete specific cache keys
+            foreach (var cacheKey in specificCacheKeys)
+            {
+                await _cacheService.DeleteAsync(cacheKey);
+            }
             
-            Console.WriteLine($"Site survey caches invalidated for project {projectId}");
+            // Delete main cache keys
+            foreach (var cacheKey in mainCacheKeys)
+            {
+                await _cacheService.DeleteAsync(cacheKey);
+            }
+            
+            // Delete pattern-based caches
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.SITE_SURVEY_ALL_PATTERN);
         }
 
         public async Task<SiteSurvey> GetSiteSurveyDetail(int projectId, int actionBy)
         {
-            // Chỉ Executive Board có thể xem tất cả các project
+            // Check authorization
             bool isExecutiveBoard = _helpService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD);
             
-            // Kiểm tra người dùng có thuộc project không
+            // Check if user has access to this project
             bool hasAccess = isExecutiveBoard || await _context.ProjectUsers
+                .AsNoTracking()
                 .AnyAsync(pu => pu.ProjectId == projectId && pu.UserId == actionBy && !pu.Deleted);
                 
             if (!hasAccess)
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
+            
+            // Try to get from project-specific site survey cache
+            string projectSurveyKey = string.Format(RedisCacheKey.SITE_SURVEY_BY_PROJECT_CACHE_KEY, projectId);
+            var surveyFromProjectCache = await _cacheService.GetAsync<SiteSurvey>(projectSurveyKey);
+            
+            if (surveyFromProjectCache != null)
+            {
+                return surveyFromProjectCache;
+            }
 
-            // Lấy toàn bộ dữ liệu SiteSurvey từ cache chính
+            // If not in project-specific cache, check main cache
             var allSurveys = await _cacheService.GetAsync<List<SiteSurvey>>(RedisCacheKey.SITE_SURVEY_CACHE_KEY);
             
             if (allSurveys != null)
             {
-                // Lọc từ cache chính theo projectId
-                var surveyFromCache = allSurveys.FirstOrDefault(s => s.ProjectId == projectId && !s.Deleted);
-                if (surveyFromCache != null)
+                // Filter from main cache by projectId
+                var surveyFromMainCache = allSurveys.FirstOrDefault(s => s.ProjectId == projectId && !s.Deleted);
+                if (surveyFromMainCache != null)
                 {
-                    return surveyFromCache;
+                    // Store in project-specific cache for faster retrieval next time
+                    await _cacheService.SetAsync(projectSurveyKey, surveyFromMainCache, TimeSpan.FromHours(1));
+                    return surveyFromMainCache;
                 }
             }
 
-            // Nếu không có trong cache hoặc không tìm thấy trong cache, tìm trong database
-            var survey = await _context.SiteSurveys.FirstOrDefaultAsync(s => s.ProjectId == projectId && !s.Deleted);
+            // Clear the change tracker before querying the database
+            _context.ChangeTracker.Clear();
+
+            // If not found in any cache, get from database
+            var survey = await _context.SiteSurveys
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.ProjectId == projectId && !s.Deleted);
+                
             if (survey == null)
             {
                 throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
 
-            // Nếu cache chưa có, tải toàn bộ dữ liệu vào cache
+            // Cache the retrieved survey
+            await _cacheService.SetAsync(projectSurveyKey, survey, TimeSpan.FromHours(1));
+            
+            // Update main cache if needed
+            await UpdateSurveyInMainCache(survey);
+            
+            return survey;
+        }
+        
+        // Helper method to update site survey in main cache
+        private async Task UpdateSurveyInMainCache(SiteSurvey survey)
+        {
+            var allSurveys = await _cacheService.GetAsync<List<SiteSurvey>>(RedisCacheKey.SITE_SURVEY_CACHE_KEY);
+            
             if (allSurveys == null)
             {
-                allSurveys = await _context.SiteSurveys.Where(s => !s.Deleted).ToListAsync();
-                await _cacheService.SetAsync(RedisCacheKey.SITE_SURVEY_CACHE_KEY, allSurveys, TimeSpan.FromMinutes(30));
+                // Clear the change tracker before querying
+                _context.ChangeTracker.Clear();
+                
+                // If main cache is empty, load all surveys
+                allSurveys = await _context.SiteSurveys
+                    .AsNoTracking()
+                    .Where(s => !s.Deleted)
+                    .ToListAsync();
+                    
+                await _cacheService.SetAsync(RedisCacheKey.SITE_SURVEY_CACHE_KEY, allSurveys, TimeSpan.FromHours(1));
+                await _cacheService.SetAsync(RedisCacheKey.SITE_SURVEY_LIST_CACHE_KEY, allSurveys, TimeSpan.FromHours(1));
             }
-            // Nếu đã có cache nhưng không tìm thấy bản ghi cần tìm, cập nhật cache
             else
             {
-                allSurveys.Add(survey); 
-                await _cacheService.SetAsync(RedisCacheKey.SITE_SURVEY_CACHE_KEY, allSurveys, TimeSpan.FromMinutes(30));
+                // Find and update the survey in cache
+                var existingSurvey = allSurveys.FirstOrDefault(s => s.Id == survey.Id);
+                if (existingSurvey != null)
+                {
+                    // Update existing survey
+                    int index = allSurveys.IndexOf(existingSurvey);
+                    allSurveys[index] = survey;
+                }
+                else
+                {
+                    // Add new survey to cache
+                    allSurveys.Add(survey);
+                }
+                
+                // Update both cache keys
+                await _cacheService.SetAsync(RedisCacheKey.SITE_SURVEY_CACHE_KEY, allSurveys, TimeSpan.FromHours(1));
+                await _cacheService.SetAsync(RedisCacheKey.SITE_SURVEY_LIST_CACHE_KEY, allSurveys, TimeSpan.FromHours(1));
             }
-
-            return survey;
+            
+            // Also cache in the survey by ID cache
+            string surveyByIdKey = string.Format(RedisCacheKey.SITE_SURVEY_BY_ID_CACHE_KEY, survey.Id);
+            await _cacheService.SetAsync(surveyByIdKey, survey, TimeSpan.FromHours(1));
         }
 
         public async Task<SiteSurvey> SaveSiteSurvey(SaveSiteSurveyDTO model, int actionBy)
@@ -178,7 +274,7 @@ namespace Sep490_Backend.Services.SiteSurveyService
             bool isExecutiveBoard = _helpService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD);
             bool isTechnicalManager = _helpService.IsInRole(actionBy, RoleConstValue.TECHNICAL_MANAGER);
             
-            if (!isExecutiveBoard || !isTechnicalManager)
+            if (!isExecutiveBoard && !isTechnicalManager)
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
@@ -303,8 +399,14 @@ namespace Sep490_Backend.Services.SiteSurveyService
 
             if (model.Id != 0)
             {
-                // Cập nhật
-                var exist = await _context.SiteSurveys.FirstOrDefaultAsync(s => s.Id == model.Id && !s.Deleted);
+                // Clear the change tracker to prevent tracking conflicts
+                _context.ChangeTracker.Clear();
+                
+                // Cập nhật - Get existing record without tracking
+                var exist = await _context.SiteSurveys
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(s => s.Id == model.Id && !s.Deleted);
+                    
                 if (exist == null)
                 {
                     throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
@@ -312,7 +414,9 @@ namespace Sep490_Backend.Services.SiteSurveyService
                 
                 survey.CreatedAt = exist.CreatedAt;
                 survey.Creator = exist.Creator;
-                _context.Update(survey);
+                
+                // Set entity state explicitly
+                _context.Entry(survey).State = EntityState.Modified;
             }
             else
             {
@@ -324,8 +428,11 @@ namespace Sep490_Backend.Services.SiteSurveyService
 
             await _context.SaveChangesAsync();
             
-            // Xóa cache duy nhất cho SiteSurvey
-            _ = _cacheService.DeleteAsync(RedisCacheKey.SITE_SURVEY_CACHE_KEY);
+            // Clear tracking after save to avoid conflicts with future operations
+            _context.ChangeTracker.Clear();
+            
+            // Invalidate all related caches
+            await InvalidateSiteSurveyCaches(survey.Id, survey.ProjectId);
 
             return survey;
         }

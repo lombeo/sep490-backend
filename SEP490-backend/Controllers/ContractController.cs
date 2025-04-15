@@ -23,15 +23,6 @@ namespace Sep490_Backend.Controllers
             _dataService = dataService;
         }
 
-        [HttpGet("list-contract")]
-        public async Task<ResponseDTO<List<ContractDTO>>> ListContract([FromQuery] SearchContractDTO model)
-        {
-            model.ActionBy = UserId;
-            var result = await HandleException(_dataService.ListContract(model), Message.ContractMessage.SEARCH_SUCCESS);
-            result.Meta = new ResponseMeta() { Total = model.Total, Index = model.PageIndex, PageSize = model.PageSize };
-            return result;
-        }
-
         [HttpDelete("delete-contract/{projectId}")]
         public async Task<ResponseDTO<int>> DeleteContract(int projectId)
         {

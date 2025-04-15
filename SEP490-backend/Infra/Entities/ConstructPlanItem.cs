@@ -80,7 +80,7 @@ namespace Sep490_Backend.Infra.Entities
                 entity.HasIndex(e => e.EndDate);
 
                 // Create a unique index that scopes Index to PlanId
-                entity.HasIndex(e => new { e.PlanId, e.Index }).IsUnique();
+                entity.HasIndex(e => new { e.PlanId, e.Index }).HasFilter("\"Deleted\" = false").IsUnique();
 
                 // Relationships
                 entity.HasOne(e => e.ConstructionPlan)

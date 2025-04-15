@@ -83,18 +83,26 @@ namespace Sep490_Backend.Services.ProjectService
             await _context.SoftDeleteAsync(entity, actionBy);
             
             // Clear all relevant caches
-            await InvalidateProjectRelatedCaches();
+            await InvalidateProjectRelatedCaches(id);
             
             return entity.Id;
         }
 
-        // New helper method to invalidate all project-related caches
-        private async Task InvalidateProjectRelatedCaches()
+        // Helper method to invalidate all project-related caches
+        private async Task InvalidateProjectRelatedCaches(int projectId)
         {
+            // Specific project cache keys
+            var specificCacheKeys = new List<string>
+            {
+                string.Format(RedisCacheKey.PROJECT_BY_ID_CACHE_KEY, projectId)
+            };
+            
+            // Main cache keys to be invalidated
             var mainCacheKeys = new[]
             {
                 RedisCacheKey.PROJECT_CACHE_KEY,
                 RedisCacheKey.PROJECT_USER_CACHE_KEY,
+                RedisCacheKey.PROJECT_LIST_CACHE_KEY,
                 RedisCacheKey.SITE_SURVEY_CACHE_KEY,
                 RedisCacheKey.CONTRACT_CACHE_KEY,
                 RedisCacheKey.CONTRACT_DETAIL_CACHE_KEY,
@@ -102,36 +110,70 @@ namespace Sep490_Backend.Services.ProjectService
                 RedisCacheKey.RESOURCE_MOBILIZATION_REQ_CACHE_KEY
             };
             
+            // Delete specific project cache keys
+            foreach (var cacheKey in specificCacheKeys)
+            {
+                await _cacheService.DeleteAsync(cacheKey);
+            }
+            
+            // Delete all main cache keys
             foreach (var cacheKey in mainCacheKeys)
             {
                 await _cacheService.DeleteAsync(cacheKey);
             }
 
-            // Also delete pattern-based caches for mobilization requests
+            // Delete pattern-based caches
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.PROJECT_ALL_PATTERN);
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.CONTRACT_ALL_PATTERN);
             await _cacheService.DeleteByPatternAsync(RedisCacheKey.MOBILIZATION_REQ_CACHE_KEY);
             await _cacheService.DeleteByPatternAsync(RedisCacheKey.MOBILIZATION_REQS_LIST_CACHE_KEY);
-            await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_MOBILIZATION_REQ_BY_ID_CACHE_KEY);
-            await _cacheService.DeleteByPatternAsync(RedisCacheKey.MOBILIZATION_REQ_BY_PROJECT_CACHE_KEY);
-            await _cacheService.DeleteByPatternAsync(RedisCacheKey.MOBILIZATION_REQS_BY_PROJECT_LIST_CACHE_KEY);
-            await _cacheService.DeleteByPatternAsync(RedisCacheKey.MOBILIZATION_REQS_BY_STATUS_LIST_CACHE_KEY);
+            await _cacheService.DeleteByPatternAsync(string.Format(RedisCacheKey.MOBILIZATION_REQ_BY_PROJECT_CACHE_KEY, projectId));
+            await _cacheService.DeleteByPatternAsync(string.Format(RedisCacheKey.MOBILIZATION_REQS_BY_PROJECT_LIST_CACHE_KEY, projectId));
         }
 
         public async Task<ProjectDTO> Detail(int id, int actionBy)
         {
-            // Get all projects from the main cache
+            // First try to get from project-specific cache
+            string projectCacheKey = string.Format(RedisCacheKey.PROJECT_BY_ID_CACHE_KEY, id);
+            var projectFromCache = await _cacheService.GetAsync<ProjectDTO>(projectCacheKey);
+            
+            if (projectFromCache != null)
+            {
+                // Verify user has access to this project
+                if (CanUserAccessProject(projectFromCache, actionBy))
+                {
+                    return projectFromCache;
+                }
+                else
+                {
+                    throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+                }
+            }
+            
+            // If not in specific cache, check the main projects cache
             var allProjects = await _cacheService.GetAsync<List<ProjectDTO>>(RedisCacheKey.PROJECT_CACHE_KEY);
             
             if (allProjects != null)
             {
-                // Filter from main cache by id and check user access
-                var projectFromCache = allProjects.FirstOrDefault(p => p.Id == id);
-                if (projectFromCache != null && CanUserAccessProject(projectFromCache, actionBy))
+                // Filter from main cache by id
+                var projectFromMainCache = allProjects.FirstOrDefault(p => p.Id == id);
+                if (projectFromMainCache != null)
                 {
-                    return projectFromCache;
+                    // Check if user has access
+                    if (CanUserAccessProject(projectFromMainCache, actionBy))
+                    {
+                        // Save to specific cache for faster retrieval next time
+                        await _cacheService.SetAsync(projectCacheKey, projectFromMainCache, TimeSpan.FromHours(1));
+                        return projectFromMainCache;
+                    }
+                    else
+                    {
+                        throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+                    }
                 }
             }
             
-            // If not in cache or user doesn't have access, query from database
+            // If not in cache, query from database
             var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == id && !p.Deleted);
             if (project == null)
             {
@@ -147,21 +189,47 @@ namespace Sep490_Backend.Services.ProjectService
             // Get project details by mapping to DTO
             var projectDTO = await MapProjectToDTO(project, actionBy);
             
-            // Update cache if needed
-            if (allProjects == null)
-            {
-                // If cache is empty, load all projects that are not deleted
-                allProjects = await GetAllProjectDTOs();
-                await _cacheService.SetAsync(RedisCacheKey.PROJECT_CACHE_KEY, allProjects, TimeSpan.FromHours(1));
-            }
-            else if (!allProjects.Any(p => p.Id == projectDTO.Id))
-            {
-                // If project not in cache, add it and update cache
-                allProjects.Add(projectDTO);
-                await _cacheService.SetAsync(RedisCacheKey.PROJECT_CACHE_KEY, allProjects, TimeSpan.FromHours(1));
-            }
+            // Cache the retrieved project
+            await _cacheService.SetAsync(projectCacheKey, projectDTO, TimeSpan.FromHours(1));
+            
+            // Update main cache if needed
+            await UpdateProjectInMainCache(projectDTO);
             
             return projectDTO;
+        }
+        
+        // Helper method to update the project in main cache
+        private async Task UpdateProjectInMainCache(ProjectDTO projectDTO)
+        {
+            var allProjects = await _cacheService.GetAsync<List<ProjectDTO>>(RedisCacheKey.PROJECT_CACHE_KEY);
+            
+            if (allProjects == null)
+            {
+                // If main cache is empty, load all projects
+                allProjects = await GetAllProjectDTOs();
+                await _cacheService.SetAsync(RedisCacheKey.PROJECT_CACHE_KEY, allProjects, TimeSpan.FromHours(1));
+                await _cacheService.SetAsync(RedisCacheKey.PROJECT_LIST_CACHE_KEY, allProjects, TimeSpan.FromHours(1));
+            }
+            else
+            {
+                // Find and update the project in cache
+                var existingProject = allProjects.FirstOrDefault(p => p.Id == projectDTO.Id);
+                if (existingProject != null)
+                {
+                    // Update existing project
+                    int index = allProjects.IndexOf(existingProject);
+                    allProjects[index] = projectDTO;
+                }
+                else
+                {
+                    // Add new project to cache
+                    allProjects.Add(projectDTO);
+                }
+                
+                // Update both cache keys
+                await _cacheService.SetAsync(RedisCacheKey.PROJECT_CACHE_KEY, allProjects, TimeSpan.FromHours(1));
+                await _cacheService.SetAsync(RedisCacheKey.PROJECT_LIST_CACHE_KEY, allProjects, TimeSpan.FromHours(1));
+            }
         }
         
         // Helper method to check if user has access to a project
@@ -567,10 +635,11 @@ namespace Sep490_Backend.Services.ProjectService
 
             await _context.SaveChangesAsync();
             
-            // Only delete the main cache key to force reload
-            _ = _cacheService.DeleteAsync(RedisCacheKey.PROJECT_CACHE_KEY);
+            // Invalidate all project-related caches
+            await InvalidateProjectRelatedCaches(project.Id);
             
-            return new ProjectDTO
+            // Map to DTO for return value
+            var projectDTO = new ProjectDTO
             {
                 Id = project.Id,
                 ProjectCode = project.ProjectCode,
@@ -621,6 +690,8 @@ namespace Sep490_Backend.Services.ProjectService
                     .Select(pu => pu.UserId)
                     .ToListAsync()
             };
+            
+            return projectDTO;
         }
     }
 }

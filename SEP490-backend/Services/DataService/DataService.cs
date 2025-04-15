@@ -19,11 +19,9 @@ namespace Sep490_Backend.Services.DataService
 {
     public interface IDataService
     {
-        Task<List<ContractDTO>> ListContract(SearchContractDTO model);
         Task<List<User>> ListUser(AdminSearchUserDTO model);
         Task<List<Customer>> ListCustomer(CustomerSearchDTO model);
         Task<List<ProjectDTO>> ListProject(SearchProjectDTO model);
-        Task<List<SiteSurvey>> ListSiteSurvey(SearchSiteSurveyDTO model);
         Task<List<Material>> ListMaterial(MaterialSearchDTO model);
         Task<List<ConstructionTeam>> ListConstructionTeam(ConstructionTeamSearchDTO model);
         Task<List<ConstructionPlanDTO>> ListConstructionPlan(ConstructionPlanQuery model);
@@ -34,7 +32,6 @@ namespace Sep490_Backend.Services.DataService
         private readonly BackendContext _context;
         private readonly IHelperService _helpService;
         private readonly ICacheService _cacheService;
-        private readonly ILogger<DataService> _logger;
         private readonly TimeSpan DEFAULT_CACHE_DURATION = TimeSpan.FromMinutes(15);
 
         public DataService(BackendContext context, IHelperService helpService, ICacheService cacheService, ILogger<DataService> logger)
@@ -42,166 +39,6 @@ namespace Sep490_Backend.Services.DataService
             _context = context;
             _helpService = helpService;
             _cacheService = cacheService;
-            _logger = logger;
-        }
-
-        public async Task<List<ContractDTO>> ListContract(SearchContractDTO model)
-        {
-            // Check if user is Executive Board member
-            var user = StaticVariable.UserMemory.FirstOrDefault(u => u.Id == model.ActionBy);
-            bool isExecutiveBoard = user != null && user.Role == RoleConstValue.EXECUTIVE_BOARD;
-
-            // Use only the main cache key
-            string cacheKey = RedisCacheKey.CONTRACT_CACHE_KEY;
-            
-            // Try to get from main cache
-            var allContracts = await _cacheService.GetAsync<List<ContractDTO>>(cacheKey);
-            
-            if (allContracts != null)
-            {
-                // If user is not Executive Board, filter contracts by user's project access
-                var filteredContracts = allContracts;
-                
-                if (!isExecutiveBoard)
-                {
-                    // Get projects the user has access to
-                    var userProjectIds = await _context.ProjectUsers
-                        .Where(pu => pu.UserId == model.ActionBy && !pu.Deleted)
-                        .Select(pu => pu.ProjectId)
-                        .ToListAsync();
-                        
-                    // Filter contracts by those projects
-                    filteredContracts = filteredContracts.Where(c => 
-                        c.Project != null && userProjectIds.Contains(c.Project.Id)).ToList();
-                }
-                
-                // Apply search filters
-                var filteredResult = ApplyContractFilters(filteredContracts, model);
-                
-                // Set total count for pagination
-                model.Total = filteredResult.Count();
-                
-                // Apply pagination if needed
-                if (model.PageSize > 0)
-                {
-                    filteredResult = filteredResult.Skip(model.Skip).Take(model.PageSize).ToList();
-                }
-                
-                return filteredResult;
-            }
-
-            // If not in cache, get from database
-            
-            // Get the list of projects the user has access to
-            List<ProjectDTO> projects = await ListProject(new SearchProjectDTO()
-            {
-                ActionBy = model.ActionBy,
-                PageSize = int.MaxValue
-            });
-            
-            var projectIds = projects.Select(p => p.Id).ToList();
-            
-            // Get contracts for those projects
-            var contracts = await _context.Contracts
-                .Where(t => !t.Deleted && projectIds.Contains(t.ProjectId))
-                .OrderByDescending(t => t.UpdatedAt)
-                .ToListAsync();
-            
-            // Get all contract details for these contracts
-            var allContractIds = contracts.Select(c => c.Id).ToList();
-            var allContractDetails = await _context.Set<ContractDetail>()
-                .Where(cd => !cd.Deleted && allContractIds.Contains(cd.ContractId))
-                .ToListAsync();
-            
-            // Map to DTOs
-            var contractDTOs = contracts.Select(t => new ContractDTO
-            {
-                Id = t.Id,
-                ContractCode = t.ContractCode,
-                ContractName = t.ContractName,
-                Project = projects.FirstOrDefault(p => p.Id == t.ProjectId) ?? new ProjectDTO(),
-                StartDate = t.StartDate,
-                EndDate = t.EndDate,
-                EstimatedDays = t.EstimatedDays,
-                Status = t.Status,
-                Tax = t.Tax,
-                SignDate = t.SignDate,
-                Attachments = t.Attachments != null ? 
-                    System.Text.Json.JsonSerializer.Deserialize<List<AttachmentInfo>>(t.Attachments.RootElement.ToString()) 
-                    : null,
-                UpdatedAt = t.UpdatedAt,
-                Updater = t.Updater,
-                CreatedAt = t.CreatedAt,
-                Creator = t.Creator,
-                Deleted = t.Deleted,
-                // Add ContractDetails for each Contract
-                ContractDetails = allContractDetails
-                    .Where(cd => cd.ContractId == t.Id)
-                    .Select(cd => new ContractDetailDTO
-                    {
-                        WorkCode = cd.WorkCode,
-                        Index = cd.Index,
-                        ContractId = cd.ContractId,
-                        ParentIndex = cd.ParentIndex,
-                        WorkName = cd.WorkName,
-                        Unit = cd.Unit,
-                        Quantity = cd.Quantity,
-                        UnitPrice = cd.UnitPrice,
-                        Total = cd.Total,
-                        CreatedAt = cd.CreatedAt,
-                        Creator = cd.Creator,
-                        UpdatedAt = cd.UpdatedAt,
-                        Updater = cd.Updater,
-                        Deleted = cd.Deleted
-                    }).ToList()
-            }).ToList();
-
-            // Save all contracts to main cache
-            await _cacheService.SetAsync(cacheKey, contractDTOs, TimeSpan.FromHours(1));
-            
-            // Apply search filters
-            var result = ApplyContractFilters(contractDTOs, model);
-            
-            // Set total count for pagination
-            model.Total = result.Count();
-            
-            // Apply pagination if needed
-            if (model.PageSize > 0)
-            {
-                result = result.Skip(model.Skip).Take(model.PageSize).ToList();
-            }
-            
-            return result;
-        }
-        
-        private List<ContractDTO> ApplyContractFilters(List<ContractDTO> data, SearchContractDTO model)
-        {
-            var result = data;
-            
-            if (!string.IsNullOrWhiteSpace(model.KeyWord))
-            {
-                result = result.Where(t => t.ContractCode.ToLower().Trim().Contains(model.KeyWord.ToLower().Trim())
-                                     || t.ContractName.ToLower().Trim().Contains(model.KeyWord.ToLower().Trim())
-                                     || t.Project.ProjectCode.ToLower().Trim().Contains(model.KeyWord.ToLower().Trim())
-                                     || t.Project.ProjectName.ToLower().Trim().Contains(model.KeyWord.ToLower().Trim())).ToList();
-            }
-
-            if(model.ProjectId != 0)
-            {
-                result = result.Where(t => t.Project.Id == model.ProjectId).ToList();
-            }
-            
-            if(model.Status != null)
-            {
-                result = result.Where(t => t.Status == model.Status).ToList();
-            }
-            
-            if(model.SignDate != null)
-            {
-                result = result.Where(t => t.SignDate == model.SignDate).ToList();
-            }
-            
-            return result;
         }
 
         public async Task<List<Customer>> ListCustomer(CustomerSearchDTO model)
@@ -495,106 +332,6 @@ namespace Sep490_Backend.Services.DataService
             ).ToList();
         }
 
-        public async Task<List<SiteSurvey>> ListSiteSurvey(SearchSiteSurveyDTO model)
-        {
-            // Check if user is authorized to perform this action
-            if (!_helpService.IsInRole(model.ActionBy, new List<string> 
-            { 
-                RoleConstValue.TECHNICAL_MANAGER, 
-                RoleConstValue.EXECUTIVE_BOARD 
-            }))
-            {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
-            }
-
-            var user = StaticVariable.UserMemory.FirstOrDefault(u => u.Id == model.ActionBy);
-            bool isExecutiveBoard = user != null && user.Role == RoleConstValue.EXECUTIVE_BOARD;
-
-            // Only use the main cache key
-            string cacheKey = RedisCacheKey.SITE_SURVEY_CACHE_KEY;
-            
-            // Try to get from cache
-            var cachedData = await _cacheService.GetAsync<List<SiteSurvey>>(cacheKey);
-            
-            if (cachedData != null)
-            {
-                // Apply filters to cached data
-                var filteredData = ApplyFilters(cachedData, model);
-                
-                // If not Executive Board, filter by user's project access
-                if (!isExecutiveBoard)
-                {
-                    var userProjects = await _context.ProjectUsers
-                        .Where(pu => pu.UserId == model.ActionBy && !pu.Deleted)
-                        .Select(pu => pu.ProjectId)
-                        .ToListAsync();
-                        
-                    filteredData = filteredData.Where(s => userProjects.Contains(s.ProjectId)).ToList();
-                }
-                
-                // Set total count for pagination
-                model.Total = filteredData.Count();
-                
-                // Apply pagination if needed
-                if (model.PageSize > 0)
-                {
-                    int skip = (model.PageIndex - 1) * model.PageSize;
-                    filteredData = filteredData.Skip(skip).Take(model.PageSize).ToList();
-                }
-                
-                return filteredData;
-            }
-
-            // If not in cache, get from database
-            var query = _context.SiteSurveys.Where(s => !s.Deleted);
-            
-            // If not Executive Board, filter by user's project access
-            if (!isExecutiveBoard)
-            {
-                var userProjects = await _context.ProjectUsers
-                    .Where(pu => pu.UserId == model.ActionBy && !pu.Deleted)
-                    .Select(pu => pu.ProjectId)
-                    .ToListAsync();
-                    
-                query = query.Where(s => userProjects.Contains(s.ProjectId));
-            }
-            
-            // Execute query and get all site surveys
-            var siteSurveys = await query.ToListAsync();
-
-            // Cache all site surveys for future use
-            await _cacheService.SetAsync(cacheKey, siteSurveys, TimeSpan.FromHours(1));
-
-            // Apply filters and pagination for this specific request
-            var result = ApplyFilters(siteSurveys, model);
-            model.Total = result.Count();
-            
-            if (model.PageSize > 0)
-            {
-                int skip = (model.PageIndex - 1) * model.PageSize;
-                result = result.Skip(skip).Take(model.PageSize).ToList();
-            }
-            
-            return result;
-        }
-        
-        private List<SiteSurvey> ApplyFilters(List<SiteSurvey> data, SearchSiteSurveyDTO model)
-        {
-            var result = data;
-            
-            if (!string.IsNullOrWhiteSpace(model.SiteSurveyName))
-            {
-                result = result.Where(t => t.SiteSurveyName.ToLower().Trim().Contains(model.SiteSurveyName.ToLower().Trim())).ToList();
-            }
-
-            if (model.Status != null)
-            {
-                result = result.Where(t => t.Status == model.Status).ToList();
-            }
-            
-            return result;
-        }
-
         public Task<List<User>> ListUser(AdminSearchUserDTO model)
         {
             var data = StaticVariable.UserMemory.ToList();
@@ -650,8 +387,6 @@ namespace Sep490_Backend.Services.DataService
 
         public async Task<List<Material>> ListMaterial(MaterialSearchDTO model)
         {
-            // Remove role-based authorization check - all authenticated users can view materials
-
             // Create cache key based on search parameters
             string cacheKey = GetMaterialSearchCacheKey(model);
             
@@ -660,11 +395,8 @@ namespace Sep490_Backend.Services.DataService
             
             if (cachedMaterials != null)
             {
-                _logger.LogInformation($"Cache hit for materials search: {cacheKey}");
                 return cachedMaterials;
             }
-            
-            _logger.LogInformation($"Cache miss for materials search: {cacheKey}, fetching from database");
 
             var query = _context.Materials.Where(t => !t.Deleted).AsQueryable();
 
@@ -702,7 +434,6 @@ namespace Sep490_Backend.Services.DataService
 
         public async Task<List<ConstructionTeam>> ListConstructionTeam(ConstructionTeamSearchDTO model)
         {
-            // Remove role-based authorization check - all authenticated users can view teams
             // Try to get teams from cache
             string cacheKey = RedisCacheKey.CONSTRUCTION_TEAM_CACHE_KEY;
             var teamsCacheList = await _cacheService.GetAsync<List<ConstructionTeam>>(cacheKey);

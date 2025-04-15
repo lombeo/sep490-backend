@@ -76,13 +76,40 @@ namespace Sep490_Backend.Services.ContractService
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
             
-            // Sử dụng extension method để xóa mềm cả Contract và các ContractDetail liên quan
-            await _context.SoftDeleteAsync(contract, actionBy);
-
-            // Xóa toàn bộ cache liên quan
-            await InvalidateContractCaches(contract.Id, projectId);
-
-            return contract.Id;
+            // Use a transaction to ensure atomic operations
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            
+            try
+            {
+                // Hard delete all ContractDetails associated with this contract
+                var contractDetails = await _context.ContractDetails
+                    .Where(cd => cd.ContractId == contract.Id)
+                    .ToListAsync();
+                    
+                if (contractDetails.Any())
+                {
+                    _context.ContractDetails.RemoveRange(contractDetails);
+                    await _context.SaveChangesAsync();
+                }
+                
+                // Soft delete the main contract
+                contract.Deleted = true;
+                contract.UpdatedAt = DateTime.UtcNow;
+                contract.Updater = actionBy;
+                await _context.SaveChangesAsync();
+                
+                await transaction.CommitAsync();
+                
+                // Xóa toàn bộ cache liên quan
+                await InvalidateContractCaches(contract.Id, projectId);
+                
+                return contract.Id;
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
         /// <summary>
@@ -96,8 +123,9 @@ namespace Sep490_Backend.Services.ContractService
                 RedisCacheKey.CONTRACT_CACHE_KEY,
                 RedisCacheKey.CONTRACT_DETAIL_CACHE_KEY,
                 RedisCacheKey.PROJECT_CACHE_KEY,
-                $"CONTRACT:ID:{contractId}",
-                $"CONTRACT:PROJECT:{projectId}"
+                RedisCacheKey.CONTRACT_LIST_CACHE_KEY,
+                string.Format(RedisCacheKey.CONTRACT_BY_ID_CACHE_KEY, contractId),
+                string.Format(RedisCacheKey.CONTRACT_BY_PROJECT_CACHE_KEY, projectId)
             };
             
             // Xóa từng cache key
@@ -106,32 +134,36 @@ namespace Sep490_Backend.Services.ContractService
                 await _cacheService.DeleteAsync(key);
             }
             
-            // Xóa các cache theo pattern nếu cần
-            await _cacheService.DeleteByPatternAsync("CONTRACT:*");
+            // Xóa các cache theo pattern
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.CONTRACT_ALL_PATTERN);
         }
 
         public async Task<ContractDTO> Detail(int projectId, int actionBy)
         {
-            // Xác thực người dùng
-            var user = StaticVariable.UserMemory.FirstOrDefault(u => u.Id == actionBy);
-            bool isExecutiveBoard = user != null && user.Role == RoleConstValue.EXECUTIVE_BOARD;
+            // Tạo cache key cho contract theo project
+            string cacheKey = string.Format(RedisCacheKey.CONTRACT_BY_PROJECT_CACHE_KEY, projectId);
             
-            // Lấy tất cả hợp đồng từ cache chính
-            var allContracts = await _cacheService.GetAsync<List<ContractDTO>>(RedisCacheKey.CONTRACT_CACHE_KEY);
+            // Thử lấy dữ liệu từ cache trước
+            var contractDTO = await _cacheService.GetAsync<ContractDTO>(cacheKey);
             
-            if (allContracts != null)
+            if (contractDTO != null)
             {
-                // Tìm contract trong cache theo ProjectId
-                var contractFromCache = allContracts.FirstOrDefault(c => c.Project?.Id == projectId);
-                if (contractFromCache != null)
+                // Kiểm tra quyền truy cập với dữ liệu từ cache
+                var cachedUser = StaticVariable.UserMemory.FirstOrDefault(u => u.Id == actionBy);
+                bool isCachedUserExecutiveBoard = cachedUser != null && cachedUser.Role == RoleConstValue.EXECUTIVE_BOARD;
+                
+                if (!isCachedUserExecutiveBoard)
                 {
-                    // Kiểm tra quyền truy cập
-                    if (isExecutiveBoard || 
-                        (contractFromCache.Project?.ProjectUsers?.Any(pu => pu.UserId == actionBy && !pu.Deleted) == true))
+                    var hasAccess = await _context.ProjectUsers
+                        .AnyAsync(pu => pu.ProjectId == projectId && pu.UserId == actionBy && !pu.Deleted);
+                        
+                    if (!hasAccess)
                     {
-                        return contractFromCache;
+                        throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
                     }
                 }
+                
+                return contractDTO;
             }
             
             // Nếu không có trong cache, tìm trong database
@@ -154,6 +186,10 @@ namespace Sep490_Backend.Services.ContractService
                 throw new KeyNotFoundException(Message.SiteSurveyMessage.PROJECT_NOT_FOUND);
             }
             
+            // Xác thực người dùng
+            var user = StaticVariable.UserMemory.FirstOrDefault(u => u.Id == actionBy);
+            bool isExecutiveBoard = user != null && user.Role == RoleConstValue.EXECUTIVE_BOARD;
+            
             // Kiểm tra quyền truy cập
             if (!isExecutiveBoard)
             {
@@ -166,9 +202,9 @@ namespace Sep490_Backend.Services.ContractService
                 }
             }
             
-            // Lấy danh sách ContractDetail
+            // Lấy danh sách ContractDetail - Using hard deletion, so no need to check Deleted flag
             var contractDetails = await _context.ContractDetails
-                .Where(cd => cd.ContractId == contract.Id && !cd.Deleted)
+                .Where(cd => cd.ContractId == contract.Id)
                 .Select(cd => new ContractDetailDTO
                 {
                     WorkCode = cd.WorkCode,
@@ -189,22 +225,22 @@ namespace Sep490_Backend.Services.ContractService
                 .ToListAsync();
             
             // Map dữ liệu từ database thành DTO
-            var contractDTO = new ContractDTO
+            contractDTO = new ContractDTO
             {
                 Id = contract.Id,
+                ContractCode = contract.ContractCode,
                 ContractName = contract.ContractName,
-                ContractNumber = contract.ContractNumber,
                 ProjectId = contract.ProjectId,
                 Project = project,
-                SignedDate = contract.SignedDate,
                 StartDate = contract.StartDate,
-                CompletionDate = contract.CompletionDate,
-                Value = contract.Value,
-                CustomerRepName = contract.CustomerRepName,
-                CustomerRepTitle = contract.CustomerRepTitle,
-                CompanyRepName = contract.CompanyRepName,
-                CompanyRepTitle = contract.CompanyRepTitle,
-                Description = contract.Description,
+                EndDate = contract.EndDate,
+                EstimatedDays = contract.EstimatedDays,
+                Status = contract.Status,
+                Tax = contract.Tax,
+                SignDate = contract.SignDate,
+                Attachments = contract.Attachments != null ? 
+                    JsonSerializer.Deserialize<List<AttachmentInfo>>(contract.Attachments.RootElement.ToString()) 
+                    : null,
                 CreatedAt = contract.CreatedAt,
                 Creator = contract.Creator,
                 UpdatedAt = contract.UpdatedAt,
@@ -212,21 +248,47 @@ namespace Sep490_Backend.Services.ContractService
                 ContractDetails = contractDetails
             };
             
-            // Cập nhật cache
+            // Lưu vào cache
+            await _cacheService.SetAsync(cacheKey, contractDTO, TimeSpan.FromHours(1));
+            
+            // Cập nhật cache chính của tất cả contract
+            await UpdateContractCache(contractDTO);
+            
+            return contractDTO;
+        }
+        
+        // Helper method để cập nhật cache chính của tất cả contract
+        private async Task UpdateContractCache(ContractDTO newContractDTO)
+        {
+            var allContracts = await _cacheService.GetAsync<List<ContractDTO>>(RedisCacheKey.CONTRACT_CACHE_KEY);
+            
             if (allContracts == null)
             {
                 // Nếu cache trống, lấy toàn bộ dữ liệu và cập nhật cache
                 allContracts = await GetAllContractDTOs();
                 await _cacheService.SetAsync(RedisCacheKey.CONTRACT_CACHE_KEY, allContracts, TimeSpan.FromHours(1));
             }
-            else if (!allContracts.Any(c => c.Id == contractDTO.Id))
+            else 
             {
-                // Nếu contract không có trong cache, thêm vào cache
-                allContracts.Add(contractDTO);
+                // Tìm và cập nhật hoặc thêm mới contract trong cache
+                var existingContract = allContracts.FirstOrDefault(c => c.Id == newContractDTO.Id);
+                if (existingContract != null)
+                {
+                    // Cập nhật contract đã tồn tại
+                    var index = allContracts.IndexOf(existingContract);
+                    allContracts[index] = newContractDTO;
+                }
+                else
+                {
+                    // Thêm mới contract vào cache
+                    allContracts.Add(newContractDTO);
+                }
+                
                 await _cacheService.SetAsync(RedisCacheKey.CONTRACT_CACHE_KEY, allContracts, TimeSpan.FromHours(1));
             }
             
-            return contractDTO;
+            // Cập nhật cache danh sách contract
+            await _cacheService.SetAsync(RedisCacheKey.CONTRACT_LIST_CACHE_KEY, allContracts, TimeSpan.FromHours(1));
         }
         
         // Helper method to get all contracts as DTOs
@@ -246,8 +308,13 @@ namespace Sep490_Backend.Services.ContractService
                     
                 if (project != null)
                 {
+                    // Get full project details
+                    var customer = await _context.Customers
+                        .FirstOrDefaultAsync(c => c.Id == project.CustomerId && !c.Deleted);
+                    
+                    // Using hard deletion for contract details, so no need to check Deleted flag
                     var contractDetails = await _context.ContractDetails
-                        .Where(cd => cd.ContractId == contract.Id && !cd.Deleted)
+                        .Where(cd => cd.ContractId == contract.Id)
                         .Select(cd => new ContractDetailDTO
                         {
                             WorkCode = cd.WorkCode,
@@ -267,12 +334,43 @@ namespace Sep490_Backend.Services.ContractService
                         })
                         .ToListAsync();
                         
-                    // Map to ProjectDTO
+                    // Map to ProjectDTO with all properties
                     var projectDTO = new ProjectDTO
                     {
                         Id = project.Id,
                         ProjectName = project.ProjectName,
-                        // Minimal project data as needed
+                        ProjectCode = project.ProjectCode,
+                        ConstructType = project.ConstructType,
+                        Location = project.Location,
+                        Area = project.Area,
+                        Purpose = project.Purpose,
+                        TechnicalReqs = project.TechnicalReqs,
+                        StartDate = project.StartDate,
+                        EndDate = project.EndDate,
+                        Budget = project.Budget,
+                        Status = project.Status,
+                        Description = project.Description,
+                        Customer = customer != null ? new Customer {
+                            Id = customer.Id,
+                            CustomerName = customer.CustomerName,
+                            CustomerCode = customer.CustomerCode,
+                            DirectorName = customer.DirectorName,
+                            Phone = customer.Phone,
+                            Email = customer.Email,
+                            Address = customer.Address,
+                            TaxCode = customer.TaxCode,
+                            Fax = customer.Fax,
+                            BankAccount = customer.BankAccount,
+                            BankName = customer.BankName,
+                            Description = customer.Description
+                        } : new Customer(),
+                        Attachments = project.Attachments != null ? 
+                            JsonSerializer.Deserialize<List<AttachmentInfo>>(project.Attachments.RootElement.ToString()) 
+                            : null,
+                        CreatedAt = project.CreatedAt,
+                        Creator = project.Creator,
+                        UpdatedAt = project.UpdatedAt,
+                        Updater = project.Updater,
                         ProjectUsers = project.ProjectUsers
                             .Where(pu => !pu.Deleted)
                             .Select(pu => new DTO.Project.ProjectUserDTO
@@ -284,28 +382,30 @@ namespace Sep490_Backend.Services.ContractService
                             }).ToList()
                     };
                     
-                    contractDTOs.Add(new ContractDTO
+                    var dto = new ContractDTO
                     {
                         Id = contract.Id,
+                        ContractCode = contract.ContractCode,
                         ContractName = contract.ContractName,
-                        ContractNumber = contract.ContractNumber,
                         ProjectId = contract.ProjectId,
                         Project = projectDTO,
-                        SignedDate = contract.SignedDate,
                         StartDate = contract.StartDate,
-                        CompletionDate = contract.CompletionDate,
-                        Value = contract.Value,
-                        CustomerRepName = contract.CustomerRepName,
-                        CustomerRepTitle = contract.CustomerRepTitle,
-                        CompanyRepName = contract.CompanyRepName,
-                        CompanyRepTitle = contract.CompanyRepTitle,
-                        Description = contract.Description,
+                        EndDate = contract.EndDate,
+                        EstimatedDays = contract.EstimatedDays,
+                        Status = contract.Status,
+                        Tax = contract.Tax,
+                        SignDate = contract.SignDate,
+                        Attachments = contract.Attachments != null ? 
+                            JsonSerializer.Deserialize<List<AttachmentInfo>>(contract.Attachments.RootElement.ToString()) 
+                            : null,
                         CreatedAt = contract.CreatedAt,
                         Creator = contract.Creator,
                         UpdatedAt = contract.UpdatedAt,
                         Updater = contract.Updater,
                         ContractDetails = contractDetails
-                    });
+                    };
+                    
+                    contractDTOs.Add(dto);
                 }
             }
             
@@ -353,53 +453,63 @@ namespace Sep490_Backend.Services.ContractService
             // Check if project already has a contract (for new contract creation)
             if (model.Id == 0)
             {
-                var existingContract = await _context.Contracts
-                    .FirstOrDefaultAsync(c => c.ProjectId == model.ProjectId && !c.Deleted);
+                bool hasExistingContract = await _context.Contracts
+                    .AsNoTracking()
+                    .AnyAsync(c => c.ProjectId == model.ProjectId && !c.Deleted);
                 
-                if (existingContract != null)
+                if (hasExistingContract)
                 {
                     throw new InvalidOperationException(Message.ContractMessage.PROJECT_ALREADY_HAS_CONTRACT);
                 }
             }
-
-            // Handle file attachments
-            List<AttachmentInfo> attachmentInfos = new List<AttachmentInfo>();
-            string existingAttachmentsJson = null;
-
-            if (model.Id != 0)
+            else
             {
-                // Find the entity directly instead of loading all contracts first
-                var existingContract = await _context.Contracts.FirstOrDefaultAsync(t => t.Id == model.Id && !t.Deleted);
-                if (existingContract == null)
+                // Check contract exists
+                bool contractExists = await _context.Contracts
+                    .AsNoTracking()
+                    .AnyAsync(t => t.Id == model.Id && !t.Deleted);
+                    
+                if (!contractExists)
                 {
                     throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
                 }
 
                 // Check for duplicate contract code excluding current contract
-                if (await _context.Contracts.AnyAsync(t => t.ContractCode == model.ContractCode && t.Id != model.Id && !t.Deleted))
-                {
-                    throw new ArgumentException(Message.ContractMessage.CONTRACT_CODE_EXIST);
-                }
-                
-                if (existingContract?.Attachments != null)
-                {
-                    existingAttachmentsJson = existingContract.Attachments.RootElement.ToString();
-                    attachmentInfos = System.Text.Json.JsonSerializer.Deserialize<List<AttachmentInfo>>(existingAttachmentsJson);
-                }
-            }
-            else
-            {
-                // Check for duplicate contract code for new contracts
-                if (await _context.Contracts.AnyAsync(t => t.ContractCode == model.ContractCode && !t.Deleted))
+                bool isDuplicateCode = await _context.Contracts
+                    .AsNoTracking()
+                    .AnyAsync(t => t.ContractCode == model.ContractCode && t.Id != model.Id && !t.Deleted);
+                    
+                if (isDuplicateCode)
                 {
                     throw new ArgumentException(Message.ContractMessage.CONTRACT_CODE_EXIST);
                 }
             }
 
+            // Handle file attachments
+            List<AttachmentInfo> attachmentInfos = new List<AttachmentInfo>();
+
+            // If updating, get existing attachments
+            if (model.Id != 0)
+            {
+                var existingAttachmentsJson = await _context.Contracts
+                    .AsNoTracking()
+                    .Where(t => t.Id == model.Id)
+                    .Select(t => t.Attachments)
+                    .FirstOrDefaultAsync();
+                    
+                if (existingAttachmentsJson != null)
+                {
+                    attachmentInfos = JsonSerializer.Deserialize<List<AttachmentInfo>>(
+                        existingAttachmentsJson.RootElement.ToString()
+                    ) ?? new List<AttachmentInfo>();
+                }
+            }
+
+            // Process new attachments if any
             if (model.Attachments != null && model.Attachments.Any())
             {
-                // If there are existing attachments and we're uploading new ones, delete the old ones
-                if (attachmentInfos != null && attachmentInfos.Any())
+                // Delete old attachments if necessary
+                if (attachmentInfos.Any())
                 {
                     try
                     {
@@ -409,7 +519,6 @@ namespace Sep490_Backend.Services.ContractService
                     }
                     catch (Exception ex)
                     {
-                        // Log error but continue with upload
                         Console.WriteLine($"Failed to delete old attachments: {ex.Message}");
                     }
                 }
@@ -439,39 +548,18 @@ namespace Sep490_Backend.Services.ContractService
                 }
             }
 
-            // Sử dụng transaction để đảm bảo tính toàn vẹn, nếu có lỗi sẽ rollback toàn bộ thay đổi
             using var transaction = await _context.Database.BeginTransactionAsync();
             
             try
             {
-                Contract contract;
+                // Store the contract ID for later use
+                int contractId;
                 
-                if (model.Id != 0)
-                {
-                    // Update existing contract - fetch it directly and update its properties
-                    contract = await _context.Contracts.FirstOrDefaultAsync(t => t.Id == model.Id && !t.Deleted);
-                    
-                    // Update properties on the tracked entity instead of creating a new one
-                    contract.ProjectId = model.ProjectId;
-                    contract.ContractCode = model.ContractCode;
-                    contract.ContractName = model.ContractName;
-                    contract.StartDate = model.StartDate;
-                    contract.EndDate = model.EndDate;
-                    contract.EstimatedDays = model.EstimatedDays;
-                    contract.Status = model.Status;
-                    contract.Tax = model.Tax;
-                    contract.SignDate = model.SignDate;
-                    contract.Attachments = attachmentInfos.Any() ? 
-                        JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(attachmentInfos)) : null;
-                    contract.UpdatedAt = DateTime.UtcNow;
-                    contract.Updater = model.ActionBy;
-                    
-                    _context.Update(contract);
-                }
-                else
+                // Process contract create/update
+                if (model.Id == 0)
                 {
                     // Create new contract
-                    contract = new Contract()
+                    var newContract = new Contract
                     {
                         ContractCode = model.ContractCode,
                         ContractName = model.ContractName,
@@ -482,243 +570,271 @@ namespace Sep490_Backend.Services.ContractService
                         Status = model.Status,
                         Tax = model.Tax,
                         SignDate = model.SignDate,
-                        Attachments = attachmentInfos.Any() ? 
-                            JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(attachmentInfos)) : null,
+                        Attachments = attachmentInfos.Any() 
+                            ? JsonDocument.Parse(JsonSerializer.Serialize(attachmentInfos)) 
+                            : null,
                         CreatedAt = DateTime.UtcNow,
                         Creator = model.ActionBy,
                         UpdatedAt = DateTime.UtcNow,
                         Updater = model.ActionBy,
                         Deleted = false
                     };
-
-                    await _context.AddAsync(contract);
-                    await _context.SaveChangesAsync(); // Save to get the ID
+                    
+                    _context.Contracts.Add(newContract);
+                    await _context.SaveChangesAsync();
+                    
+                    contractId = newContract.Id;
+                    
+                    // Clear context to avoid tracking conflicts
+                    _context.ChangeTracker.Clear();
                 }
-
-                // Lấy tất cả các ContractDetail của Contract này
-                var existingContractDetails = await _context.ContractDetails
-                    .Where(cd => cd.ContractId == contract.Id && !cd.Deleted)
-                    .ToListAsync();
-
-                // Detach all existing contract details to avoid tracking conflicts
-                foreach (var detail in existingContractDetails)
+                else
                 {
-                    _context.Entry(detail).State = EntityState.Detached;
-                }
-
-                // Tạo dictionary để theo dõi WorkCodes đã được xử lý
-                var processedWorkCodes = new HashSet<string>();
-                
-                // Xử lý danh sách ContractDetail
-                List<ContractDetail> updatedContractDetails = new List<ContractDetail>();
-                
-                // Xử lý các item bị xóa trước
-                foreach (var detailDto in model.ContractDetails.Where(d => d.IsDelete && !string.IsNullOrEmpty(d.WorkCode)))
-                {
-                    var detailToDelete = existingContractDetails.FirstOrDefault(cd => cd.WorkCode == detailDto.WorkCode);
-                    if (detailToDelete != null)
+                    // Get existing contract without tracking
+                    contractId = model.Id;
+                    
+                    var existingContract = await _context.Contracts
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(c => c.Id == contractId);
+                        
+                    if (existingContract == null)
                     {
-                        detailToDelete.Deleted = true;
-                        detailToDelete.UpdatedAt = DateTime.UtcNow;
-                        detailToDelete.Updater = model.ActionBy;
-                        _context.Update(detailToDelete);
-                        processedWorkCodes.Add(detailDto.WorkCode);
+                        throw new KeyNotFoundException("Contract not found");
                     }
+                    
+                    // Create new contract instance for update
+                    var updatedContract = new Contract
+                    {
+                        Id = contractId,
+                        ContractCode = model.ContractCode,
+                        ContractName = model.ContractName,
+                        ProjectId = model.ProjectId,
+                        StartDate = model.StartDate,
+                        EndDate = model.EndDate,
+                        EstimatedDays = model.EstimatedDays,
+                        Status = model.Status,
+                        Tax = model.Tax,
+                        SignDate = model.SignDate,
+                        Attachments = attachmentInfos.Any() 
+                            ? JsonDocument.Parse(JsonSerializer.Serialize(attachmentInfos)) 
+                            : existingContract.Attachments,
+                        CreatedAt = existingContract.CreatedAt,
+                        Creator = existingContract.Creator,
+                        UpdatedAt = DateTime.UtcNow,
+                        Updater = model.ActionBy,
+                        Deleted = existingContract.Deleted
+                    };
+                    
+                    // Mark entity as modified to trigger update
+                    _context.Entry(updatedContract).State = EntityState.Modified;
+                    await _context.SaveChangesAsync();
+                    
+                    // Clear context to avoid tracking conflicts
+                    _context.ChangeTracker.Clear();
                 }
                 
-                // Xử lý các chi tiết theo cấp bậc - sắp xếp theo index để đảm bảo thứ tự xử lý
-                // Sắp xếp các ContractDetails theo thứ tự từ parent đến child
-                var sortedDetails = model.ContractDetails
-                    .Where(d => !d.IsDelete)
-                    .OrderBy(d => d.Index.Length) // Sắp xếp theo độ dài của index (1 trước, sau đó 1.1, 1.1.1)
-                    .ThenBy(d => d.Index) // Sau đó sắp xếp theo thứ tự của index
+                // Process contract details
+                
+                // 1. Get list of deleted items
+                var itemsToDelete = model.ContractDetails
+                    .Where(d => d.IsDelete && !string.IsNullOrEmpty(d.WorkCode))
+                    .Select(d => d.WorkCode)
                     .ToList();
                     
-                // Dictionary để lưu trữ ánh xạ giữa Index và WorkCode mới tạo ra
-                var indexToWorkCode = new Dictionary<string, string>();
-                int nextCodeCounter = 1;
+                // 2. Get existing contract details without tracking
+                var existingDetails = await _context.ContractDetails
+                    .AsNoTracking()
+                    .Where(cd => cd.ContractId == contractId)
+                    .ToListAsync();
+                    
+                var existingWorkCodes = existingDetails.Select(cd => cd.WorkCode).ToHashSet();
                 
-                // Dictionary lưu trữ ánh xạ từ Index string đến số index trong database
-                var parentIndices = new Dictionary<string, string>();
-
-                // Xử lý theo nhóm cấp bậc (level)
-                var detailsByLevel = sortedDetails
-                    .GroupBy(d => d.Index.Count(c => c == '.'))
-                    .OrderBy(g => g.Key)
-                    .ToList();
-
-                foreach (var levelGroup in detailsByLevel)
+                // 3. Delete items marked for deletion
+                if (itemsToDelete.Any())
                 {
-                    foreach (var detailDto in levelGroup)
+                    foreach (var workCode in itemsToDelete)
                     {
-                        // Bỏ qua nếu đã được xử lý
-                        if (processedWorkCodes.Contains(detailDto.WorkCode))
+                        var detailToDelete = existingDetails.FirstOrDefault(d => d.WorkCode == workCode);
+                        if (detailToDelete != null)
                         {
+                            // We need to attach and mark as deleted - cannot directly use Remove with a detached entity
+                            _context.ContractDetails.Attach(detailToDelete);
+                            _context.ContractDetails.Remove(detailToDelete);
+                        }
+                    }
+                    
+                    await _context.SaveChangesAsync();
+                    
+                    // Update the existing work codes list
+                    existingWorkCodes.RemoveWhere(wc => itemsToDelete.Contains(wc));
+                    
+                    // Clear context again
+                    _context.ChangeTracker.Clear();
+                }
+                
+                // 4. Calculate next counter for new items
+                int nextCounter = 1;
+                if (existingWorkCodes.Any())
+                {
+                    var maxCounter = existingWorkCodes
+                        .Where(wc => wc.StartsWith(model.ContractCode + "-"))
+                        .Select(wc => {
+                            var parts = wc.Split('-');
+                            if (parts.Length > 1 && int.TryParse(parts[1], out int num))
+                                return num;
+                            return 0;
+                        })
+                        .DefaultIfEmpty(0)
+                        .Max();
+                    
+                    nextCounter = maxCounter + 1;
+                }
+                
+                // 5. Process other items by level to maintain parent-child relationships
+                var indexToWorkCode = new Dictionary<string, string>();
+                
+                // Get items to process (not marked for deletion)
+                var itemsToProcess = model.ContractDetails
+                    .Where(d => !d.IsDelete)
+                    .OrderBy(d => d.Index.Length)
+                    .ThenBy(d => d.Index)
+                    .ToList();
+                    
+                // Process each level to maintain hierarchy
+                foreach (var level in itemsToProcess.GroupBy(item => item.Index.Count(c => c == '.')))
+                {
+                    var detailsForLevel = new List<ContractDetail>();
+                    
+                    foreach (var item in level)
+                    {
+                        // Skip if already in deleted list
+                        if (itemsToDelete.Contains(item.WorkCode))
                             continue;
+                        
+                        // Resolve parent
+                        string parentWorkCode = null;
+                        if (!string.IsNullOrEmpty(item.ParentIndex) && indexToWorkCode.ContainsKey(item.ParentIndex))
+                        {
+                            parentWorkCode = indexToWorkCode[item.ParentIndex];
                         }
                         
-                        // Kiểm tra xem WorkCode này đã có trong Context chưa để tránh duplicate tracking
-                        if (!string.IsNullOrEmpty(detailDto.WorkCode))
+                        // Handle updates
+                        if (!string.IsNullOrEmpty(item.WorkCode) && existingWorkCodes.Contains(item.WorkCode))
                         {
-                            var tracked = _context.ChangeTracker.Entries<ContractDetail>()
-                                .FirstOrDefault(e => e.Entity.WorkCode == detailDto.WorkCode);
-                                
-                            if (tracked != null)
+                            // Get the existing detail
+                            var existingDetail = existingDetails.FirstOrDefault(d => d.WorkCode == item.WorkCode);
+                            
+                            if (existingDetail != null)
                             {
-                                // Entity đã được track, đánh dấu là đã xử lý
-                                processedWorkCodes.Add(detailDto.WorkCode);
-                                continue;
+                                // Create updated entity
+                                var updatedDetail = new ContractDetail
+                                {
+                                    WorkCode = item.WorkCode,
+                                    ContractId = contractId,
+                                    Index = item.Index,
+                                    ParentIndex = parentWorkCode ?? existingDetail.ParentIndex,
+                                    WorkName = item.WorkName,
+                                    Unit = item.Unit,
+                                    Quantity = item.Quantity,
+                                    UnitPrice = item.UnitPrice,
+                                    Total = item.Quantity * item.UnitPrice,
+                                    CreatedAt = existingDetail.CreatedAt,
+                                    Creator = existingDetail.Creator,
+                                    UpdatedAt = DateTime.UtcNow,
+                                    Updater = model.ActionBy,
+                                    Deleted = false
+                                };
+                                
+                                // Mark for update
+                                _context.Entry(updatedDetail).State = EntityState.Modified;
+                                
+                                // Store for parent-child relationship
+                                indexToWorkCode[item.Index] = item.WorkCode;
                             }
-                        }
-                        
-                        // Tạo entity từ DTO
-                        var contractDetail = new ContractDetail
-                        {
-                            ContractId = contract.Id,
-                            Index = detailDto.Index,
-                            WorkName = detailDto.WorkName,
-                            Unit = detailDto.Unit,
-                            Quantity = detailDto.Quantity,
-                            UnitPrice = detailDto.UnitPrice,
-                            Total = detailDto.Quantity * detailDto.UnitPrice,
-                            UpdatedAt = DateTime.UtcNow,
-                            Updater = model.ActionBy,
-                            Deleted = false
-                        };
-                        
-                        // Xử lý ParentIndex
-                        if (string.IsNullOrEmpty(detailDto.ParentIndex))
-                        {
-                            contractDetail.ParentIndex = null;
-                        }
-                        else if (parentIndices.ContainsKey(detailDto.ParentIndex))
-                        {
-                            // Sử dụng WorkCode của parent thay vì sử dụng Index string
-                            contractDetail.ParentIndex = parentIndices[detailDto.ParentIndex];
-                        }
-                        
-                        // Nếu WorkCode không được cung cấp, tạo mới
-                        if (string.IsNullOrEmpty(detailDto.WorkCode))
-                        {
-                            // Tạo WorkCode theo công thức ContractCode-số thứ tự tăng dần
-                            contractDetail.WorkCode = $"{model.ContractCode}-{nextCodeCounter++}";
-                            contractDetail.CreatedAt = DateTime.UtcNow;
-                            contractDetail.Creator = model.ActionBy;
-                            
-                            await _context.ContractDetails.AddAsync(contractDetail);
-                            
-                            // Lưu mapping của index và workcode để sử dụng cho các hạng mục con
-                            indexToWorkCode[detailDto.Index] = contractDetail.WorkCode;
-                            parentIndices[detailDto.Index] = contractDetail.WorkCode;
                         }
                         else
                         {
-                            // Kiểm tra xem WorkCode có tồn tại không
-                            var existingDetail = existingContractDetails.FirstOrDefault(cd => cd.WorkCode == detailDto.WorkCode);
-                            if (existingDetail != null)
+                            // This is a new item
+                            string workCode;
+                            if (string.IsNullOrEmpty(item.WorkCode))
                             {
-                                // Cập nhật
-                                contractDetail.WorkCode = detailDto.WorkCode;
-                                contractDetail.CreatedAt = existingDetail.CreatedAt;
-                                contractDetail.Creator = existingDetail.Creator;
-
-                                // Sử dụng Entry để cập nhật trạng thái thay vì Update trực tiếp
-                                _context.Entry(contractDetail).State = EntityState.Modified;
-                                
-                                // Cập nhật mapping
-                                indexToWorkCode[detailDto.Index] = contractDetail.WorkCode;
-                                parentIndices[detailDto.Index] = contractDetail.WorkCode;
+                                // Generate a new unique work code
+                                workCode = $"{model.ContractCode}-{nextCounter++}";
                             }
                             else
                             {
-                                // WorkCode không tồn tại, tạo mới với WorkCode đã cung cấp
-                                contractDetail.WorkCode = detailDto.WorkCode;
-                                contractDetail.CreatedAt = DateTime.UtcNow;
-                                contractDetail.Creator = model.ActionBy;
-                                
-                                // Kiểm tra xem entity có đang được track hay không
-                                var trackedEntry = _context.ChangeTracker.Entries<ContractDetail>()
-                                    .FirstOrDefault(e => e.Entity.WorkCode == contractDetail.WorkCode);
-                                    
-                                if (trackedEntry == null)
-                                {
-                                    await _context.ContractDetails.AddAsync(contractDetail);
-                                }
-                                
-                                // Cập nhật mapping
-                                indexToWorkCode[detailDto.Index] = contractDetail.WorkCode;
-                                parentIndices[detailDto.Index] = contractDetail.WorkCode;
+                                // Use the provided work code if it doesn't exist yet
+                                workCode = item.WorkCode;
                             }
+                            
+                            // Create new detail
+                            var newDetail = new ContractDetail
+                            {
+                                WorkCode = workCode,
+                                ContractId = contractId,
+                                Index = item.Index,
+                                ParentIndex = parentWorkCode,
+                                WorkName = item.WorkName,
+                                Unit = item.Unit,
+                                Quantity = item.Quantity,
+                                UnitPrice = item.UnitPrice,
+                                Total = item.Quantity * item.UnitPrice,
+                                CreatedAt = DateTime.UtcNow,
+                                Creator = model.ActionBy,
+                                UpdatedAt = DateTime.UtcNow,
+                                Updater = model.ActionBy,
+                                Deleted = false
+                            };
+                            
+                            // Add to list for this level
+                            detailsForLevel.Add(newDetail);
+                            
+                            // Store for parent-child relationship
+                            indexToWorkCode[item.Index] = workCode;
+                            
+                            // Add to existing work codes to prevent duplicates
+                            existingWorkCodes.Add(workCode);
                         }
-
-                        updatedContractDetails.Add(contractDetail);
-                        processedWorkCodes.Add(contractDetail.WorkCode);
                     }
                     
-                    // Lưu thay đổi sau mỗi cấp để đảm bảo parent đã tồn tại trước khi thêm child
-                    try 
+                    // Add new details for this level if any
+                    if (detailsForLevel.Any())
                     {
-                        await _context.SaveChangesAsync();
+                        await _context.ContractDetails.AddRangeAsync(detailsForLevel);
                     }
-                    catch (DbUpdateException ex)
-                    {
-                        // Try to recover from tracking errors
-                        if (ex.InnerException != null && ex.InnerException.Message.Contains("tracked because another instance"))
-                        {
-                            Console.WriteLine("Detected tracking conflict, attempting to recover...");
-                            
-                            // Get all tracked entities of ContractDetail type
-                            var trackedEntities = _context.ChangeTracker.Entries<ContractDetail>()
-                                .Where(e => e.State != EntityState.Detached)
-                                .Select(e => e.Entity)
-                                .ToList();
-                                
-                            // Clear tracking
-                            ClearEntityTracking(trackedEntities);
-                            
-                            // Try save again
-                            await _context.SaveChangesAsync();
-                        }
-                        else
-                        {
-                            throw;
-                        }
-                    }
+                    
+                    // Save changes for this level
+                    await _context.SaveChangesAsync();
+                    
+                    // Clear context to avoid tracking issues with the next level
+                    _context.ChangeTracker.Clear();
                 }
                 
-                // Commit transaction khi tất cả thay đổi đã thành công
+                // Commit the transaction
                 await transaction.CommitAsync();
-
-                // Xóa cache chính
-                _ = _cacheService.DeleteAsync(new List<string>
-                {
-                    RedisCacheKey.CONTRACT_CACHE_KEY,
-                    RedisCacheKey.CONTRACT_DETAIL_CACHE_KEY
-                });
                 
-                // Return the Contract DTO
+                // Clear caches
+                await InvalidateContractCaches(contractId, model.ProjectId);
+                
+                // Get the updated contract details
+                _context.ChangeTracker.Clear();
                 return await Detail(model.ProjectId, model.ActionBy);
-            }
-            catch (DbUpdateException ex)
-            {
-                // Xử lý lỗi cập nhật database
-                await transaction.RollbackAsync();
-                
-                // Kiểm tra nếu lỗi là do tracking conflict
-                if (ex.InnerException != null && ex.InnerException.Message.Contains("tracked because another instance"))
-                {
-                    throw new InvalidOperationException("Có xung đột trong quá trình cập nhật dữ liệu. Vui lòng thử lại sau.", ex);
-                }
-                
-                throw;
             }
             catch (Exception ex)
             {
-                // Có lỗi xảy ra, rollback tất cả thay đổi
+                // Log detailed error information
+                Console.WriteLine($"Save Contract Error: {ex.Message}");
+                Console.WriteLine($"InnerException: {ex.InnerException?.Message}");
+                Console.WriteLine($"Stack Trace: {ex.StackTrace}");
+                
+                // Rollback transaction
                 await transaction.RollbackAsync();
-                Console.WriteLine($"Save contract error: {ex.Message}");
-                throw; // Re-throw để xử lý exception ở tầng cao hơn
+                
+                // Wrap in a more user-friendly message
+                throw new InvalidOperationException(
+                    "Có lỗi khi lưu dữ liệu hợp đồng. Vui lòng thử lại sau hoặc liên hệ quản trị viên.", ex);
             }
         }
     }
 }
+

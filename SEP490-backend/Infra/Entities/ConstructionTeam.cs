@@ -41,10 +41,7 @@ namespace Sep490_Backend.Infra.Entities
                     .HasColumnType("timestamp without time zone");
 
                 entity.HasIndex(e => e.TeamName);
-                entity.HasIndex(e => e.TeamManager).IsUnique();
-                
-                // Add a unique index on TeamManager to ensure one User can only manage one team
-                entity.HasIndex(e => e.TeamManager).IsUnique();
+                entity.HasIndex(e => e.TeamManager).HasFilter("\"Deleted\" = false").IsUnique();
 
                 // Relationships
                 // One-to-one with Manager (one user can only manage one team)

@@ -4,11 +4,22 @@
     {
         public const string OTP_CACHE_KEY = "OTP:{0}:{1}";
         public const string SITE_SURVEY_CACHE_KEY = "SITE_SURVEY";
+        public const string SITE_SURVEY_BY_ID_CACHE_KEY = "SITE_SURVEY:ID:{0}";
+        public const string SITE_SURVEY_BY_PROJECT_CACHE_KEY = "SITE_SURVEY:PROJECT:{0}";
+        public const string SITE_SURVEY_LIST_CACHE_KEY = "SITE_SURVEY:LIST";
+        public const string SITE_SURVEY_ALL_PATTERN = "SITE_SURVEY:*";
         public const string CUSTOMER_CACHE_KEY = "CUSTOMER";
         public const string PROJECT_CACHE_KEY = "PROJECT";
         public const string PROJECT_USER_CACHE_KEY = "PROJECT_USER";
+        public const string PROJECT_BY_ID_CACHE_KEY = "PROJECT:ID:{0}";
+        public const string PROJECT_LIST_CACHE_KEY = "PROJECT:LIST";
+        public const string PROJECT_ALL_PATTERN = "PROJECT:*";
         public const string CONTRACT_CACHE_KEY = "CONTRACT";
         public const string CONTRACT_DETAIL_CACHE_KEY = "CONTRACT_DETAIL";
+        public const string CONTRACT_BY_ID_CACHE_KEY = "CONTRACT:ID:{0}";
+        public const string CONTRACT_BY_PROJECT_CACHE_KEY = "CONTRACT:PROJECT:{0}";
+        public const string CONTRACT_LIST_CACHE_KEY = "CONTRACT:LIST";
+        public const string CONTRACT_ALL_PATTERN = "CONTRACT:*";
         public const string MATERIAL_CACHE_KEY = "MATERIAL";
         public const string CONSTRUCTION_TEAM_CACHE_KEY = "CONSTRUCTION_TEAM";
         public const string CONSTRUCTION_PLAN_CACHE_KEY = "CONSTRUCTION_PLAN"; // Cache key for construction plans

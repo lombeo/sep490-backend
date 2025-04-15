@@ -74,7 +74,7 @@ namespace Sep490_Backend.Infra.Entities
                 entity.Property(e => e.UpdatedAt)
                     .HasColumnType("timestamp without time zone");
 
-                entity.HasIndex(e => e.RequestCode)
+                entity.HasIndex(e => e.RequestCode).HasFilter("\"Deleted\" = false")
                     .IsUnique();
                 entity.HasIndex(e => e.ProjectId);
                 entity.HasIndex(e => e.Status);

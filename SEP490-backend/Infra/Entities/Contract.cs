@@ -17,17 +17,6 @@ namespace Sep490_Backend.Infra.Entities
         public decimal Tax { get; set; }
         public DateTime SignDate { get; set; }
         public JsonDocument? Attachments { get; set; }
-        
-        // Added missing properties to match ContractDTO
-        public string? ContractNumber { get; set; }
-        public DateTime SignedDate { get; set; }
-        public DateTime CompletionDate { get; set; }
-        public decimal Value { get; set; }
-        public string? CustomerRepName { get; set; }
-        public string? CustomerRepTitle { get; set; }
-        public string? CompanyRepName { get; set; }
-        public string? CompanyRepTitle { get; set; }
-        public string? Description { get; set; }
 
         // Navigation properties
         public virtual Project Project { get; set; }
@@ -50,19 +39,7 @@ namespace Sep490_Backend.Infra.Entities
                 entity.Property(e => e.EstimatedDays).IsRequired();
                 entity.Property(e => e.Status).IsRequired();
                 entity.Property(e => e.Tax).IsRequired();
-                entity.Property(e => e.SignDate).IsRequired();
-                
-                // Configure the new properties
-                entity.Property(e => e.ContractNumber);
-                entity.Property(e => e.SignedDate);
-                entity.Property(e => e.CompletionDate);
-                entity.Property(e => e.Value);
-                entity.Property(e => e.CustomerRepName);
-                entity.Property(e => e.CustomerRepTitle);
-                entity.Property(e => e.CompanyRepName);
-                entity.Property(e => e.CompanyRepTitle);
-                entity.Property(e => e.Description);
-                
+                entity.Property(e => e.SignDate).IsRequired();            
                 entity.Property(e => e.Attachments).HasColumnType("jsonb");
                 entity.Property(e => e.CreatedAt).IsRequired();
                 entity.Property(e => e.Creator).IsRequired();
