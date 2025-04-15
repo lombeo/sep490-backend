@@ -202,31 +202,25 @@ namespace Sep490_Backend.Services.CacheService
         {
             try
             {
-                key = _prefixCacheKey + key;
+                string keyWithPrefix = _prefixCacheKey + key;
+                string serialized = JsonConvert.SerializeObject(value);
 
-                expirationTime = expirationTime ?? new TimeSpan(24, 0, 0);
                 if (isMemoryCached)
                 {
-                    _memoryCache.Set(key, value, expirationTime.Value);
+                    _memoryCache.Set(keyWithPrefix, value, expirationTime ?? TimeSpan.FromHours(1));
                 }
-                else
+
+                // Set for an hour by default or custom value
+                var options = new DistributedCacheEntryOptions
                 {
-                    await _database.SetStringAsync(
-                        key, 
-                        JsonConvert.SerializeObject(value, new JsonSerializerSettings 
-                        { 
-                            ReferenceLoopHandling = ReferenceLoopHandling.Ignore
-                        }), 
-                        new DistributedCacheEntryOptions() { SlidingExpiration = expirationTime });
-                }
+                    AbsoluteExpirationRelativeToNow = expirationTime ?? TimeSpan.FromHours(1)
+                };
+
+                await _database.SetStringAsync(keyWithPrefix, serialized, options);
             }
             catch (Exception ex)
             {
-                _logger.LogError("SetAsync key= " + key);
-                _logger.LogError("SetAsync value = " + JsonConvert.SerializeObject(value, new JsonSerializerSettings 
-                { 
-                    ReferenceLoopHandling = ReferenceLoopHandling.Ignore 
-                }));
+                _logger.LogError("SetAsync = " + key);
                 _logger.LogError(ex, ex.Message + " " + ex.StackTrace);
             }
         }

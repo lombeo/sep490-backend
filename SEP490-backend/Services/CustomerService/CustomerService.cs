@@ -113,23 +113,39 @@ namespace Sep490_Backend.Services.CustomerService
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
+            
             var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == customerId && !c.Deleted);
             if (customer == null)
             {
                 throw new KeyNotFoundException(Message.CustomerMessage.CUSTOMER_NOT_FOUND);
             }
-            customer.Deleted = true;
-            _context.Update(customer);
+            
+            // Use the extension method for soft delete
+            await _context.SoftDeleteAsync(customer, actionBy);
+            
+            // Perform thorough cache invalidation
+            await InvalidateCustomerCaches(customerId);
 
-            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        /// <summary>
+        /// Invalidates all customer-related caches
+        /// </summary>
+        private async Task InvalidateCustomerCaches(int customerId)
+        {
+            _logger.LogInformation($"Invalidating caches for customer ID {customerId}");
             
             // Invalidate customer-specific cache
             await _cacheService.DeleteAsync($"{RedisCacheKey.CUSTOMER_CACHE_KEY}:{customerId}");
             
             // Invalidate general customer cache
             await _cacheService.DeleteAsync(RedisCacheKey.CUSTOMER_CACHE_KEY);
-
-            return true;
+            
+            // Also invalidate project cache as projects might have customer data
+            await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_CACHE_KEY);
+            
+            _logger.LogInformation("Customer caches invalidated successfully");
         }
 
         public async Task<Customer> CreateCustomer(CustomerCreateDTO model, int actionBy)

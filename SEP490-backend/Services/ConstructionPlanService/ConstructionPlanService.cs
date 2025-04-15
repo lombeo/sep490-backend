@@ -875,8 +875,10 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
 
-            // Get construction plan
+            // Get construction plan with related entities
             var constructionPlan = await _context.ConstructionPlans
+                .Include(cp => cp.ConstructPlanItems)
+                    .ThenInclude(pi => pi.ConstructPlanItemDetails)
                 .FirstOrDefaultAsync(cp => cp.Id == id && !cp.Deleted);
 
             if (constructionPlan == null)
@@ -884,41 +886,36 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
                 throw new KeyNotFoundException(Message.ConstructionPlanMessage.NOT_FOUND);
             }
 
-            // Mark construction plan as deleted
-            constructionPlan.Deleted = true;
-            constructionPlan.Updater = actionBy;
-            _context.ConstructionPlans.Update(constructionPlan);
+            // Use the extension method for cascade soft delete
+            await _context.SoftDeleteAsync(constructionPlan, actionBy);
 
-            // Soft delete all related plan items
-            var planItems = await _context.ConstructPlanItems
-                .Where(pi => pi.PlanId == id && !pi.Deleted)
-                .ToListAsync();
-
-            foreach (var planItem in planItems)
-            {
-                planItem.Deleted = true;
-                planItem.Updater = actionBy;
-                _context.ConstructPlanItems.Update(planItem);
-
-                // Soft delete all related item details
-                var itemDetails = await _context.ConstructPlanItemDetails
-                    .Where(d => d.PlanItemId == planItem.WorkCode && !d.Deleted)
-                    .ToListAsync();
-
-                foreach (var detail in itemDetails)
-                {
-                    detail.Deleted = true;
-                    detail.Updater = actionBy;
-                    _context.ConstructPlanItemDetails.Update(detail);
-                }
-            }
-
-            await _context.SaveChangesAsync();
-
-            // Clear only the main cache
-            await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY);
+            // Invalidate all related caches
+            await InvalidateConstructionPlanCaches(constructionPlan.Id, constructionPlan.ProjectId);
             
             return true;
+        }
+
+        /// <summary>
+        /// Invalidates all caches related to construction plans
+        /// </summary>
+        private async Task InvalidateConstructionPlanCaches(int planId, int projectId)
+        {
+            // Clear the main construction plan cache
+            await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY);
+            
+            // Clear project-specific caches
+            await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_CACHE_KEY);
+            
+            // Clear any plan-specific caches
+            var planSpecificCacheKey = $"CONSTRUCTION_PLAN:{planId}";
+            await _cacheService.DeleteAsync(planSpecificCacheKey);
+            
+            // Clear project-specific plan caches
+            var projectPlanCacheKey = $"CONSTRUCTION_PLAN:PROJECT:{projectId}";
+            await _cacheService.DeleteAsync(projectPlanCacheKey);
+            
+            // Clear construction team caches as they might be associated with plans
+            await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_TEAM_CACHE_KEY);
         }
 
         public async Task<bool> Approve(ApproveConstructionPlanDTO model, int actionBy)

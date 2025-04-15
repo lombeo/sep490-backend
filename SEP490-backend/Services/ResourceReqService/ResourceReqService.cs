@@ -456,31 +456,13 @@ namespace Sep490_Backend.Services.ResourceReqService
                 throw new InvalidOperationException(Message.ResourceRequestMessage.ONLY_DRAFT_CAN_BE_DELETED);
             }
 
-            // Begin transaction
-            using var transaction = await _context.Database.BeginTransactionAsync();
+            // Use extension method for soft delete
+            await _context.SoftDeleteAsync(request, actionBy);
+            
+            // Invalidate cache
+            await InvalidateResourceAllocationReqCache(request.Id, request.FromProjectId, request.ToProjectId);
 
-            try
-            {
-                // Perform soft delete
-                request.Deleted = true;
-                request.UpdatedAt = DateTime.UtcNow;
-                request.Updater = actionBy;
-
-                _context.ResourceAllocationReqs.Update(request);
-                await _context.SaveChangesAsync();
-                
-                await transaction.CommitAsync();
-                
-                // Invalidate cache
-                await InvalidateResourceAllocationReqCache(request.Id, request.FromProjectId, request.ToProjectId);
-
-                return true;
-            }
-            catch (Exception)
-            {
-                await transaction.RollbackAsync();
-                throw;
-            }
+            return true;
         }
 
         /// <summary>
@@ -518,31 +500,13 @@ namespace Sep490_Backend.Services.ResourceReqService
                 throw new InvalidOperationException(Message.ResourceRequestMessage.ONLY_DRAFT_CAN_BE_DELETED);
             }
 
-            // Begin transaction
-            using var transaction = await _context.Database.BeginTransactionAsync();
+            // Use our extension method to soft delete the entity
+            await _context.SoftDeleteAsync(request, actionBy);
+            
+            // Invalidate cache
+            await InvalidateResourceMobilizationReqCache(request.Id, request.ProjectId);
 
-            try
-            {
-                // Perform soft delete
-                request.Deleted = true;
-                request.UpdatedAt = DateTime.UtcNow;
-                request.Updater = actionBy;
-
-                _context.ResourceMobilizationReqs.Update(request);
-                await _context.SaveChangesAsync();
-                
-                await transaction.CommitAsync();
-                
-                // Invalidate cache
-                await InvalidateResourceMobilizationReqCache(request.Id, request.ProjectId);
-
-                return true;
-            }
-            catch (Exception)
-            {
-                await transaction.RollbackAsync();
-                throw;
-            }
+            return true;
         }
 
         /// <summary>

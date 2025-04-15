@@ -123,3 +123,52 @@ This is a common pattern in EF Core relationships but requires special handling 
 The fix resolves issues with the following endpoints:
 - `GET /sep490/resourcereq/mobilization/list` - List resource mobilization requests
 - Any other endpoint returning entities with circular navigation properties
+
+# Soft Delete Implementation
+
+## Overview
+
+The application now features an enhanced soft delete mechanism that automatically handles cascade soft deletion for related entities and provides a consistent approach to soft delete operations.
+
+Key improvements:
+
+1. **Global Query Filters**: Automatically filters out soft-deleted entities from all queries
+2. **Cascade Soft Delete**: When an entity is soft-deleted, all related entities are automatically soft-deleted too
+3. **Extension Methods**: Simplified API for soft delete operations
+
+## Features
+
+- **Automatic Filtering**: No need to manually add `.Where(e => !e.Deleted)` to every query
+- **Data Integrity**: All related entities are soft-deleted together, maintaining referential integrity
+- **Simplified API**: Extension methods like `SoftDeleteAsync`, `SoftDeleteByIdAsync`, and `IncludeRelatedEntities`
+- **Maintenance Friendly**: Adding new related entities doesn't require changes to delete logic
+
+## Implementation
+
+The soft delete functionality is implemented through:
+
+1. Global query filters applied in the `BackendContext`
+2. Cascade soft delete logic in the `OnBeforeSaving` method
+3. Extension methods in the `EntityExtensions` class
+
+For detailed implementation and usage examples, see the [Soft Delete Documentation](Docs/SoftDeleteDocumentation.md).
+
+## Migration
+
+Existing code that manually handles soft delete (by setting `Deleted = true` and updating the entity) should be updated to use the new extension methods:
+
+```csharp
+// Before
+entity.Deleted = true;
+entity.UpdatedAt = DateTime.UtcNow;
+entity.Updater = actionBy;
+_context.Update(entity);
+await _context.SaveChangesAsync();
+
+// After
+await _context.SoftDeleteAsync(entity, actionBy);
+```
+
+## Note
+
+Cache invalidation is still required after soft delete operations, as the global query filters only affect database queries, not in-memory cached data.

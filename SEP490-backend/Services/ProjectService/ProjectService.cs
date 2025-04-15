@@ -1,6 +1,4 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using NPOI.HSSF.Record.Chart;
-using NPOI.SS.Formula.Functions;
 using Sep490_Backend.DTO.Common;
 using Sep490_Backend.DTO.Project;
 using Sep490_Backend.Infra;
@@ -10,12 +8,10 @@ using Sep490_Backend.Services.CacheService;
 using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.HelperService;
 using Sep490_Backend.Services.GoogleDriveService;
-using Microsoft.AspNetCore.Http;
 using Sep490_Backend.Infra.Helps;
 using Sep490_Backend.Controllers;
 using System.Text.Json;
 using Sep490_Backend.DTO;
-using Sep490_Backend.DTO.Customer;
 
 namespace Sep490_Backend.Services.ProjectService
 {
@@ -56,7 +52,11 @@ namespace Sep490_Backend.Services.ProjectService
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
 
-            var entity = await _context.Projects.FirstOrDefaultAsync(t => t.Id == id);
+            // Get project with related entities for cascade delete
+            var entity = await _context.Projects
+                .IncludeRelatedEntities()
+                .FirstOrDefaultAsync(t => t.Id == id);
+            
             if (entity == null)
             {
                 throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
@@ -79,93 +79,41 @@ namespace Sep490_Backend.Services.ProjectService
                 }
             }
 
-            // Lấy tất cả các entity liên quan đến project để xóa mềm
+            // Use the extension method for soft delete
+            await _context.SoftDeleteAsync(entity, actionBy);
             
-            // 1. Xóa mềm toàn bộ SiteSurvey liên quan
-            var siteSurveys = await _context.SiteSurveys
-                .Where(t => t.ProjectId == id && !t.Deleted)
-                .ToListAsync();
-                
-            foreach (var survey in siteSurveys)
-            {
-                survey.Deleted = true;
-                survey.UpdatedAt = DateTime.UtcNow;
-                survey.Updater = actionBy;
-                _context.Update(survey);
-            }
-            
-            // 2. Xóa mềm toàn bộ Contract liên quan
-            var contracts = await _context.Contracts
-                .Where(c => c.ProjectId == id && !c.Deleted)
-                .ToListAsync();
-                
-            var contractIds = contracts.Select(c => c.Id).ToList();
-                
-            foreach (var contract in contracts)
-            {
-                contract.Deleted = true;
-                contract.UpdatedAt = DateTime.UtcNow;
-                contract.Updater = actionBy;
-                _context.Update(contract);
-            }
-            
-            // 3. Xóa mềm toàn bộ ContractDetail của các Contract liên quan
-            if (contractIds.Any())
-            {
-                var contractDetails = await _context.ContractDetails
-                    .Where(cd => contractIds.Contains(cd.ContractId) && !cd.Deleted)
-                    .ToListAsync();
-                    
-                foreach (var detail in contractDetails)
-                {
-                    detail.Deleted = true;
-                    detail.UpdatedAt = DateTime.UtcNow;
-                    detail.Updater = actionBy;
-                    _context.Update(detail);
-                }
-            }
-            
-            // 4. Xóa mềm toàn bộ ProjectUser liên quan
-            var projectUsers = await _context.ProjectUsers
-                .Where(pu => pu.ProjectId == id && !pu.Deleted)
-                .ToListAsync();
-                
-            foreach (var pu in projectUsers)
-            {
-                pu.Deleted = true;
-                pu.UpdatedAt = DateTime.UtcNow;
-                pu.Updater = actionBy;
-                _context.Update(pu);
-            }
-            
-            // 5. Cuối cùng, xóa mềm Project
-            entity.Deleted = true;
-            entity.UpdatedAt = DateTime.UtcNow;
-            entity.Updater = actionBy;
-            _context.Update(entity);
-
-            // Lấy tất cả người dùng liên quan đến project để xóa cache sau này
-            var relatedUsers = projectUsers.Select(pu => pu.UserId).ToList();
-
-            await _context.SaveChangesAsync();
-            
-            // Simplify cache deletion - only delete the main cache keys
-            _ = _cacheService.DeleteAsync(RedisCacheKey.PROJECT_CACHE_KEY);
-            _ = _cacheService.DeleteAsync(RedisCacheKey.PROJECT_USER_CACHE_KEY);
-            
-            // Delete other main cache keys affected
-            if (siteSurveys.Any())
-            {
-                _ = _cacheService.DeleteAsync(RedisCacheKey.SITE_SURVEY_CACHE_KEY);
-            }
-            
-            if (contracts.Any())
-            {
-                _ = _cacheService.DeleteAsync(RedisCacheKey.CONTRACT_CACHE_KEY);
-                _ = _cacheService.DeleteAsync(RedisCacheKey.CONTRACT_DETAIL_CACHE_KEY);
-            }
+            // Clear all relevant caches
+            await InvalidateProjectRelatedCaches();
             
             return entity.Id;
+        }
+
+        // New helper method to invalidate all project-related caches
+        private async Task InvalidateProjectRelatedCaches()
+        {
+            var mainCacheKeys = new[]
+            {
+                RedisCacheKey.PROJECT_CACHE_KEY,
+                RedisCacheKey.PROJECT_USER_CACHE_KEY,
+                RedisCacheKey.SITE_SURVEY_CACHE_KEY,
+                RedisCacheKey.CONTRACT_CACHE_KEY,
+                RedisCacheKey.CONTRACT_DETAIL_CACHE_KEY,
+                RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY,
+                RedisCacheKey.RESOURCE_MOBILIZATION_REQ_CACHE_KEY
+            };
+            
+            foreach (var cacheKey in mainCacheKeys)
+            {
+                await _cacheService.DeleteAsync(cacheKey);
+            }
+
+            // Also delete pattern-based caches for mobilization requests
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.MOBILIZATION_REQ_CACHE_KEY);
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.MOBILIZATION_REQS_LIST_CACHE_KEY);
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_MOBILIZATION_REQ_BY_ID_CACHE_KEY);
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.MOBILIZATION_REQ_BY_PROJECT_CACHE_KEY);
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.MOBILIZATION_REQS_BY_PROJECT_LIST_CACHE_KEY);
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.MOBILIZATION_REQS_BY_STATUS_LIST_CACHE_KEY);
         }
 
         public async Task<ProjectDTO> Detail(int id, int actionBy)
@@ -282,77 +230,77 @@ namespace Sep490_Backend.Services.ProjectService
         // Assume this is a method to map a project entity to a DTO
         private async Task<ProjectDTO> MapProjectToDTO(Project project, int actionBy)
         {
-            // Get the project users including viewers (users who aren't creators)
-            var projectUsers = await _context.ProjectUsers
-                .Where(pu => pu.ProjectId == project.Id && !pu.Deleted)
-                .ToListAsync();
+                // Get the project users including viewers (users who aren't creators)
+                var projectUsers = await _context.ProjectUsers
+                    .Where(pu => pu.ProjectId == project.Id && !pu.Deleted)
+                    .ToListAsync();
+                    
+                // Get viewer user IDs
+                var viewerUserIds = projectUsers
+                    .Where(pu => !pu.IsCreator)
+                    .Select(pu => pu.UserId)
+                    .ToList();
+                    
+                // Check if this user is the creator
+                bool isCreator = projectUsers.Any(pu => pu.UserId == actionBy && pu.IsCreator);
                 
-            // Get viewer user IDs
-            var viewerUserIds = projectUsers
-                .Where(pu => !pu.IsCreator)
-                .Select(pu => pu.UserId)
-                .ToList();
+                // Get customer information
+                var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == project.CustomerId);
                 
-            // Check if this user is the creator
-            bool isCreator = projectUsers.Any(pu => pu.UserId == actionBy && pu.IsCreator);
-            
-            // Get customer information
-            var customer = await _context.Customers.FirstOrDefaultAsync(c => c.Id == project.CustomerId);
-            
             return new ProjectDTO
-            {
-                Id = project.Id,
-                ProjectCode = project.ProjectCode,
-                ProjectName = project.ProjectName,
-                Customer = customer != null ? new Customer
                 {
-                    Id = customer.Id,
-                    CustomerName = customer.CustomerName,
-                    DirectorName = customer.DirectorName,
-                    Phone = customer.Phone,
-                    Email = customer.Email,
-                    Address = customer.Address,
-                    Description = customer.Description,
-                    CustomerCode = customer.CustomerCode,
-                    TaxCode = customer.TaxCode,
-                    Fax = customer.Fax,
-                    BankAccount = customer.BankAccount,
-                    BankName = customer.BankName,
-                    CreatedAt = customer.CreatedAt,
-                    Creator = customer.Creator,
-                    UpdatedAt = customer.UpdatedAt,
-                    Updater = customer.Updater,
-                    Deleted = customer.Deleted,
-                    Projects = null // Prevent circular references
-                } : new Customer(),
-                ConstructType = project.ConstructType,
-                Location = project.Location,
-                Area = project.Area,
-                Purpose = project.Purpose,
-                TechnicalReqs = project.TechnicalReqs,
-                StartDate = project.StartDate,
-                EndDate = project.EndDate,
-                Budget = project.Budget,
-                Status = project.Status,
-                Attachments = project.Attachments != null ? 
-                    JsonSerializer.Deserialize<List<AttachmentInfo>>(project.Attachments.RootElement.ToString()) 
-                    : null,
-                Description = project.Description,
-                UpdatedAt = project.UpdatedAt,
-                Updater = project.Updater,
-                CreatedAt = project.CreatedAt,
-                Creator = project.Creator,
-                Deleted = project.Deleted,
-                IsCreator = isCreator,
-                ViewerUserIds = viewerUserIds,
-                ProjectUsers = projectUsers.Select(pu => new DTO.Project.ProjectUserDTO
-                {
-                    Id = pu.Id,
-                    UserId = pu.UserId,
-                    ProjectId = pu.ProjectId,
-                    IsCreator = pu.IsCreator
-                }).ToList()
-            };
+                    Id = project.Id,
+                    ProjectCode = project.ProjectCode,
+                    ProjectName = project.ProjectName,
+                    Customer = customer != null ? new Customer
+                    {
+                        Id = customer.Id,
+                        CustomerName = customer.CustomerName,
+                        DirectorName = customer.DirectorName,
+                        Phone = customer.Phone,
+                        Email = customer.Email,
+                        Address = customer.Address,
+                        Description = customer.Description,
+                        CustomerCode = customer.CustomerCode,
+                        TaxCode = customer.TaxCode,
+                        Fax = customer.Fax,
+                        BankAccount = customer.BankAccount,
+                        BankName = customer.BankName,
+                        CreatedAt = customer.CreatedAt,
+                        Creator = customer.Creator,
+                        UpdatedAt = customer.UpdatedAt,
+                        Updater = customer.Updater,
+                        Deleted = customer.Deleted,
+                        Projects = null // Prevent circular references
+                    } : new Customer(),
+                    ConstructType = project.ConstructType,
+                    Location = project.Location,
+                    Area = project.Area,
+                    Purpose = project.Purpose,
+                    TechnicalReqs = project.TechnicalReqs,
+                    StartDate = project.StartDate,
+                    EndDate = project.EndDate,
+                    Budget = project.Budget,
+                    Status = project.Status,
+                    Attachments = project.Attachments != null ? 
+                        JsonSerializer.Deserialize<List<AttachmentInfo>>(project.Attachments.RootElement.ToString()) 
+                        : null,
+                    Description = project.Description,
+                    UpdatedAt = project.UpdatedAt,
+                    Updater = project.Updater,
+                    CreatedAt = project.CreatedAt,
+                    Creator = project.Creator,
+                    Deleted = project.Deleted,
+                    IsCreator = isCreator,
+                    ViewerUserIds = viewerUserIds,
+                    ProjectUsers = projectUsers.Select(pu => new DTO.Project.ProjectUserDTO
+                    {
+                        Id = pu.Id,
+                        UserId = pu.UserId,
+                        ProjectId = pu.ProjectId,
+                        IsCreator = pu.IsCreator
+                    }).ToList()
+                };
         }
 
         public async Task<ListProjectStatusDTO> ListProjectStatus(int actionBy)

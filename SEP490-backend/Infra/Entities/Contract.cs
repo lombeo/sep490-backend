@@ -40,7 +40,7 @@ namespace Sep490_Backend.Infra.Entities
         {
             modelBuilder.Entity<Contract>(entity =>
             {
-                entity.ToTable("contracts");
+                entity.ToTable("Contracts");
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.ContractCode).IsRequired();
                 entity.Property(e => e.ContractName).IsRequired();

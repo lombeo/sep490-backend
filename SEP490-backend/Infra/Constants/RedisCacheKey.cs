@@ -24,6 +24,7 @@
         
         // Required keys for ResourceReqService
         public const string MOBILIZATION_REQ_CACHE_KEY = "RESOURCE_MOBILIZATION_REQ:{0}";
+        public const string RESOURCE_MOBILIZATION_REQ_CACHE_KEY = "RESOURCE_MOBILIZATION_REQ"; // Main cache key for all resource mobilization requests
         public const string RESOURCE_MOBILIZATION_REQ_BY_ID_CACHE_KEY = "RESOURCE_MOBILIZATION_REQ:ID:{0}";
         public const string MOBILIZATION_REQ_BY_PROJECT_CACHE_KEY = "RESOURCE_MOBILIZATION_REQ:PROJECT:{0}";
         public const string MOBILIZATION_REQS_BY_PROJECT_LIST_CACHE_KEY = "RESOURCE_MOBILIZATION_REQS:PROJECT:{0}";

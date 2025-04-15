@@ -131,7 +131,7 @@ namespace Sep490_Backend.Controllers
                 return new ResponseDTO<T>
                 {
                     Success = false,
-                    Code = 200, // Theo mẫu ban đầu; cân nhắc điều chỉnh nếu cần
+                    Code = 200,
                     Message = ex.Message
                 };
             }

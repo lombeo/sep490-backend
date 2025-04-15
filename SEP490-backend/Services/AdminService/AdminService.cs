@@ -7,6 +7,7 @@ using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Infra.Helps;
 using Sep490_Backend.Services.AuthenService;
+using Sep490_Backend.Services.CacheService;
 using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.EmailService;
 using Sep490_Backend.Services.HelperService;
@@ -29,14 +30,16 @@ namespace Sep490_Backend.Services.AdminService
         private readonly IEmailService _emailService;
         private readonly IHelperService _helperService;
         private readonly IDataService _dataService;
+        private readonly ICacheService _cacheService;
 
-        public AdminService(IHelperService helperService, BackendContext context, IAuthenService authenService, IEmailService emailService, IDataService dataService)
+        public AdminService(IHelperService helperService, BackendContext context, IAuthenService authenService, IEmailService emailService, IDataService dataService, ICacheService cacheService)
         {
             _context = context;
             _authenService = authenService;
             _helperService = helperService;
             _emailService = emailService;
             _dataService = dataService;
+            _cacheService = cacheService;
         }
 
         public async Task<bool> DeleteUser(int userId, int actionBy)
@@ -49,22 +52,51 @@ namespace Sep490_Backend.Services.AdminService
             {
                 throw new ApplicationException(Message.AdminMessage.DELETE_USER_ERROR);
             }
-            var user = await _context.Users.FirstOrDefaultAsync(t => t.Id == userId && !t.Deleted);
+            
+            var user = await _context.Users
+                .Include(u => u.ProjectUsers)
+                .FirstOrDefaultAsync(t => t.Id == userId && !t.Deleted);
 
-            if (user != null)
-            {
-                user.Deleted = true;
-                _context.Update(user);
-                await _context.SaveChangesAsync();
-            }
-            else
+            if (user == null)
             {
                 throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
 
+            // Use the extension method for soft delete
+            await _context.SoftDeleteAsync(user, actionBy);
+
+            // Invalidate user cache
             _authenService.TriggerUpdateUserMemory(userId);
+            
+            // Invalidate other related caches
+            await InvalidateUserRelatedCaches(userId, user.ProjectUsers?.Select(pu => pu.ProjectId).ToList());
 
             return true;
+        }
+
+        /// <summary>
+        /// Invalidates all caches related to a user
+        /// </summary>
+        private async Task InvalidateUserRelatedCaches(int userId, List<int> relatedProjectIds)
+        {
+            // User memory is already updated by TriggerUpdateUserMemory
+            
+            // Invalidate construction team caches if user was part of a team
+            await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_TEAM_CACHE_KEY);
+            
+            // If user was part of projects, invalidate project-related caches
+            if (relatedProjectIds != null && relatedProjectIds.Any())
+            {
+                await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_CACHE_KEY);
+                await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_USER_CACHE_KEY);
+                
+                // Invalidate specific project caches
+                foreach (var projectId in relatedProjectIds)
+                {
+                    var projectCacheKey = $"PROJECT:{projectId}";
+                    await _cacheService.DeleteAsync(projectCacheKey);
+                }
+            }
         }
 
         public async Task<User> UpdateUser(AdminUpdateUserDTO model, int actionBy)

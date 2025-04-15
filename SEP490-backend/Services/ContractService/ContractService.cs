@@ -7,6 +7,7 @@ using Sep490_Backend.DTO.Project;
 using Sep490_Backend.Infra;
 using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Infra.Entities;
+using Sep490_Backend.Infra.Helps;
 using Sep490_Backend.Services.CacheService;
 using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.GoogleDriveService;
@@ -57,8 +58,11 @@ namespace Sep490_Backend.Services.ContractService
             }
             
             // Tìm Contract cần xóa theo ProjectId
-            var data = await _context.Contracts.FirstOrDefaultAsync(t => t.ProjectId == projectId && !t.Deleted);
-            if (data == null)
+            var contract = await _context.Contracts
+                .Include(c => c.ContractDetails)
+                .FirstOrDefaultAsync(t => t.ProjectId == projectId && !t.Deleted);
+                
+            if (contract == null)
             {
                 throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
@@ -72,35 +76,38 @@ namespace Sep490_Backend.Services.ContractService
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
             
-            // Xóa mềm Contract
-            data.Deleted = true;
-            data.UpdatedAt = DateTime.UtcNow;
-            data.Updater = actionBy;
-            _context.Update(data);
-            
-            // Xóa mềm tất cả ContractDetail liên quan
-            var contractDetail = await _context.ContractDetails
-                .Where(t => !t.Deleted && t.ContractId == data.Id)
-                .ToListAsync();
-                
-            foreach (var item in contractDetail)
-            {
-                item.Deleted = true;
-                item.UpdatedAt = DateTime.UtcNow;
-                item.Updater = actionBy;
-                _context.Update(item);
-            }
+            // Sử dụng extension method để xóa mềm cả Contract và các ContractDetail liên quan
+            await _context.SoftDeleteAsync(contract, actionBy);
 
-            await _context.SaveChangesAsync();
+            // Xóa toàn bộ cache liên quan
+            await InvalidateContractCaches(contract.Id, projectId);
 
-            // Xóa cache chính
-            _ = _cacheService.DeleteAsync(new List<string>
+            return contract.Id;
+        }
+
+        /// <summary>
+        /// Xóa toàn bộ cache liên quan đến contract
+        /// </summary>
+        private async Task InvalidateContractCaches(int contractId, int projectId)
+        {
+            // Danh sách các cache key chính cần xóa
+            var cacheKeysToDelete = new List<string>
             {
                 RedisCacheKey.CONTRACT_CACHE_KEY,
-                RedisCacheKey.CONTRACT_DETAIL_CACHE_KEY
-            });
-
-            return data.Id;
+                RedisCacheKey.CONTRACT_DETAIL_CACHE_KEY,
+                RedisCacheKey.PROJECT_CACHE_KEY,
+                $"CONTRACT:ID:{contractId}",
+                $"CONTRACT:PROJECT:{projectId}"
+            };
+            
+            // Xóa từng cache key
+            foreach (var key in cacheKeysToDelete)
+            {
+                await _cacheService.DeleteAsync(key);
+            }
+            
+            // Xóa các cache theo pattern nếu cần
+            await _cacheService.DeleteByPatternAsync("CONTRACT:*");
         }
 
         public async Task<ContractDTO> Detail(int projectId, int actionBy)

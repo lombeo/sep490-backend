@@ -275,50 +275,54 @@ namespace Sep490_Backend.Services.ConstructionTeamService
                 throw new UnauthorizedAccessException(Message.ConstructionTeamMessage.ONLY_CREATOR_CAN_DELETE);
             }
 
-            // Begin transaction
-            using var transaction = await _context.Database.BeginTransactionAsync();
+            // Find the team with its members and plan items to check if it's in use
+            var teamWithRelations = await _context.ConstructionTeams
+                .Include(t => t.Members)
+                .Include(t => t.ConstructPlanItems)
+                .FirstOrDefaultAsync(t => t.Id == teamId && !t.Deleted);
+
+            // Check if the team is assigned to construction plan items
+            if (teamWithRelations.ConstructPlanItems != null && teamWithRelations.ConstructPlanItems.Any())
+            {
+                throw new InvalidOperationException(Message.ConstructionTeamMessage.TEAM_IN_USE);
+            }
+
+            // Update all members to remove team association
+            foreach (var member in teamWithRelations.Members)
+            {
+                member.TeamId = null;
+                _context.Users.Update(member);
+            }
+            await _context.SaveChangesAsync();
+
+            // Use the extension method for soft delete
+            await _context.SoftDeleteAsync(team, actionBy);
+
+            // Invalidate all related caches
+            await InvalidateTeamCaches(teamId);
+
+            return true;
+        }
+
+        /// <summary>
+        /// Invalidates all team-related caches 
+        /// </summary>
+        private async Task InvalidateTeamCaches(int teamId)
+        {
+            // Main construction team cache
+            await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_TEAM_CACHE_KEY);
             
-            try
-            {
-                // Find the team with its members and plan items
-                var teamWithRelations = await _context.ConstructionTeams
-                    .Include(t => t.Members)
-                    .Include(t => t.ConstructPlanItems)
-                    .FirstOrDefaultAsync(t => t.Id == teamId && !t.Deleted);
-
-                // Check if the team is assigned to construction plan items
-                if (teamWithRelations.ConstructPlanItems != null && teamWithRelations.ConstructPlanItems.Any())
-                {
-                    throw new InvalidOperationException(Message.ConstructionTeamMessage.TEAM_IN_USE);
-                }
-
-                // Update all members to remove team association
-                foreach (var member in teamWithRelations.Members)
-                {
-                    member.TeamId = null;
-                    _context.Users.Update(member);
-                }
-
-                // Perform soft delete
-                team.Deleted = true;
-                team.UpdatedAt = DateTime.Now;
-                team.Updater = actionBy;
-
-                _context.ConstructionTeams.Update(team);
-                await _context.SaveChangesAsync();
-                
-                await transaction.CommitAsync();
-
-                // Invalidate cache
-                await InvalidateTeamCache();
-
-                return true;
-            }
-            catch (Exception)
-            {
-                await transaction.RollbackAsync();
-                throw;
-            }
+            // Team-specific cache if it exists
+            await _cacheService.DeleteAsync($"CONSTRUCTION_TEAM:{teamId}");
+            
+            // User caches since members had their TeamId updated
+            await _cacheService.DeleteAsync("USER_CACHE_KEY");
+            
+            // Construction plan caches, as they may include team information
+            await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY);
+            
+            // Any pattern-based caches
+            await _cacheService.DeleteByPatternAsync("CONSTRUCTION_TEAM:*");
         }
 
         /// <summary>

@@ -200,13 +200,8 @@ namespace Sep490_Backend.Services.MaterialService
                 throw new InvalidOperationException(Message.MaterialMessage.MATERIAL_IN_USE);
             }
 
-            // Perform soft delete
-            material.Deleted = true;
-            material.UpdatedAt = DateTime.Now;
-            material.Updater = actionBy;
-
-            _context.Materials.Update(material);
-            await _context.SaveChangesAsync();
+            // Use the extension method for soft delete
+            await _context.SoftDeleteAsync(material, actionBy);
 
             // Invalidate cache
             await InvalidateMaterialCache();
@@ -222,8 +217,14 @@ namespace Sep490_Backend.Services.MaterialService
             // Clear the main materials cache
             await _cacheService.DeleteAsync(RedisCacheKey.MATERIAL_CACHE_KEY);
             
-            // Use pattern-based deletion for all material-related caches
-            await _cacheService.DeleteByPatternAsync(RedisCacheKey.MATERIAL_CACHE_KEY);
+            // Delete specific material caches using pattern matching
+            await _cacheService.DeleteByPatternAsync($"{RedisCacheKey.MATERIAL_CACHE_KEY}_ID_");
+            
+            // Delete any inventory related caches that might have material info
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_BY_TYPE_CACHE_KEY);
+            
+            _logger.LogInformation("Material cache invalidated successfully");
         }
 
         public async Task<MaterialDetailDTO> GetMaterialById(int materialId, int actionBy)

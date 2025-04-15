@@ -1,7 +1,11 @@
 ﻿using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.EntityFrameworkCore.Metadata;
 using System.Reflection;
 using Sep490_Backend.Infra.Entities;
+using System.Linq.Expressions;
+using System;
 
 namespace Sep490_Backend.Infra
 {
@@ -59,10 +63,34 @@ namespace Sep490_Backend.Infra
             ResourceMobilizationReqsConfiguration.Config(modelBuilder);
             ResourceInventoryConfiguration.Config(modelBuilder);
             MaterialConfiguration.Config(modelBuilder);
-            //OnModelCreatingPartial(modelBuilder);
+            
+            // Apply global query filters for soft delete to all entities that inherit from CommonEntity
+            ApplyGlobalFilters(modelBuilder);
         }
 
-        //partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
+        private void ApplyGlobalFilters(ModelBuilder modelBuilder)
+        {
+            // Get all entity types that inherit from CommonEntity
+            var entityTypes = modelBuilder.Model.GetEntityTypes()
+                .Where(t => typeof(CommonEntity).IsAssignableFrom(t.ClrType));
+
+            foreach (var entityType in entityTypes)
+            {
+                // Skip types that don't inherit from CommonEntity
+                if (!typeof(CommonEntity).IsAssignableFrom(entityType.ClrType))
+                    continue;
+
+                // Create the filter expression: x => !x.Deleted
+                var parameter = Expression.Parameter(entityType.ClrType, "x");
+                var deletedProperty = Expression.Property(parameter, nameof(CommonEntity.Deleted));
+                var notDeletedExpression = Expression.Not(deletedProperty);
+                var lambda = Expression.Lambda(notDeletedExpression, parameter);
+
+                // Apply filter via model builder's HasQueryFilter directly
+                modelBuilder.Entity(entityType.ClrType).HasQueryFilter(lambda);
+            }
+        }
+
         public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess,
                 CancellationToken cancellationToken = new CancellationToken())
         {
@@ -72,18 +100,64 @@ namespace Sep490_Backend.Infra
 
         protected virtual void OnBeforeSaving()
         {
-            foreach (var entry in ChangeTracker.Entries())
+            var entries = ChangeTracker.Entries<CommonEntity>().ToList();
+            
+            foreach (var entry in entries)
             {
-                if (entry != null && entry.Entity is CommonEntity commonEntity)
+                if (entry.State == EntityState.Added)
                 {
-                    if (entry.State == EntityState.Added)
-                    {
-                        ((CommonEntity)entry.Entity).CreatedAt = DateTime.UtcNow;
-                    }
-
-                    ((CommonEntity)entry.Entity).UpdatedAt = DateTime.UtcNow;
+                    entry.Entity.CreatedAt = DateTime.UtcNow;
                 }
 
+                entry.Entity.UpdatedAt = DateTime.UtcNow;
+                
+                // Handle cascade soft delete for related entities
+                if (entry.State == EntityState.Modified && 
+                    entry.Entity.Deleted && 
+                    entry.OriginalValues[nameof(CommonEntity.Deleted)] is bool originalDeleted && 
+                    !originalDeleted)
+                {
+                    CascadeSoftDelete(entry.Entity);
+                }
+            }
+        }
+        
+        private void CascadeSoftDelete(CommonEntity entity)
+        {
+            // Find all navigation properties that are collections of entities that inherit from CommonEntity
+            var entityType = entity.GetType();
+            var navigationProperties = entityType.GetProperties()
+                .Where(p => 
+                    p.PropertyType.IsGenericType && 
+                    (p.PropertyType.GetGenericTypeDefinition() == typeof(ICollection<>) || 
+                     p.PropertyType.GetGenericTypeDefinition() == typeof(List<>)) &&
+                    typeof(CommonEntity).IsAssignableFrom(p.PropertyType.GetGenericArguments()[0])
+                );
+                
+            foreach (var property in navigationProperties)
+            {
+                // Get the navigation collection
+                var value = property.GetValue(entity);
+                if (value == null) continue;
+                
+                // For each related entity in the collection, mark it as deleted
+                var collectionType = property.PropertyType;
+                var elementType = collectionType.GetGenericArguments()[0];
+                
+                var enumerableValue = value as System.Collections.IEnumerable;
+                if (enumerableValue == null) continue;
+                
+                foreach (var item in enumerableValue)
+                {
+                    if (item is CommonEntity relatedEntity && !relatedEntity.Deleted)
+                    {
+                        relatedEntity.Deleted = true;
+                        relatedEntity.UpdatedAt = DateTime.UtcNow;
+                        
+                        // Also apply cascade soft delete to this related entity
+                        CascadeSoftDelete(relatedEntity);
+                    }
+                }
             }
         }
     }

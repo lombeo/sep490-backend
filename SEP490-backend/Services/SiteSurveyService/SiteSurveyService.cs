@@ -93,18 +93,31 @@ namespace Sep490_Backend.Services.SiteSurveyService
                 }
             }
 
-            // Xóa mềm SiteSurvey
-            data.Deleted = true;
-            data.UpdatedAt = DateTime.UtcNow;
-            data.Updater = actionBy;
+            // Sử dụng extension method để xóa mềm
+            await _context.SoftDeleteAsync(data, actionBy);
 
-            _context.Update(data);
-            await _context.SaveChangesAsync();
-
-            // Xóa cache duy nhất cho SiteSurvey
-            _ = _cacheService.DeleteAsync(RedisCacheKey.SITE_SURVEY_CACHE_KEY);
+            // Xóa cache cho SiteSurvey
+            await InvalidateSiteSurveyCaches(data.ProjectId);
 
             return data.Id;
+        }
+
+        /// <summary>
+        /// Xóa cache liên quan đến SiteSurvey
+        /// </summary>
+        private async Task InvalidateSiteSurveyCaches(int projectId)
+        {
+            // Xóa cache chung cho tất cả SiteSurvey
+            await _cacheService.DeleteAsync(RedisCacheKey.SITE_SURVEY_CACHE_KEY);
+            
+            // Xóa cache liên quan đến Project
+            await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_CACHE_KEY);
+            
+            // Nếu có cache cho SiteSurvey theo ProjectId, xóa nó
+            var projectSpecificCacheKey = $"SITE_SURVEY:PROJECT:{projectId}";
+            await _cacheService.DeleteAsync(projectSpecificCacheKey);
+            
+            Console.WriteLine($"Site survey caches invalidated for project {projectId}");
         }
 
         public async Task<SiteSurvey> GetSiteSurveyDetail(int projectId, int actionBy)
@@ -165,7 +178,7 @@ namespace Sep490_Backend.Services.SiteSurveyService
             bool isExecutiveBoard = _helpService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD);
             bool isTechnicalManager = _helpService.IsInRole(actionBy, RoleConstValue.TECHNICAL_MANAGER);
             
-            if (!isExecutiveBoard && !isTechnicalManager)
+            if (!isExecutiveBoard || !isTechnicalManager)
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
