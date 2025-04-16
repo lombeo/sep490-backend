@@ -12,14 +12,12 @@ namespace Sep490_Backend.Services.VehicleService
     {
         private readonly BackendContext _context;
         private readonly ICacheService _cacheService;
-        private readonly ILogger<VehicleService> _logger;
         private readonly TimeSpan DEFAULT_CACHE_DURATION = TimeSpan.FromMinutes(15);
 
-        public VehicleService(BackendContext context, ICacheService cacheService, ILogger<VehicleService> logger)
+        public VehicleService(BackendContext context, ICacheService cacheService)
         {
             _context = context;
             _cacheService = cacheService;
-            _logger = logger;
         }
 
         private string GetVehicleSearchCacheKey(VehicleSearchDTO searchDto)
@@ -35,7 +33,6 @@ namespace Sep490_Backend.Services.VehicleService
             
             if (cachedVehicles != null)
             {
-                _logger.LogInformation($"Cache hit for all vehicles, finding vehicle ID {id}");
                 var vehicle = cachedVehicles.FirstOrDefault(v => v.Id == id && !v.Deleted);
                 if (vehicle != null)
                 {
@@ -43,15 +40,13 @@ namespace Sep490_Backend.Services.VehicleService
                 }
             }
             
-            _logger.LogInformation($"Cache miss for vehicle ID {id}, fetching from database");
-            
             var foundVehicle = await _context.Vehicles
                 .Include(v => v.User)
                 .FirstOrDefaultAsync(v => v.Id == id && !v.Deleted);
 
             if (foundVehicle == null)
             {
-                throw new KeyNotFoundException($"Vehicle with ID {id} not found");
+                throw new KeyNotFoundException(Message.VehicleMessage.NOT_FOUND);
             }
 
             if (cachedVehicles == null)
@@ -80,8 +75,6 @@ namespace Sep490_Backend.Services.VehicleService
             
             if (allVehicles == null)
             {
-                _logger.LogInformation($"Cache miss for all vehicles, fetching from database");
-                
                 allVehicles = await _context.Vehicles
                     .Include(v => v.User)
                     .Where(v => !v.Deleted)
@@ -89,26 +82,17 @@ namespace Sep490_Backend.Services.VehicleService
                     
                 await _cacheService.SetAsync(cacheKey, allVehicles, DEFAULT_CACHE_DURATION);
             }
-            else
-            {
-                _logger.LogInformation($"Cache hit for all vehicles");
-            }
             
             var filteredVehicles = allVehicles.AsQueryable();
             
-            if (!string.IsNullOrEmpty(searchDto.LicensePlate))
+            if (!string.IsNullOrEmpty(searchDto.KeyWord))
             {
-                filteredVehicles = filteredVehicles.Where(v => v.LicensePlate.Contains(searchDto.LicensePlate));
-            }
-
-            if (!string.IsNullOrEmpty(searchDto.Brand))
-            {
-                filteredVehicles = filteredVehicles.Where(v => v.Brand.Contains(searchDto.Brand));
-            }
-
-            if (searchDto.VehicleType.HasValue)
-            {
-                filteredVehicles = filteredVehicles.Where(v => v.VehicleType == searchDto.VehicleType.Value);
+                filteredVehicles = filteredVehicles.Where(v => 
+                    v.LicensePlate.Contains(searchDto.KeyWord) ||
+                    v.Brand.Contains(searchDto.KeyWord) ||
+                    v.VehicleType.Contains(searchDto.KeyWord) ||
+                    v.VehicleName.Contains(searchDto.KeyWord)
+                );
             }
 
             if (searchDto.Status.HasValue)
@@ -139,13 +123,13 @@ namespace Sep490_Backend.Services.VehicleService
 
             if (existingVehicle != null)
             {
-                throw new ArgumentException($"Vehicle with license plate {vehicleDto.LicensePlate} already exists");
+                throw new ArgumentException(Message.VehicleMessage.LICENSE_PLATE_EXISTS);
             }
 
             var driver = await _context.Users.FirstOrDefaultAsync(u => u.Id == vehicleDto.Driver && !u.Deleted);
             if (driver == null)
             {
-                throw new ArgumentException($"Driver with ID {vehicleDto.Driver} not found");
+                throw new ArgumentException(Message.CommonMessage.NOT_FOUND);
             }
 
             var vehicle = new Vehicle
@@ -155,6 +139,7 @@ namespace Sep490_Backend.Services.VehicleService
                 YearOfManufacture = vehicleDto.YearOfManufacture,
                 CountryOfManufacture = vehicleDto.CountryOfManufacture,
                 VehicleType = vehicleDto.VehicleType,
+                VehicleName = vehicleDto.VehicleName,
                 ChassisNumber = vehicleDto.ChassisNumber,
                 EngineNumber = vehicleDto.EngineNumber,
                 Image = vehicleDto.Image,
@@ -185,7 +170,7 @@ namespace Sep490_Backend.Services.VehicleService
 
             if (vehicle == null)
             {
-                throw new KeyNotFoundException($"Vehicle with ID {vehicleDto.Id} not found");
+                throw new KeyNotFoundException(Message.VehicleMessage.NOT_FOUND);
             }
 
             if (vehicle.LicensePlate != vehicleDto.LicensePlate)
@@ -195,14 +180,14 @@ namespace Sep490_Backend.Services.VehicleService
 
                 if (existingVehicle != null)
                 {
-                    throw new ArgumentException($"Vehicle with license plate {vehicleDto.LicensePlate} already exists");
+                    throw new ArgumentException(Message.VehicleMessage.LICENSE_PLATE_EXISTS);
                 }
             }
 
             var driver = await _context.Users.FirstOrDefaultAsync(u => u.Id == vehicleDto.Driver && !u.Deleted);
             if (driver == null)
             {
-                throw new ArgumentException($"Driver with ID {vehicleDto.Driver} not found");
+                throw new ArgumentException(Message.CommonMessage.NOT_FOUND);
             }
 
             vehicle.LicensePlate = vehicleDto.LicensePlate;
@@ -210,6 +195,7 @@ namespace Sep490_Backend.Services.VehicleService
             vehicle.YearOfManufacture = vehicleDto.YearOfManufacture;
             vehicle.CountryOfManufacture = vehicleDto.CountryOfManufacture;
             vehicle.VehicleType = vehicleDto.VehicleType;
+            vehicle.VehicleName = vehicleDto.VehicleName;
             vehicle.ChassisNumber = vehicleDto.ChassisNumber;
             vehicle.EngineNumber = vehicleDto.EngineNumber;
             vehicle.Image = vehicleDto.Image;
@@ -238,7 +224,7 @@ namespace Sep490_Backend.Services.VehicleService
 
             if (vehicle == null)
             {
-                throw new KeyNotFoundException($"Vehicle with ID {id} not found");
+                throw new KeyNotFoundException(Message.VehicleMessage.NOT_FOUND);
             }
 
             vehicle.Deleted = true;

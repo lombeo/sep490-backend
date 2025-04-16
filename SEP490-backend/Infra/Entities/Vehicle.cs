@@ -9,7 +9,8 @@ namespace Sep490_Backend.Infra.Entities
         public string Brand { get; set; }
         public int YearOfManufacture { get; set; }
         public string CountryOfManufacture { get; set; }
-        public int VehicleType { get; set; }
+        public string VehicleType { get; set; }
+        public string VehicleName { get; set; }
         public string ChassisNumber { get; set; }
         public string EngineNumber { get; set; }
         public string Image { get; set; }
@@ -46,6 +47,14 @@ namespace Sep490_Backend.Infra.Entities
                       .HasColumnType("text");
 
                 entity.Property(e => e.CountryOfManufacture)
+                      .IsRequired()
+                      .HasColumnType("text");
+
+                entity.Property(e => e.VehicleType)
+                      .IsRequired()
+                      .HasColumnType("text");
+
+                entity.Property(e => e.VehicleName)
                       .IsRequired()
                       .HasColumnType("text");
 

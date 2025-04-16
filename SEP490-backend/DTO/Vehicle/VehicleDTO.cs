@@ -5,9 +5,7 @@ namespace Sep490_Backend.DTO.Vehicle
 {
     public class VehicleSearchDTO : BaseQuery
     {
-        public string? LicensePlate { get; set; }
-        public string? Brand { get; set; }
-        public int? VehicleType { get; set; }
+        public string? KeyWord { get; set; }
         public int? Status { get; set; }
         public int? Driver { get; set; }
     }
@@ -25,7 +23,11 @@ namespace Sep490_Backend.DTO.Vehicle
         [Required(ErrorMessage = "Country of manufacture is required for vehicle documentation")]
         public string CountryOfManufacture { get; set; } = string.Empty;
         
-        public int VehicleType { get; set; }
+        [Required(ErrorMessage = "Vehicle type is required for vehicle categorization")]
+        public string VehicleType { get; set; } = string.Empty;
+        
+        [Required(ErrorMessage = "Vehicle name is required for vehicle identification")]
+        public string VehicleName { get; set; } = string.Empty;
         
         [Required(ErrorMessage = "Chassis number is required for vehicle identification")]
         public string ChassisNumber { get; set; } = string.Empty;
@@ -69,7 +71,8 @@ namespace Sep490_Backend.DTO.Vehicle
         public string Brand { get; set; } = string.Empty;
         public int YearOfManufacture { get; set; }
         public string CountryOfManufacture { get; set; } = string.Empty;
-        public int VehicleType { get; set; }
+        public string VehicleType { get; set; } = string.Empty;
+        public string VehicleName { get; set; } = string.Empty;
         public string ChassisNumber { get; set; } = string.Empty;
         public string EngineNumber { get; set; } = string.Empty;
         public string Image { get; set; } = string.Empty;
