@@ -16,8 +16,6 @@ namespace Sep490_Backend.Infra.Entities
         
         // Navigation property
         public virtual Contract Contract { get; set; }
-        public virtual ContractDetail ParentItem { get; set; }
-        public virtual ICollection<ContractDetail> ChildItems { get; set; }
     }
 
     public static class ContractDetailConfiguration
@@ -72,17 +70,6 @@ namespace Sep490_Backend.Infra.Entities
                       .WithMany(c => c.ContractDetails)
                       .HasForeignKey(e => e.ContractId)
                       .OnDelete(DeleteBehavior.Cascade);
-
-                // Parent-child relationships
-                entity.HasOne(e => e.ParentItem)
-                    .WithMany(e => e.ChildItems)
-                    .HasForeignKey(e => e.ParentIndex)
-                    .OnDelete(DeleteBehavior.Restrict);
-
-                entity.HasMany(e => e.ChildItems)
-                    .WithOne(e => e.ParentItem)
-                    .HasForeignKey(e => e.ParentIndex)
-                    .OnDelete(DeleteBehavior.Restrict);
             });
         }
     }

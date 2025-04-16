@@ -711,12 +711,8 @@ namespace Sep490_Backend.Services.ContractService
                         if (itemsToDelete.Contains(item.WorkCode))
                             continue;
                         
-                        // Resolve parent
-                        string parentWorkCode = null;
-                        if (!string.IsNullOrEmpty(item.ParentIndex) && indexToWorkCode.ContainsKey(item.ParentIndex))
-                        {
-                            parentWorkCode = indexToWorkCode[item.ParentIndex];
-                        }
+                        // ParentIndex is now directly the Index of the parent
+                        string parentIndex = item.ParentIndex;
                         
                         // Handle updates
                         if (!string.IsNullOrEmpty(item.WorkCode) && existingWorkCodes.Contains(item.WorkCode))
@@ -732,7 +728,7 @@ namespace Sep490_Backend.Services.ContractService
                                     WorkCode = item.WorkCode,
                                     ContractId = contractId,
                                     Index = item.Index,
-                                    ParentIndex = parentWorkCode ?? existingDetail.ParentIndex,
+                                    ParentIndex = parentIndex,
                                     WorkName = item.WorkName,
                                     Unit = item.Unit,
                                     Quantity = item.Quantity,
@@ -773,7 +769,7 @@ namespace Sep490_Backend.Services.ContractService
                                 WorkCode = workCode,
                                 ContractId = contractId,
                                 Index = item.Index,
-                                ParentIndex = parentWorkCode,
+                                ParentIndex = parentIndex,
                                 WorkName = item.WorkName,
                                 Unit = item.Unit,
                                 Quantity = item.Quantity,
