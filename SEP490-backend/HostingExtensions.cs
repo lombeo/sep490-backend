@@ -32,6 +32,7 @@ using Sep490_Backend.Services.ConstructionPlanService;
 using Sep490_Backend.Services.VehicleService;
 using Sep490_Backend.Services.ActionLogService;
 using System.Net;
+using Sep490_Backend.Services.ConstructionLogService;
 
 namespace Sep490_Backend
 {
@@ -116,6 +117,7 @@ namespace Sep490_Backend
             builder.Services.AddScoped<IConstructionPlanService, ConstructionPlanService>();
             builder.Services.AddScoped<IVehicleService, VehicleService>();
             builder.Services.AddScoped<IActionLogService, ActionLogService>();
+            builder.Services.AddScoped<IConstructionLogService, ConstructionLogService>();
             builder.Services.AddHostedService<DefaultBackgroundService>();
 
             builder.Services.AddEndpointsApiExplorer();
@@ -135,6 +137,9 @@ namespace Sep490_Backend
             builder.Services.AddSwaggerGen(c =>
             {
                 c.SwaggerDoc("v1", new OpenApiInfo { Title = "SEP490 API", Version = "v1" });
+
+                // Custom schema ID generator to avoid conflicts between DTOs with same name
+                c.CustomSchemaIds(type => type.FullName);
 
                 c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
                 {

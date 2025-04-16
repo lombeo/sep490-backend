@@ -50,5 +50,13 @@
         
         public const string RESOURCE_INVENTORY_BY_TYPE_CACHE_KEY = "RESOURCE_INVENTORY:TYPE:{0}";
         public const string RESOURCE_INVENTORY_BY_ID_CACHE_KEY = "RESOURCE_INVENTORY:ID:{0}";
+        
+        // Construction Log Cache Keys
+        public const string CONSTRUCTION_LOG_CACHE_KEY = "CONSTRUCTION_LOG"; // Main cache key for all construction logs
+        public const string CONSTRUCTION_LOG_BY_ID_CACHE_KEY = "CONSTRUCTION_LOG:ID:{0}"; // Cache key for specific construction log by ID
+        public const string CONSTRUCTION_LOG_BY_PROJECT_CACHE_KEY = "CONSTRUCTION_LOG:PROJECT:{0}"; // Cache key for construction logs by project
+        public const string CONSTRUCTION_LOG_LIST_CACHE_KEY = "CONSTRUCTION_LOG:LIST"; // Cache key for construction log list
+        public const string CONSTRUCTION_LOG_BY_TASK_CACHE_KEY = "CONSTRUCTION_LOG:TASK:{0}"; // Cache key for construction logs by task index
+        public const string CONSTRUCTION_LOG_ALL_PATTERN = "CONSTRUCTION_LOG:*"; // Pattern for all construction log cache keys
     }
 }

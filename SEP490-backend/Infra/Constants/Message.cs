@@ -241,5 +241,25 @@
             // Error messages
             public const string NOT_FOUND = "E-LOG-001"; // Action log not found!
         }
+
+        public static class ConstructionLogMessage
+        {
+            // Success messages
+            public const string CREATE_SUCCESS = "S-CL-001"; // Create construction log successfully!
+            public const string UPDATE_SUCCESS = "S-CL-002"; // Update construction log successfully!
+            public const string DELETE_SUCCESS = "S-CL-003"; // Delete construction log successfully!
+            public const string SEARCH_SUCCESS = "S-CL-004"; // Search construction logs successfully!
+            public const string GET_DETAIL_SUCCESS = "S-CL-005"; // Get construction log details successfully!
+            public const string GET_BY_PROJECT_SUCCESS = "S-CL-006"; // Get construction logs by project successfully!
+            public const string GET_BY_TASK_SUCCESS = "S-CL-007"; // Get construction logs by task successfully!
+            
+            // Error messages
+            public const string NOT_FOUND = "E-CL-001"; // Construction log not found!
+            public const string PROJECT_NOT_FOUND = "E-CL-002"; // Project not found!
+            public const string LOG_CODE_EXISTS = "E-CL-003"; // Construction log code already exists!
+            public const string INVALID_DATE = "E-CL-004"; // Invalid date format or value!
+            public const string UNAUTHORIZED = "E-CL-005"; // You are not authorized to perform this action!
+            public const string ONLY_CONSTRUCTION_MANAGER = "E-CL-006"; // Only the Construction Manager can create or update construction logs!
+        }
     }
 }

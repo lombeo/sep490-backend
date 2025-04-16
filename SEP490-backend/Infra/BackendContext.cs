@@ -39,6 +39,7 @@ namespace Sep490_Backend.Infra
         public virtual DbSet<ResourceMobilizationReqs> ResourceMobilizationReqs { get; set; }
         public virtual DbSet<ResourceInventory> ResourceInventory { get; set; }
         public virtual DbSet<Material> Materials { get; set; }
+        public virtual DbSet<ConstructionLog> ConstructionLogs { get; set; }
 
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -63,6 +64,7 @@ namespace Sep490_Backend.Infra
             ResourceMobilizationReqsConfiguration.Config(modelBuilder);
             ResourceInventoryConfiguration.Config(modelBuilder);
             MaterialConfiguration.Config(modelBuilder);
+            ConstructionLogConfiguration.Config(modelBuilder);
             
             // Apply global query filters for soft delete to all entities that inherit from CommonEntity
             ApplyGlobalFilters(modelBuilder);
