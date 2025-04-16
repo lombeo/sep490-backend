@@ -60,5 +60,11 @@ namespace Sep490_Backend.Controllers
         {
             return await HandleException(_constructionTeamService.Delete(id, UserId), Message.ConstructionTeamMessage.DELETE_SUCCESS);
         }
+
+        [HttpDelete("remove-member-from-team/{id}")]
+        public async Task<ResponseDTO<bool>> RemoveMemberFromTeam(int id)
+        {
+            return await HandleException(_constructionTeamService.RemoveMemberFromTeam(id, UserId), Message.ConstructionTeamMessage.REMOVE_MEMBER_SUCCESS);
+        }
     }
 } 

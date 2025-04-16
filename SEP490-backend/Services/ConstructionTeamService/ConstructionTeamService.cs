@@ -21,6 +21,7 @@ namespace Sep490_Backend.Services.ConstructionTeamService
     {
         Task<ConstructionTeam> Save(ConstructionTeamSaveDTO model, int actionBy);
         Task<bool> Delete(int teamId, int actionBy);
+        Task<bool> RemoveMemberFromTeam(int memberId, int actionBy);
     }
 
     public class ConstructionTeamService : IConstructionTeamService
@@ -98,7 +99,7 @@ namespace Sep490_Backend.Services.ConstructionTeamService
                 {
                     errors.Add(new ResponseError
                     {
-                        Message = "Team manager not found",
+                        Message = Message.ConstructionTeamMessage.MANAGER_NOT_FOUND,
                         Field = nameof(model.TeamManager).ToCamelCase()
                     });
                 }
@@ -106,7 +107,7 @@ namespace Sep490_Backend.Services.ConstructionTeamService
                 {
                     errors.Add(new ResponseError
                     {
-                        Message = "Selected user must have Team Leader role",
+                        Message = Message.ConstructionTeamMessage.MANAGER_ROLE_REQUIRED,
                         Field = nameof(model.TeamManager).ToCamelCase()
                     });
                 }
@@ -119,7 +120,7 @@ namespace Sep490_Backend.Services.ConstructionTeamService
                 {
                     errors.Add(new ResponseError
                     {
-                        Message = "This user is already managing another team",
+                        Message = Message.ConstructionTeamMessage.MANAGER_ALREADY_ASSIGNED,
                         Field = nameof(model.TeamManager).ToCamelCase()
                     });
                 }
@@ -138,6 +139,74 @@ namespace Sep490_Backend.Services.ConstructionTeamService
                 });
             }
 
+            // Validate team members if provided
+            if (model.TeamMemberIds != null && model.TeamMemberIds.Any())
+            {
+                // Check if the manager is also included in team members
+                if (model.TeamMemberIds.Contains(model.TeamManager))
+                {
+                    errors.Add(new ResponseError
+                    {
+                        Message = Message.ConstructionTeamMessage.MANAGER_IN_MEMBERS,
+                        Field = nameof(model.TeamMemberIds).ToCamelCase()
+                    });
+                }
+
+                // Check if all team members exist and are not already in other teams
+                var memberIds = model.TeamMemberIds.Distinct().ToList();
+                var existingMembers = await _context.Users
+                    .Where(u => memberIds.Contains(u.Id) && !u.Deleted)
+                    .ToListAsync();
+
+                if (existingMembers.Count != memberIds.Count)
+                {
+                    var foundIds = existingMembers.Select(u => u.Id);
+                    var missingIds = memberIds.Where(id => !foundIds.Contains(id));
+                    
+                    errors.Add(new ResponseError
+                    {
+                        Message = Message.ConstructionTeamMessage.MEMBERS_NOT_FOUND,
+                        Field = nameof(model.TeamMemberIds).ToCamelCase()
+                    });
+                }
+
+                // Check if any members are already in other teams
+                var membersInOtherTeams = existingMembers
+                    .Where(u => u.TeamId.HasValue && (model.Id == null || u.TeamId != model.Id))
+                    .ToList();
+
+                if (membersInOtherTeams.Any())
+                {
+                    var conflictingUserNames = string.Join(", ", 
+                        membersInOtherTeams.Select(u => u.FullName));
+                    
+                    errors.Add(new ResponseError
+                    {
+                        Message = Message.ConstructionTeamMessage.MEMBERS_IN_OTHER_TEAMS,
+                        Field = nameof(model.TeamMemberIds).ToCamelCase()
+                    });
+                }
+                
+                // Check if all team members have Construction Employee role
+                var membersWithInvalidRole = new List<int>();
+                foreach (var member in existingMembers)
+                {
+                    if (!_helperService.IsInRole(member.Id, RoleConstValue.CONSTRUCTION_EMPLOYEE))
+                    {
+                        membersWithInvalidRole.Add(member.Id);
+                    }
+                }
+                
+                if (membersWithInvalidRole.Any())
+                {
+                    errors.Add(new ResponseError
+                    {
+                        Message = Message.ConstructionTeamMessage.INVALID_MEMBER_ROLE,
+                        Field = nameof(model.TeamMemberIds).ToCamelCase()
+                    });
+                }
+            }
+
             // Throw aggregated errors
             if (errors.Count > 0)
                 throw new ValidationException(errors);
@@ -147,24 +216,26 @@ namespace Sep490_Backend.Services.ConstructionTeamService
             
             try
             {
+                ConstructionTeam teamEntity;
+                
                 // If ID is provided, update existing team
                 if (model.Id.HasValue && model.Id.Value > 0)
                 {
-                    var teamToUpdate = await _context.ConstructionTeams
+                    teamEntity = await _context.ConstructionTeams
                         .Include(t => t.Members)
                         .FirstOrDefaultAsync(t => t.Id == model.Id.Value && !t.Deleted);
 
-                    if (teamToUpdate == null)
+                    if (teamEntity == null)
                     {
                         throw new KeyNotFoundException(Message.ConstructionTeamMessage.NOT_FOUND);
                     }
 
                     // Handle team manager change - update previous team members if manager changes
-                    if (teamToUpdate.TeamManager != model.TeamManager)
+                    if (teamEntity.TeamManager != model.TeamManager)
                     {
                         // Get previous manager and remove team association
                         var previousManager = await _context.Users
-                            .FirstOrDefaultAsync(u => u.Id == teamToUpdate.TeamManager);
+                            .FirstOrDefaultAsync(u => u.Id == teamEntity.TeamManager);
                             
                         if (previousManager != null)
                         {
@@ -178,34 +249,72 @@ namespace Sep490_Backend.Services.ConstructionTeamService
                             
                         if (newManager != null)
                         {
-                            newManager.TeamId = teamToUpdate.Id;
+                            newManager.TeamId = teamEntity.Id;
                             _context.Users.Update(newManager);
                         }
                     }
 
                     // Update properties
-                    teamToUpdate.TeamName = model.TeamName;
-                    teamToUpdate.TeamManager = model.TeamManager;
-                    teamToUpdate.Description = model.Description ?? "";
+                    teamEntity.TeamName = model.TeamName;
+                    teamEntity.TeamManager = model.TeamManager;
+                    teamEntity.Description = model.Description ?? "";
                     
                     // Update audit fields
-                    teamToUpdate.UpdatedAt = DateTime.Now;
-                    teamToUpdate.Updater = actionBy;
+                    teamEntity.UpdatedAt = DateTime.Now;
+                    teamEntity.Updater = actionBy;
 
-                    _context.ConstructionTeams.Update(teamToUpdate);
+                    _context.ConstructionTeams.Update(teamEntity);
                     await _context.SaveChangesAsync();
                     
-                    await transaction.CommitAsync();
+                    // Get current team members except the manager (manager is also considered a team member)
+                    var currentMemberIds = teamEntity.Members
+                        .Where(m => m.Id != model.TeamManager)
+                        .Select(m => m.Id)
+                        .ToList();
                     
-                    // Invalidate cache if needed
-                    await InvalidateTeamCache();
-
-                    return teamToUpdate;
+                    // Identify members to add and remove
+                    var memberIdsToAdd = model.TeamMemberIds
+                        .Where(id => !currentMemberIds.Contains(id))
+                        .ToList();
+                    
+                    var memberIdsToRemove = currentMemberIds
+                        .Where(id => !model.TeamMemberIds.Contains(id))
+                        .ToList();
+                        
+                    // Remove users from team
+                    if (memberIdsToRemove.Any())
+                    {
+                        var usersToRemove = await _context.Users
+                            .Where(u => memberIdsToRemove.Contains(u.Id))
+                            .ToListAsync();
+                        
+                        foreach (var user in usersToRemove)
+                        {
+                            user.TeamId = null;
+                            _context.Users.Update(user);
+                        }
+                        await _context.SaveChangesAsync();
+                    }
+                    
+                    // Add new users to team
+                    if (memberIdsToAdd.Any())
+                    {
+                        var usersToAdd = await _context.Users
+                            .Where(u => memberIdsToAdd.Contains(u.Id))
+                            .ToListAsync();
+                        
+                        foreach (var user in usersToAdd)
+                        {
+                            user.TeamId = teamEntity.Id;
+                            _context.Users.Update(user);
+                        }
+                        await _context.SaveChangesAsync();
+                    }
                 }
                 else
                 {
                     // Create new construction team
-                    var newTeam = new ConstructionTeam
+                    teamEntity = new ConstructionTeam
                     {
                         TeamName = model.TeamName,
                         TeamManager = model.TeamManager,
@@ -218,7 +327,7 @@ namespace Sep490_Backend.Services.ConstructionTeamService
                         UpdatedAt = DateTime.Now
                     };
 
-                    await _context.ConstructionTeams.AddAsync(newTeam);
+                    await _context.ConstructionTeams.AddAsync(teamEntity);
                     await _context.SaveChangesAsync();
                     
                     // Set the manager's TeamId to this team
@@ -227,9 +336,25 @@ namespace Sep490_Backend.Services.ConstructionTeamService
                         
                     if (manager != null)
                     {
-                        manager.TeamId = newTeam.Id;
+                        manager.TeamId = teamEntity.Id;
                         _context.Users.Update(manager);
                         await _context.SaveChangesAsync();
+                    }
+                    
+                    // Add team members if any are specified
+                    if (model.TeamMemberIds.Any())
+                    {
+                        var membersToAdd = await _context.Users
+                            .Where(u => model.TeamMemberIds.Contains(u.Id))
+                            .ToListAsync();
+                            
+                        foreach (var member in membersToAdd)
+                        {
+                            member.TeamId = teamEntity.Id;
+                            _context.Users.Update(member);
+                        }
+                        await _context.SaveChangesAsync();
+                    }
                     }
                     
                     await transaction.CommitAsync();
@@ -237,8 +362,7 @@ namespace Sep490_Backend.Services.ConstructionTeamService
                     // Invalidate cache if needed
                     await InvalidateTeamCache();
 
-                    return newTeam;
-                }
+                return teamEntity;
             }
             catch (Exception)
             {
@@ -300,6 +424,67 @@ namespace Sep490_Backend.Services.ConstructionTeamService
 
             // Invalidate all related caches
             await InvalidateTeamCaches(teamId);
+
+            return true;
+        }
+        
+        /// <summary>
+        /// Removes a member from their construction team
+        /// </summary>
+        /// <param name="memberId">ID of the user to remove from team</param>
+        /// <param name="actionBy">ID of the user performing the action</param>
+        /// <returns>True if removal was successful, otherwise false</returns>
+        public async Task<bool> RemoveMemberFromTeam(int memberId, int actionBy)
+        {
+            // Authorization check - only Construction Manager can remove team members
+            if (!_helperService.IsInRole(actionBy, RoleConstValue.CONSTRUCTION_MANAGER))
+            {
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+            }
+            
+            // Find the user to remove
+            var member = await _context.Users
+                .FirstOrDefaultAsync(u => u.Id == memberId && !u.Deleted);
+                
+            if (member == null)
+            {
+                throw new KeyNotFoundException(Message.ConstructionTeamMessage.MEMBER_NOT_FOUND);
+            }
+            
+            // Check if user is in a team
+            if (!member.TeamId.HasValue)
+            {
+                throw new InvalidOperationException(Message.ConstructionTeamMessage.MEMBER_NOT_IN_TEAM);
+            }
+            
+            // Find the team to verify team manager
+            var team = await _context.ConstructionTeams
+                .FirstOrDefaultAsync(t => t.Id == member.TeamId.Value && !t.Deleted);
+                
+            if (team == null)
+            {
+                throw new KeyNotFoundException(Message.ConstructionTeamMessage.NOT_FOUND);
+            }
+            
+            // Check if user is the team manager - managers should be changed through Update API
+            if (team.TeamManager == memberId)
+            {
+                throw new InvalidOperationException(Message.ConstructionTeamMessage.CANNOT_REMOVE_MANAGER);
+            }
+            
+            // Check if actionBy is the creator of the team
+            if (team.Creator != actionBy)
+            {
+                throw new UnauthorizedAccessException(Message.ConstructionTeamMessage.ONLY_CREATOR_CAN_UPDATE);
+            }
+            
+            // Remove user from team
+            member.TeamId = null;
+            _context.Users.Update(member);
+            await _context.SaveChangesAsync();
+            
+            // Invalidate caches
+            await InvalidateTeamCaches(team.Id);
 
             return true;
         }

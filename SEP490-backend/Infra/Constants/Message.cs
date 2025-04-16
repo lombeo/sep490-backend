@@ -192,6 +192,7 @@
             public const string DELETE_SUCCESS = "S-CTM-002"; // Delete construction team successfully!
             public const string SEARCH_SUCCESS = "S-CTM-003"; // Search construction teams successfully!
             public const string GET_DETAIL_SUCCESS = "S-CTM-004"; // Get construction team details successfully!
+            public const string REMOVE_MEMBER_SUCCESS = "S-CTM-005"; // Remove member from team successfully!
             
             // Error messages
             public const string NOT_FOUND = "E-CTM-001"; // Construction team not found!
@@ -200,6 +201,16 @@
             public const string TEAM_IN_USE = "E-CTM-004"; // Cannot delete team because it is assigned to construction plan items!
             public const string NAME_REQUIRED = "E-CTM-005"; // Construction team name is required!
             public const string DUPLICATE_NAME = "E-CTM-006"; // Construction team name already exists!
+            public const string MANAGER_NOT_FOUND = "E-CTM-007"; // Team manager not found!
+            public const string MANAGER_ROLE_REQUIRED = "E-CTM-008"; // Selected user must have Team Leader role!
+            public const string MANAGER_ALREADY_ASSIGNED = "E-CTM-009"; // This user is already managing another team!
+            public const string MEMBERS_NOT_FOUND = "E-CTM-010"; // Some specified team members were not found!
+            public const string MEMBERS_IN_OTHER_TEAMS = "E-CTM-011"; // Some users are already members of other teams!
+            public const string MANAGER_IN_MEMBERS = "E-CTM-012"; // Team manager cannot be included in team members list!
+            public const string INVALID_MEMBER_ROLE = "E-CTM-013"; // Only Construction Employees can be added as team members!
+            public const string MEMBER_NOT_FOUND = "E-CTM-014"; // Member not found!
+            public const string MEMBER_NOT_IN_TEAM = "E-CTM-015"; // User is not a member of any team!
+            public const string CANNOT_REMOVE_MANAGER = "E-CTM-016"; // Cannot remove team manager using this method!
         }
 
         public static class VehicleMessage
