@@ -22,7 +22,6 @@ namespace Sep490_Backend.DTO.ConstructionPlan
         
         public int ProjectId { get; set; }
         public List<SaveConstructPlanItemDTO> PlanItems { get; set; } = new List<SaveConstructPlanItemDTO>();
-        public List<int> Reviewers { get; set; } = new List<int>();
     }
 
     public class SaveConstructPlanItemDTO
@@ -87,7 +86,5 @@ namespace Sep490_Backend.DTO.ConstructionPlan
         
         [Required(ErrorMessage = "Excel file with construction plan is required")]
         public IFormFile ExcelFile { get; set; } = null!;
-        
-        public List<int> ReviewerIds { get; set; } = new List<int>();
     }
 } 

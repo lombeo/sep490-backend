@@ -568,7 +568,6 @@ namespace Sep490_Backend.Services.DataService
                 {
                     Id = plan.Id,
                     PlanName = plan.PlanName,
-                    Reviewer = plan.Reviewer,
                     ProjectId = plan.ProjectId,
                     ProjectName = plan.Project?.ProjectName ?? "",
                     CreatedAt = plan.CreatedAt ?? DateTime.UtcNow,
@@ -578,6 +577,28 @@ namespace Sep490_Backend.Services.DataService
                     UpdatedBy = plan.Updater,
                     IsApproved = plan.Reviewer != null && plan.Reviewer.Count > 0 && plan.Reviewer.All(r => r.Value == true)
                 };
+                
+                // Add reviewers if available
+                if (plan.Reviewers != null && plan.Reviewers.Any())
+                {
+                    foreach (var reviewer in plan.Reviewers)
+                    {
+                        bool isApproved = false;
+                        if (plan.Reviewer != null && plan.Reviewer.ContainsKey(reviewer.Id))
+                        {
+                            isApproved = plan.Reviewer[reviewer.Id];
+                        }
+
+                        dto.Reviewers.Add(new ReviewerDTO
+                        {
+                            Id = reviewer.Id,
+                            Name = reviewer.FullName,
+                            Email = reviewer.Email,
+                            IsApproved = isApproved,
+                            Role = reviewer.Role
+                        });
+                    }
+                }
                 
                 constructionPlanDTOs.Add(dto);
             }

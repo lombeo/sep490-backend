@@ -14,9 +14,6 @@ namespace Sep490_Backend.DTO.ConstructionPlan
         [Required(ErrorMessage = "Construction plan name is required")]
         public string PlanName { get; set; } = string.Empty;
         
-        [JsonConverter(typeof(ReviewerDictionaryConverter))]
-        public Dictionary<int, bool>? Reviewer { get; set; }
-        
         public int ProjectId { get; set; }
         
         [Required(ErrorMessage = "Project name is required for construction management")]
@@ -114,6 +111,9 @@ namespace Sep490_Backend.DTO.ConstructionPlan
         public string Email { get; set; } = string.Empty;
         
         public bool IsApproved { get; set; }
+        
+        [Required(ErrorMessage = "Reviewer role is required")]
+        public string Role { get; set; } = string.Empty;
     }
 
     public class ConstructionTeamDTO

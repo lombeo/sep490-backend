@@ -91,22 +91,36 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                 Reviewer = new Dictionary<int, bool>()
             };
 
-            // Add reviewers
-            if (model.Reviewers != null && model.Reviewers.Any())
-            {
-                // Initialize reviewers collection if it's null
-                constructionPlan.Reviewers = new List<User>();
+            // Initialize reviewers collection
+            constructionPlan.Reviewers = new List<User>();
 
-                // Add each reviewer to dictionary with default false (not approved)
-                foreach (var reviewerId in model.Reviewers)
-                {
-                    var reviewer = await _context.Users.FirstOrDefaultAsync(u => u.Id == reviewerId && !u.Deleted);
-                    if (reviewer != null)
-                    {
-                        constructionPlan.Reviewers.Add(reviewer);
-                        constructionPlan.Reviewer.Add(reviewerId, false);
-                    }
-                }
+            // Find the first Technical Manager for this project
+            var technicalManager = await _context.ProjectUsers
+                .Include(pu => pu.User)
+                .Where(pu => pu.ProjectId == model.ProjectId 
+                      && !pu.Deleted 
+                      && pu.User.Role == RoleConstValue.TECHNICAL_MANAGER 
+                      && !pu.User.Deleted)
+                .Select(pu => pu.User)
+                .FirstOrDefaultAsync();
+
+            // Find the first Executive Board member
+            var executiveBoard = await _context.Users
+                .Where(u => u.Role == RoleConstValue.EXECUTIVE_BOARD && !u.Deleted)
+                .FirstOrDefaultAsync();
+
+            // Add the Technical Manager as reviewer if found
+            if (technicalManager != null)
+            {
+                constructionPlan.Reviewers.Add(technicalManager);
+                constructionPlan.Reviewer.Add(technicalManager.Id, false);
+            }
+
+            // Add the Executive Board member as reviewer if found
+            if (executiveBoard != null && (technicalManager == null || technicalManager.Id != executiveBoard.Id))
+            {
+                constructionPlan.Reviewers.Add(executiveBoard);
+                constructionPlan.Reviewer.Add(executiveBoard.Id, false);
             }
 
             // Save construction plan
@@ -253,55 +267,67 @@ namespace Sep490_Backend.Services.ConstructionPlanService
             constructionPlan.ProjectId = model.ProjectId;
             constructionPlan.Updater = actionBy;
 
-            // Update reviewers
-            if (model.Reviewers != null)
+            // Note: We maintain existing reviewers during update
+            // If project is changed, we need to verify if the existing reviewers are still appropriate
+            if (constructionPlan.ProjectId != model.ProjectId)
             {
-                // Create a new dictionary for reviewers
-                var newReviewer = new Dictionary<int, bool>();
+                // Project changed - we need to update the Technical Manager reviewer
+                var technicalManager = await _context.ProjectUsers
+                    .Include(pu => pu.User)
+                    .Where(pu => pu.ProjectId == model.ProjectId 
+                          && !pu.Deleted 
+                          && pu.User.Role == RoleConstValue.TECHNICAL_MANAGER 
+                          && !pu.User.Deleted)
+                    .Select(pu => pu.User)
+                    .FirstOrDefaultAsync();
                 
-                // Transfer existing approval statuses
-                if (constructionPlan.Reviewer != null)
+                // Find current Executive Board member among reviewers
+                var existingExecutiveBoardReviewer = constructionPlan.Reviewers
+                    .FirstOrDefault(r => r.Role == RoleConstValue.EXECUTIVE_BOARD);
+
+                // If no Executive Board member, try to find one in the system
+                if (existingExecutiveBoardReviewer == null)
                 {
-                    foreach (var reviewerId in model.Reviewers)
+                    var executiveBoard = await _context.Users
+                        .Where(u => u.Role == RoleConstValue.EXECUTIVE_BOARD && !u.Deleted)
+                        .FirstOrDefaultAsync();
+                        
+                    if (executiveBoard != null)
                     {
-                        if (constructionPlan.Reviewer.ContainsKey(reviewerId))
+                        // Add Executive Board member to reviewers
+                        constructionPlan.Reviewers.Add(executiveBoard);
+                        if (constructionPlan.Reviewer == null)
                         {
-                            newReviewer[reviewerId] = constructionPlan.Reviewer[reviewerId];
+                            constructionPlan.Reviewer = new Dictionary<int, bool>();
                         }
-                        else
+                        constructionPlan.Reviewer[executiveBoard.Id] = false;
+                    }
+                }
+
+                // Replace existing Technical Manager with new one from the project
+                if (technicalManager != null)
+                {
+                    // Remove existing Technical Managers
+                    var existingTechnicalManagers = constructionPlan.Reviewers
+                        .Where(r => r.Role == RoleConstValue.TECHNICAL_MANAGER)
+                        .ToList();
+
+                    foreach (var existingManager in existingTechnicalManagers)
+                    {
+                        constructionPlan.Reviewers.Remove(existingManager);
+                        if (constructionPlan.Reviewer != null && constructionPlan.Reviewer.ContainsKey(existingManager.Id))
                         {
-                            newReviewer[reviewerId] = false;
+                            constructionPlan.Reviewer.Remove(existingManager.Id);
                         }
                     }
-                }
-                else
-                {
-                    // Initialize with all false
-                    foreach (var reviewerId in model.Reviewers)
+
+                    // Add new Technical Manager
+                    constructionPlan.Reviewers.Add(technicalManager);
+                    if (constructionPlan.Reviewer == null)
                     {
-                        newReviewer[reviewerId] = false;
+                        constructionPlan.Reviewer = new Dictionary<int, bool>();
                     }
-                }
-                
-                constructionPlan.Reviewer = newReviewer;
-                
-                // Update the many-to-many relationship
-                if (constructionPlan.Reviewers == null)
-                {
-                    constructionPlan.Reviewers = new List<User>();
-                }
-                else
-                {
-                    constructionPlan.Reviewers.Clear();
-                }
-                
-                foreach (var reviewerId in model.Reviewers)
-                {
-                    var reviewer = await _context.Users.FirstOrDefaultAsync(u => u.Id == reviewerId && !u.Deleted);
-                    if (reviewer != null)
-                    {
-                        constructionPlan.Reviewers.Add(reviewer);
-                    }
+                    constructionPlan.Reviewer[technicalManager.Id] = false;
                 }
             }
 
@@ -718,7 +744,6 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
             {
                 Id = constructionPlan.Id,
                 PlanName = constructionPlan.PlanName,
-                Reviewer = constructionPlan.Reviewer,
                 ProjectId = constructionPlan.ProjectId,
                 ProjectName = constructionPlan.Project?.ProjectName ?? "",
                 CreatedAt = constructionPlan.CreatedAt ?? DateTime.UtcNow,
@@ -745,7 +770,8 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
                         Id = reviewer.Id,
                         Name = reviewer.FullName,
                         Email = reviewer.Email,
-                        IsApproved = isApproved
+                        IsApproved = isApproved,
+                        Role = reviewer.Role
                     });
                 }
             }
@@ -1112,22 +1138,36 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
                 Reviewer = new Dictionary<int, bool>()
             };
 
-            // Add reviewers
-            if (model.ReviewerIds != null && model.ReviewerIds.Any())
-            {
-                // Initialize reviewers collection if it's null
-                constructionPlan.Reviewers = new List<User>();
+            // Initialize reviewers collection
+            constructionPlan.Reviewers = new List<User>();
 
-                // Add each reviewer to dictionary with default false (not approved)
-                foreach (var reviewerId in model.ReviewerIds)
-                {
-                    var reviewer = await _context.Users.FirstOrDefaultAsync(u => u.Id == reviewerId && !u.Deleted);
-                    if (reviewer != null)
-                    {
-                        constructionPlan.Reviewers.Add(reviewer);
-                        constructionPlan.Reviewer.Add(reviewerId, false);
-                    }
-                }
+            // Find the first Technical Manager for this project
+            var technicalManager = await _context.ProjectUsers
+                .Include(pu => pu.User)
+                .Where(pu => pu.ProjectId == model.ProjectId 
+                      && !pu.Deleted 
+                      && pu.User.Role == RoleConstValue.TECHNICAL_MANAGER 
+                      && !pu.User.Deleted)
+                .Select(pu => pu.User)
+                .FirstOrDefaultAsync();
+
+            // Find the first Executive Board member
+            var executiveBoard = await _context.Users
+                .Where(u => u.Role == RoleConstValue.EXECUTIVE_BOARD && !u.Deleted)
+                .FirstOrDefaultAsync();
+
+            // Add the Technical Manager as reviewer if found
+            if (technicalManager != null)
+            {
+                constructionPlan.Reviewers.Add(technicalManager);
+                constructionPlan.Reviewer.Add(technicalManager.Id, false);
+            }
+
+            // Add the Executive Board member as reviewer if found
+            if (executiveBoard != null && (technicalManager == null || technicalManager.Id != executiveBoard.Id))
+            {
+                constructionPlan.Reviewers.Add(executiveBoard);
+                constructionPlan.Reviewer.Add(executiveBoard.Id, false);
             }
 
             // Save construction plan
