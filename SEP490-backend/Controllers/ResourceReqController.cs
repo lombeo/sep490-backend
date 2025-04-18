@@ -60,6 +60,7 @@ namespace Sep490_Backend.Controllers
         /// </summary>
         /// <param name="projectId">Optional filter by project ID</param>
         /// <param name="status">Optional filter by request status</param>
+        /// <param name="requestType">Optional filter by request type</param>
         /// <param name="searchTerm">Optional search by request code or request name</param>
         /// <param name="pageIndex">Page number for pagination (default: 1)</param>
         /// <param name="pageSize">Page size for pagination (default: 10)</param>
@@ -68,6 +69,7 @@ namespace Sep490_Backend.Controllers
         public async Task<ResponseDTO<List<ResourceMobilizationReqs>>> GetResourceMobilizationRequests(
             [FromQuery] int projectId = 0,
             [FromQuery] RequestStatus? status = null,
+            [FromQuery] RequestType? requestType = null,
             [FromQuery] string? searchTerm = null,
             [FromQuery] int pageIndex = 1,
             [FromQuery] int pageSize = 10)
@@ -80,7 +82,7 @@ namespace Sep490_Backend.Controllers
             };
             
             var result = await HandleException(
-                _resourceReqService.ViewResourceMobilizationRequests(projectId, status, searchTerm, query),
+                _resourceReqService.ViewResourceMobilizationRequests(projectId, status, requestType, searchTerm, query),
                 Message.CommonMessage.ACTION_SUCCESS
             );
             

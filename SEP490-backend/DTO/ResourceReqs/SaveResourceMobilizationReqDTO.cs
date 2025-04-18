@@ -20,5 +20,6 @@ namespace Sep490_Backend.DTO.ResourceReqs
         public RequestStatus Status { get; set; }
         public JsonDocument? Attachments { get; set; }
         public DateTime RequestDate { get; set; }
+        public RequestType RequestType { get; set; } = RequestType.SupplyMore;
     }
 } 

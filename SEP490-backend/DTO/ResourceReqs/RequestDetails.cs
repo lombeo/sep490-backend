@@ -10,5 +10,7 @@ namespace Sep490_Backend.DTO.ResourceReqs
         public int ResourceId { get; set; } //Vehicle, User, Material ID
         public ResourceType ResourceType { get; set; }
         public RequestDetailType Type { get; set; }
+        public string? Name { get; set; }
+        public string? Description { get; set; }
     }
 }

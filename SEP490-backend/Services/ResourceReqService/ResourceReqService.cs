@@ -25,7 +25,7 @@ namespace Sep490_Backend.Services.ResourceReqService
         Task<bool> DeleteResourceMobilizationReq(int reqId, int actionBy);
         
         // Updated method signatures to use BaseQuery instead of PagedResponseDTO
-        Task<List<ResourceMobilizationReqs>> ViewResourceMobilizationRequests(int projectId, RequestStatus? status, string? searchTerm, BaseQuery query);
+        Task<List<ResourceMobilizationReqs>> ViewResourceMobilizationRequests(int projectId, RequestStatus? status, RequestType? requestType, string? searchTerm, BaseQuery query);
         Task<ResourceMobilizationReqs> GetResourceMobilizationRequestById(int id);
         Task<ResourceMobilizationReqs> SendResourceMobilizationRequest(int reqId, int actionBy);
         Task<ResourceMobilizationReqs> ApproveResourceMobilizationRequest(int reqId, string comments, int actionBy);
@@ -326,6 +326,12 @@ namespace Sep490_Backend.Services.ResourceReqService
                 errors.Add(new ResponseError { Field = "RequestDate", Message = Message.ResourceRequestMessage.INVALID_REQUEST_DATE });
             }
 
+            // Validate request type
+            if (model.RequestType != RequestType.SupplyMore && model.RequestType != RequestType.AddNew)
+            {
+                errors.Add(new ResponseError { Field = "RequestType", Message = "Invalid request type" });
+            }
+
             // If there are validation errors, throw exception
             if (errors.Any())
             {
@@ -363,6 +369,7 @@ namespace Sep490_Backend.Services.ResourceReqService
                     reqToUpdate.Status = model.Status;
                     reqToUpdate.Attachments = model.Attachments;
                     reqToUpdate.RequestDate = model.RequestDate;
+                    reqToUpdate.RequestType = model.RequestType;
                     
                     // Update audit fields
                     reqToUpdate.UpdatedAt = DateTime.UtcNow;
@@ -395,6 +402,7 @@ namespace Sep490_Backend.Services.ResourceReqService
                         Status = RequestStatus.Draft, // New requests always start as Draft
                         Attachments = model.Attachments,
                         RequestDate = model.RequestDate,
+                        RequestType = model.RequestType,
                         
                         // Set audit fields
                         Creator = actionBy,
@@ -576,11 +584,12 @@ namespace Sep490_Backend.Services.ResourceReqService
         /// </summary>
         /// <param name="projectId">Optional filter by project ID</param>
         /// <param name="status">Optional filter by request status</param>
+        /// <param name="requestType">Optional filter by request type</param>
         /// <param name="searchTerm">Optional search by request code or request name</param>
         /// <param name="query">BaseQuery object containing pagination parameters</param>
         /// <returns>List of resource mobilization requests</returns>
         public async Task<List<ResourceMobilizationReqs>> ViewResourceMobilizationRequests(
-            int projectId, RequestStatus? status, string? searchTerm, BaseQuery query)
+            int projectId, RequestStatus? status, RequestType? requestType, string? searchTerm, BaseQuery query)
         {
             // Check authorization - this method is accessible by both Resource Manager, Technical Department, and Executive Board
             if (!_helperService.IsInRole(query.ActionBy, RoleConstValue.RESOURCE_MANAGER) && 
@@ -592,7 +601,17 @@ namespace Sep490_Backend.Services.ResourceReqService
 
             // Build cache key based on parameters
             string cacheKey;
-            if (projectId > 0 && status.HasValue && !string.IsNullOrEmpty(searchTerm))
+            if (projectId > 0 && status.HasValue && requestType.HasValue && !string.IsNullOrEmpty(searchTerm))
+            {
+                cacheKey = $"{RedisCacheKey.MOBILIZATION_REQS_BY_PROJECT_LIST_CACHE_KEY}:{status.Value}:{requestType.Value}:SEARCH:{searchTerm}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+                cacheKey = string.Format(cacheKey, projectId);
+            }
+            else if (projectId > 0 && status.HasValue && requestType.HasValue)
+            {
+                cacheKey = $"{RedisCacheKey.MOBILIZATION_REQS_BY_PROJECT_LIST_CACHE_KEY}:{status.Value}:{requestType.Value}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+                cacheKey = string.Format(cacheKey, projectId);
+            }
+            else if (projectId > 0 && status.HasValue && !string.IsNullOrEmpty(searchTerm))
             {
                 cacheKey = $"{RedisCacheKey.MOBILIZATION_REQS_BY_PROJECT_LIST_CACHE_KEY}:{status.Value}:SEARCH:{searchTerm}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
                 cacheKey = string.Format(cacheKey, projectId);
@@ -602,29 +621,60 @@ namespace Sep490_Backend.Services.ResourceReqService
                 cacheKey = $"{RedisCacheKey.MOBILIZATION_REQS_BY_PROJECT_LIST_CACHE_KEY}:{status.Value}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
                 cacheKey = string.Format(cacheKey, projectId);
             }
+            else if (projectId > 0 && requestType.HasValue && !string.IsNullOrEmpty(searchTerm))
+            {
+                cacheKey = $"{RedisCacheKey.MOBILIZATION_REQS_BY_PROJECT_LIST_CACHE_KEY}:{requestType.Value}:SEARCH:{searchTerm}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+                cacheKey = string.Format(cacheKey, projectId);
+            }
+            else if (projectId > 0 && requestType.HasValue)
+            {
+                cacheKey = $"{RedisCacheKey.MOBILIZATION_REQS_BY_PROJECT_LIST_CACHE_KEY}:{requestType.Value}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+                cacheKey = string.Format(cacheKey, projectId);
+            }
             else if (projectId > 0 && !string.IsNullOrEmpty(searchTerm))
             {
-                cacheKey = string.Format(RedisCacheKey.MOBILIZATION_REQS_BY_PROJECT_LIST_CACHE_KEY, projectId) + $":SEARCH:{searchTerm}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+                cacheKey = $"{RedisCacheKey.MOBILIZATION_REQS_BY_PROJECT_LIST_CACHE_KEY}:SEARCH:{searchTerm}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+                cacheKey = string.Format(cacheKey, projectId);
+            }
+            else if (status.HasValue && requestType.HasValue && !string.IsNullOrEmpty(searchTerm))
+            {
+                cacheKey = $"{RedisCacheKey.MOBILIZATION_REQS_BY_STATUS_LIST_CACHE_KEY}:{status.Value}:{requestType.Value}:SEARCH:{searchTerm}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+                cacheKey = string.Format(cacheKey, projectId);
+            }
+            else if (status.HasValue && requestType.HasValue)
+            {
+                cacheKey = $"{RedisCacheKey.MOBILIZATION_REQS_BY_STATUS_LIST_CACHE_KEY}:{status.Value}:{requestType.Value}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+                cacheKey = string.Format(cacheKey, projectId);
             }
             else if (status.HasValue && !string.IsNullOrEmpty(searchTerm))
             {
-                cacheKey = string.Format(RedisCacheKey.MOBILIZATION_REQS_BY_STATUS_LIST_CACHE_KEY, status.Value) + $":SEARCH:{searchTerm}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+                cacheKey = $"{RedisCacheKey.MOBILIZATION_REQS_BY_STATUS_LIST_CACHE_KEY}:{status.Value}:SEARCH:{searchTerm}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+                cacheKey = string.Format(cacheKey, projectId);
             }
             else if (projectId > 0)
             {
-                cacheKey = string.Format(RedisCacheKey.MOBILIZATION_REQS_BY_PROJECT_LIST_CACHE_KEY, projectId) + $":PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+                cacheKey = $"{RedisCacheKey.MOBILIZATION_REQS_BY_PROJECT_LIST_CACHE_KEY}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+                cacheKey = string.Format(cacheKey, projectId);
             }
-            else if (status.HasValue)
+            else if (requestType.HasValue && !string.IsNullOrEmpty(searchTerm))
             {
-                cacheKey = string.Format(RedisCacheKey.MOBILIZATION_REQS_BY_STATUS_LIST_CACHE_KEY, status.Value) + $":PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+                cacheKey = $"{RedisCacheKey.MOBILIZATION_REQS_BY_PROJECT_LIST_CACHE_KEY}:SEARCH:{searchTerm}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+                cacheKey = string.Format(cacheKey, projectId);
+            }
+            else if (requestType.HasValue)
+            {
+                cacheKey = $"{RedisCacheKey.MOBILIZATION_REQS_BY_PROJECT_LIST_CACHE_KEY}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+                cacheKey = string.Format(cacheKey, projectId);
             }
             else if (!string.IsNullOrEmpty(searchTerm))
             {
                 cacheKey = $"{RedisCacheKey.MOBILIZATION_REQS_LIST_CACHE_KEY}:SEARCH:{searchTerm}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+                cacheKey = string.Format(cacheKey, projectId);
             }
             else
             {
                 cacheKey = $"{RedisCacheKey.MOBILIZATION_REQS_LIST_CACHE_KEY}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+                cacheKey = string.Format(cacheKey, projectId);
             }
 
             // Try to get from cache first
@@ -649,6 +699,11 @@ namespace Sep490_Backend.Services.ResourceReqService
             if (status.HasValue)
             {
                 dbQuery = dbQuery.Where(r => r.Status == status.Value);
+            }
+
+            if (requestType.HasValue)
+            {
+                dbQuery = dbQuery.Where(r => r.RequestType == requestType.Value);
             }
 
             if (!string.IsNullOrEmpty(searchTerm))
@@ -826,6 +881,22 @@ namespace Sep490_Backend.Services.ResourceReqService
                 else if (isExecutiveBoard && request.Status == RequestStatus.ManagerApproved)
                 {
                     request.Status = RequestStatus.BodApproved;
+                    
+                    // Process resource allocation when BOD approves
+                    if (request.Status == RequestStatus.BodApproved)
+                    {
+                        // Process resources based on RequestType
+                        if (request.RequestType == RequestType.AddNew)
+                        {
+                            // Add new resources to appropriate tables for each resource type
+                            await AddNewResources(request, actionBy);
+                        }
+                        else if (request.RequestType == RequestType.SupplyMore)
+                        {
+                            // Add to or create inventory records
+                            await UpdateInventoryResources(request, actionBy);
+                        }
+                    }
                 }
 
                 // Store approval comments in the description or as an additional field
@@ -925,6 +996,177 @@ namespace Sep490_Backend.Services.ResourceReqService
                 await transaction.RollbackAsync();
                 throw;
             }
+        }
+
+        /// <summary>
+        /// Adds new resources based on resource mobilization request details
+        /// </summary>
+        /// <param name="request">The approved resource mobilization request</param>
+        /// <param name="actionBy">ID of the user performing the action</param>
+        private async Task AddNewResources(ResourceMobilizationReqs request, int actionBy)
+        {
+            foreach (var detail in request.ResourceMobilizationDetails)
+            {
+                // Different handling based on resource type
+                switch (detail.ResourceType)
+                {
+                    case ResourceType.MATERIAL:
+                        // Logic to add new material would go here
+                        // First check if it already exists in inventory
+                        var existingMaterial = await _context.ResourceInventory
+                            .FirstOrDefaultAsync(r => 
+                                r.ResourceType == ResourceType.MATERIAL && 
+                                r.ResourceId == detail.ResourceId &&
+                                !r.Deleted);
+                        
+                        if (existingMaterial == null)
+                        {
+                            // Create new inventory resource
+                            var newMaterialResource = new ResourceInventory
+                            {
+                                Name = detail.Name ?? "New Material Resource",
+                                Description = detail.Description ?? "",
+                                ResourceId = detail.ResourceId,
+                                ProjectId = request.ProjectId,
+                                ResourceType = ResourceType.MATERIAL,
+                                Quantity = detail.Quantity,
+                                Unit = detail.Unit ?? "Unit",
+                                Status = true,
+                                Creator = actionBy,
+                                Updater = actionBy,
+                                CreatedAt = DateTime.UtcNow,
+                                UpdatedAt = DateTime.UtcNow
+                            };
+                            
+                            await _context.ResourceInventory.AddAsync(newMaterialResource);
+                        }
+                        break;
+                        
+                    case ResourceType.MACHINE:
+                        // Logic to add new machine would go here
+                        var existingMachine = await _context.ResourceInventory
+                            .FirstOrDefaultAsync(r => 
+                                r.ResourceType == ResourceType.MACHINE && 
+                                r.ResourceId == detail.ResourceId &&
+                                !r.Deleted);
+                        
+                        if (existingMachine == null)
+                        {
+                            // Create new inventory resource
+                            var newMachineResource = new ResourceInventory
+                            {
+                                Name = detail.Name ?? "New Machine Resource",
+                                Description = detail.Description ?? "",
+                                ResourceId = detail.ResourceId,
+                                ProjectId = request.ProjectId,
+                                ResourceType = ResourceType.MACHINE,
+                                Quantity = detail.Quantity,
+                                Unit = detail.Unit ?? "Unit",
+                                Status = true,
+                                Creator = actionBy,
+                                Updater = actionBy,
+                                CreatedAt = DateTime.UtcNow,
+                                UpdatedAt = DateTime.UtcNow
+                            };
+                            
+                            await _context.ResourceInventory.AddAsync(newMachineResource);
+                        }
+                        break;
+                        
+                    case ResourceType.HUMAN:
+                        // Similar logic for human resources
+                        var existingHuman = await _context.ResourceInventory
+                            .FirstOrDefaultAsync(r => 
+                                r.ResourceType == ResourceType.HUMAN && 
+                                r.ResourceId == detail.ResourceId &&
+                                !r.Deleted);
+                        
+                        if (existingHuman == null)
+                        {
+                            // Create new inventory resource
+                            var newHumanResource = new ResourceInventory
+                            {
+                                Name = detail.Name ?? "New Human Resource",
+                                Description = detail.Description ?? "",
+                                ResourceId = detail.ResourceId,
+                                ProjectId = request.ProjectId,
+                                ResourceType = ResourceType.HUMAN,
+                                Quantity = detail.Quantity,
+                                Unit = detail.Unit ?? "Person",
+                                Status = true,
+                                Creator = actionBy,
+                                Updater = actionBy,
+                                CreatedAt = DateTime.UtcNow,
+                                UpdatedAt = DateTime.UtcNow
+                            };
+                            
+                            await _context.ResourceInventory.AddAsync(newHumanResource);
+                        }
+                        break;
+                }
+            }
+            
+            // Save all changes
+            await _context.SaveChangesAsync();
+            
+            // Invalidate inventory cache
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
+        }
+
+        /// <summary>
+        /// Updates inventory resources based on resource mobilization request details
+        /// </summary>
+        /// <param name="request">The approved resource mobilization request</param>
+        /// <param name="actionBy">ID of the user performing the action</param>
+        private async Task UpdateInventoryResources(ResourceMobilizationReqs request, int actionBy)
+        {
+            foreach (var detail in request.ResourceMobilizationDetails)
+            {
+                // Look for existing resource in inventory
+                var existingResource = await _context.ResourceInventory
+                    .FirstOrDefaultAsync(r => 
+                        r.ResourceType == detail.ResourceType && 
+                        r.ResourceId == detail.ResourceId && 
+                        r.ProjectId == request.ProjectId &&
+                        !r.Deleted);
+                
+                if (existingResource != null)
+                {
+                    // Update existing resource quantity
+                    existingResource.Quantity += detail.Quantity;
+                    existingResource.UpdatedAt = DateTime.UtcNow;
+                    existingResource.Updater = actionBy;
+                    
+                    _context.ResourceInventory.Update(existingResource);
+                }
+                else
+                {
+                    // Create new inventory record
+                    var newResource = new ResourceInventory
+                    {
+                        Name = detail.Name ?? $"Resource {detail.ResourceId}",
+                        Description = detail.Description ?? "",
+                        ResourceId = detail.ResourceId,
+                        ProjectId = request.ProjectId,
+                        ResourceType = detail.ResourceType,
+                        Quantity = detail.Quantity,
+                        Unit = detail.Unit ?? "Unit",
+                        Status = true,
+                        Creator = actionBy,
+                        Updater = actionBy,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+                    
+                    await _context.ResourceInventory.AddAsync(newResource);
+                }
+            }
+            
+            // Save all changes
+            await _context.SaveChangesAsync();
+            
+            // Invalidate inventory cache
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
         }
 
         #endregion
