@@ -15,6 +15,7 @@
             public const string PERMISSION_REQUIRED = "E-CM-007"; //You do not have permission to perform this action!
             public const string ACTION_FAIL = "E-CM-008"; //Internal server error!
             public const string VALIDATE_ERROR = "E-CM-009"; //One or more validation errors occurred.
+            public const string NOT_ALLOWED_PROJECT = "E-CM-010"; //You are not allowed to access this project.
         }
 
         public static class AuthenMessage

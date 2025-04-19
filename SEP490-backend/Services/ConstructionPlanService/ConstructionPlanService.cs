@@ -72,6 +72,14 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                 throw new KeyNotFoundException(Message.ConstructionPlanMessage.INVALID_PROJECT);
             }
 
+            // Verify if user is part of the project
+            var isUserInProject = await _context.ProjectUsers
+                .AnyAsync(pu => pu.ProjectId == model.ProjectId && pu.UserId == actionBy && !pu.Deleted);
+            if (!isUserInProject)
+            {
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED_PROJECT);
+            }
+
             // Check if plan name already exists for this project
             var existingPlan = await _context.ConstructionPlans
                 .FirstOrDefaultAsync(cp => cp.PlanName == model.PlanName 
@@ -88,13 +96,13 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                 PlanName = model.PlanName,
                 ProjectId = model.ProjectId,
                 Creator = actionBy,
-                Reviewer = new Dictionary<int, bool>()
+                Reviewer = new Dictionary<int, bool?>() // Changed to nullable bool to support null values
             };
 
             // Initialize reviewers collection
             constructionPlan.Reviewers = new List<User>();
 
-            // Find the first Technical Manager for this project
+            // Find the Technical Manager for this project
             var technicalManager = await _context.ProjectUsers
                 .Include(pu => pu.User)
                 .Where(pu => pu.ProjectId == model.ProjectId 
@@ -104,7 +112,17 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                 .Select(pu => pu.User)
                 .FirstOrDefaultAsync();
 
-            // Find the first Executive Board member
+            // Find the Resource Manager for this project
+            var resourceManager = await _context.ProjectUsers
+                .Include(pu => pu.User)
+                .Where(pu => pu.ProjectId == model.ProjectId 
+                      && !pu.Deleted 
+                      && pu.User.Role == RoleConstValue.RESOURCE_MANAGER 
+                      && !pu.User.Deleted)
+                .Select(pu => pu.User)
+                .FirstOrDefaultAsync();
+
+            // Find the Executive Board member
             var executiveBoard = await _context.Users
                 .Where(u => u.Role == RoleConstValue.EXECUTIVE_BOARD && !u.Deleted)
                 .FirstOrDefaultAsync();
@@ -113,14 +131,23 @@ namespace Sep490_Backend.Services.ConstructionPlanService
             if (technicalManager != null)
             {
                 constructionPlan.Reviewers.Add(technicalManager);
-                constructionPlan.Reviewer.Add(technicalManager.Id, false);
+                constructionPlan.Reviewer.Add(technicalManager.Id, null); // Initialize as null
+            }
+            
+            // Add the Resource Manager as reviewer if found
+            if (resourceManager != null && (technicalManager == null || technicalManager.Id != resourceManager.Id))
+            {
+                constructionPlan.Reviewers.Add(resourceManager);
+                constructionPlan.Reviewer.Add(resourceManager.Id, null); // Initialize as null
             }
 
             // Add the Executive Board member as reviewer if found
-            if (executiveBoard != null && (technicalManager == null || technicalManager.Id != executiveBoard.Id))
+            if (executiveBoard != null && 
+                (technicalManager == null || technicalManager.Id != executiveBoard.Id) &&
+                (resourceManager == null || resourceManager.Id != executiveBoard.Id))
             {
                 constructionPlan.Reviewers.Add(executiveBoard);
-                constructionPlan.Reviewer.Add(executiveBoard.Id, false);
+                constructionPlan.Reviewer.Add(executiveBoard.Id, null); // Initialize as null
             }
 
             // Save construction plan
@@ -214,8 +241,8 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                 await _context.SaveChangesAsync();
             }
 
-            // Clear only the main cache 
-            await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY);
+            // Clear caches - using improved cache invalidation
+            await InvalidateConstructionPlanCaches(constructionPlan.Id, constructionPlan.ProjectId);
             
             // Return the newly created plan
             return await GetById(constructionPlan.Id, actionBy);
@@ -224,7 +251,11 @@ namespace Sep490_Backend.Services.ConstructionPlanService
         public async Task<ConstructionPlanDTO> Update(SaveConstructionPlanDTO model, int actionBy)
         {
             // Check if user is authorized to perform this action
-            if (!_helperService.IsInRole(actionBy, RoleConstValue.CONSTRUCTION_MANAGER))
+            if (!_helperService.IsInRole(actionBy, new List<string> {
+                RoleConstValue.CONSTRUCTION_MANAGER,
+                RoleConstValue.TECHNICAL_MANAGER,
+                RoleConstValue.RESOURCE_MANAGER
+            }))
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
@@ -234,9 +265,13 @@ namespace Sep490_Backend.Services.ConstructionPlanService
             {
                 throw new ArgumentException(Message.CommonMessage.MISSING_PARAM);
             }
+            
+            // Start with a clean tracking context to avoid issues
+            _context.ChangeTracker.Clear();
 
+            // Handle ConstructionPlan entity without reviewers first
             var constructionPlan = await _context.ConstructionPlans
-                .Include(cp => cp.Reviewers)
+                .AsNoTracking() // Important: Use AsNoTracking to avoid tracking issues
                 .FirstOrDefaultAsync(cp => cp.Id == model.Id.Value && !cp.Deleted);
 
             if (constructionPlan == null)
@@ -251,6 +286,17 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                 throw new KeyNotFoundException(Message.ConstructionPlanMessage.INVALID_PROJECT);
             }
 
+            // Verify if user is part of the project (except for Executive Board who can access all)
+            if (!_helperService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD))
+            {
+                var isUserInProject = await _context.ProjectUsers
+                    .AnyAsync(pu => pu.ProjectId == model.ProjectId && pu.UserId == actionBy && !pu.Deleted);
+                if (!isUserInProject)
+                {
+                    throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED_PROJECT);
+                }
+            }
+
             // Check if plan name already exists for this project (excluding this plan)
             var existingPlan = await _context.ConstructionPlans
                 .FirstOrDefaultAsync(cp => cp.PlanName == model.PlanName 
@@ -262,80 +308,168 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                 throw new InvalidOperationException(Message.ConstructionPlanMessage.PLAN_NAME_EXIST);
             }
 
-            // Update construction plan
+            // Update construction plan basic properties
             constructionPlan.PlanName = model.PlanName;
             constructionPlan.ProjectId = model.ProjectId;
             constructionPlan.Updater = actionBy;
 
-            // Note: We maintain existing reviewers during update
-            // If project is changed, we need to verify if the existing reviewers are still appropriate
-            if (constructionPlan.ProjectId != model.ProjectId)
+            // Initialize or preserve the Reviewer dictionary
+            if (constructionPlan.Reviewer == null)
             {
-                // Project changed - we need to update the Technical Manager reviewer
-                var technicalManager = await _context.ProjectUsers
-                    .Include(pu => pu.User)
-                    .Where(pu => pu.ProjectId == model.ProjectId 
-                          && !pu.Deleted 
-                          && pu.User.Role == RoleConstValue.TECHNICAL_MANAGER 
-                          && !pu.User.Deleted)
-                    .Select(pu => pu.User)
-                    .FirstOrDefaultAsync();
-                
-                // Find current Executive Board member among reviewers
-                var existingExecutiveBoardReviewer = constructionPlan.Reviewers
-                    .FirstOrDefault(r => r.Role == RoleConstValue.EXECUTIVE_BOARD);
-
-                // If no Executive Board member, try to find one in the system
-                if (existingExecutiveBoardReviewer == null)
-                {
-                    var executiveBoard = await _context.Users
-                        .Where(u => u.Role == RoleConstValue.EXECUTIVE_BOARD && !u.Deleted)
-                        .FirstOrDefaultAsync();
-                        
-                    if (executiveBoard != null)
-                    {
-                        // Add Executive Board member to reviewers
-                        constructionPlan.Reviewers.Add(executiveBoard);
-                        if (constructionPlan.Reviewer == null)
-                        {
-                            constructionPlan.Reviewer = new Dictionary<int, bool>();
-                        }
-                        constructionPlan.Reviewer[executiveBoard.Id] = false;
-                    }
-                }
-
-                // Replace existing Technical Manager with new one from the project
-                if (technicalManager != null)
-                {
-                    // Remove existing Technical Managers
-                    var existingTechnicalManagers = constructionPlan.Reviewers
-                        .Where(r => r.Role == RoleConstValue.TECHNICAL_MANAGER)
-                        .ToList();
-
-                    foreach (var existingManager in existingTechnicalManagers)
-                    {
-                        constructionPlan.Reviewers.Remove(existingManager);
-                        if (constructionPlan.Reviewer != null && constructionPlan.Reviewer.ContainsKey(existingManager.Id))
-                        {
-                            constructionPlan.Reviewer.Remove(existingManager.Id);
-                        }
-                    }
-
-                    // Add new Technical Manager
-                    constructionPlan.Reviewers.Add(technicalManager);
-                    if (constructionPlan.Reviewer == null)
-                    {
-                        constructionPlan.Reviewer = new Dictionary<int, bool>();
-                    }
-                    constructionPlan.Reviewer[technicalManager.Id] = false;
-                }
+                constructionPlan.Reviewer = new Dictionary<int, bool?>();
             }
 
-            // Update the entity
-            _context.ConstructionPlans.Update(constructionPlan);
-            await _context.SaveChangesAsync();
+            try 
+            {
+                // Start a transaction for atomic operations
+                using var transaction = await _context.Database.BeginTransactionAsync();
+                
+                try
+                {
+                    // Step 1: Update the main entity first without touching relationships
+                    _context.ConstructionPlans.Update(constructionPlan);
+                    await _context.SaveChangesAsync();
+                    
+                    // Clear tracking again to ensure clean state
+                    _context.ChangeTracker.Clear();
+                    
+                    // Get current reviewers for the plan
+                    List<int> currentReviewerIds = new List<int>();
+                    List<User> newReviewers = new List<User>();
+                    
+                    // Step 2: Handle reviewers if project changed
+                    if (constructionPlan.ProjectId != model.ProjectId)
+                    {
+                        // Get the current reviewer IDs using direct SQL to avoid tracking issues
+                        using (var conn = new NpgsqlConnection(_context.Database.GetConnectionString()))
+                        {
+                            await conn.OpenAsync();
+                            using var cmd = new NpgsqlCommand(
+                                @"SELECT ""ReviewerId"" FROM ""ConstructionPlanReviewers"" 
+                                  WHERE ""ReviewedPlanId"" = @planId", conn);
+                            cmd.Parameters.AddWithValue("planId", constructionPlan.Id);
+                            
+                            using var reader = await cmd.ExecuteReaderAsync();
+                            while (await reader.ReadAsync())
+                            {
+                                currentReviewerIds.Add(reader.GetInt32(0));
+                            }
+                        }
+                        
+                        // Find the Technical Manager for the new project
+                        var technicalManager = await _context.ProjectUsers
+                            .Include(pu => pu.User)
+                            .Where(pu => pu.ProjectId == model.ProjectId 
+                                  && !pu.Deleted 
+                                  && pu.User.Role == RoleConstValue.TECHNICAL_MANAGER 
+                                  && !pu.User.Deleted)
+                            .Select(pu => pu.User)
+                            .FirstOrDefaultAsync();
+                        
+                        // Find the Resource Manager for the new project
+                        var resourceManager = await _context.ProjectUsers
+                            .Include(pu => pu.User)
+                            .Where(pu => pu.ProjectId == model.ProjectId 
+                                  && !pu.Deleted 
+                                  && pu.User.Role == RoleConstValue.RESOURCE_MANAGER 
+                                  && !pu.User.Deleted)
+                            .Select(pu => pu.User)
+                            .FirstOrDefaultAsync();
+                        
+                        // Find Executive Board member (either existing or new)
+                        var executiveBoard = await _context.Users
+                            .Where(u => u.Role == RoleConstValue.EXECUTIVE_BOARD && !u.Deleted)
+                            .FirstOrDefaultAsync();
+                        
+                        // Build new reviewer list based on role
+                        if (technicalManager != null && !currentReviewerIds.Contains(technicalManager.Id))
+                        {
+                            newReviewers.Add(technicalManager);
+                            constructionPlan.Reviewer[technicalManager.Id] = null;
+                        }
+                        
+                        if (resourceManager != null && !currentReviewerIds.Contains(resourceManager.Id))
+                        {
+                            newReviewers.Add(resourceManager);
+                            constructionPlan.Reviewer[resourceManager.Id] = null;
+                        }
+                        
+                        if (executiveBoard != null && !currentReviewerIds.Contains(executiveBoard.Id))
+                        {
+                            newReviewers.Add(executiveBoard);
+                            constructionPlan.Reviewer[executiveBoard.Id] = null;
+                        }
+                        
+                        // Step 3: Update the ConstructionPlanReviewers table directly with SQL
+                        // First, delete reviewers with specific roles (Technical Manager, Resource Manager)
+                        using (var conn = new NpgsqlConnection(_context.Database.GetConnectionString()))
+                        {
+                            await conn.OpenAsync();
+                            
+                            // Delete existing Technical and Resource managers
+                            using (var cmd = new NpgsqlCommand(
+                                @"DELETE FROM ""ConstructionPlanReviewers"" 
+                                  WHERE ""ReviewedPlanId"" = @planId AND ""ReviewerId"" IN (
+                                      SELECT ""Id"" FROM ""Users"" 
+                                      WHERE ""Role"" IN ('TECHNICAL_MANAGER', 'RESOURCE_MANAGER')
+                                  )", conn))
+                            {
+                                cmd.Parameters.AddWithValue("planId", constructionPlan.Id);
+                                await cmd.ExecuteNonQueryAsync();
+                            }
+                            
+                            // Add new reviewers
+                            foreach (var reviewer in newReviewers)
+                            {
+                                using (var insertCmd = new NpgsqlCommand(
+                                    @"INSERT INTO ""ConstructionPlanReviewers"" (""ReviewedPlanId"", ""ReviewerId"")
+                                      VALUES (@planId, @reviewerId)
+                                      ON CONFLICT (""ReviewedPlanId"", ""ReviewerId"") DO NOTHING", conn))
+                                {
+                                    insertCmd.Parameters.AddWithValue("planId", constructionPlan.Id);
+                                    insertCmd.Parameters.AddWithValue("reviewerId", reviewer.Id);
+                                    await insertCmd.ExecuteNonQueryAsync();
+                                }
+                            }
+                        }
+                        
+                        // Step 4: Update Reviewer dictionary field in ConstructionPlans
+                        using (var conn = new NpgsqlConnection(_context.Database.GetConnectionString()))
+                        {
+                            await conn.OpenAsync();
+                            using (var cmd = new NpgsqlCommand(
+                                @"UPDATE ""ConstructionPlans"" 
+                                  SET ""Reviewer"" = @reviewer
+                                  WHERE ""Id"" = @planId", conn))
+                            {
+                                cmd.Parameters.AddWithValue("planId", constructionPlan.Id);
+                                cmd.Parameters.AddWithValue("reviewer", 
+                                    Newtonsoft.Json.JsonConvert.SerializeObject(constructionPlan.Reviewer));
+                                await cmd.ExecuteNonQueryAsync();
+                            }
+                        }
+                    }
+                    
+                    // Commit transaction
+                    await transaction.CommitAsync();
+                }
+                catch (Exception ex)
+                {
+                    // Rollback if any errors occur
+                    await transaction.RollbackAsync();
+                    throw new DbUpdateException($"Failed to update ConstructionPlan: {ex.Message}", ex);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log the exception
+                System.Diagnostics.Debug.WriteLine($"Error updating ConstructionPlan: {ex.Message}");
+                throw;
+            }
 
-            // Update plan items if provided
+            // Update plan items if provided, with clean tracking context
+            _context.ChangeTracker.Clear();
+            
             if (model.PlanItems != null && model.PlanItems.Any())
             {
                 // Generate prefix for work codes based on project
@@ -438,8 +572,8 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                 await _context.SaveChangesAsync();
             }
 
-            // Clear only the main cache
-            await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY);
+            // Clear caches - using improved cache invalidation
+            await InvalidateConstructionPlanCaches(constructionPlan.Id, constructionPlan.ProjectId);
             
             // Return the updated plan
             return await GetById(constructionPlan.Id, actionBy);
@@ -481,6 +615,10 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                 _context.ConstructPlanItemDetails.Update(detailToRemove);
             }
             
+            // Save changes for deletions first and clear the tracker
+            await _context.SaveChangesAsync();
+            _context.ChangeTracker.Clear();
+            
             // Process each detail in the model
             int detailCounter = 1;
             foreach (var detailDto in details)
@@ -493,32 +631,43 @@ namespace Sep490_Backend.Services.ConstructionPlanService
 
                 if (detailDto.Id.HasValue && existingDetailIds.Contains(detailDto.Id.Value))
                 {
-                    // Update existing detail
-                    var detail = existingDetails.First(ed => ed.Id == detailDto.Id.Value);
+                    // Update existing detail - first clear tracker to avoid conflicts
+                    _context.ChangeTracker.Clear();
                     
-                    // Update properties
-                    detail.WorkCode = detailDto.WorkCode;
-                    detail.ResourceType = detailDto.ResourceType;
-                    detail.Quantity = detailDto.Quantity;
-                    detail.Unit = detailDto.Unit;
-                    detail.UnitPrice = detailDto.UnitPrice;
-                    detail.Total = detailDto.Quantity * detailDto.UnitPrice;
-                    detail.ResourceId = detailDto.ResourceId;
-                    detail.Updater = actionBy;
+                    // Fetch the entity fresh from the database
+                    var detail = await _context.ConstructPlanItemDetails.FindAsync(detailDto.Id.Value);
                     
-                    _context.ConstructPlanItemDetails.Update(detail);
-                    
-                    // Save to ensure the detail exists before updating resources
-                    await _context.SaveChangesAsync();
-                    
-                    // Update resources based on type if ResourceId is provided
-                    if (detailDto.ResourceId.HasValue)
+                    if (detail != null)
                     {
-                        await SetResourceDirectly(detail.Id, detailDto.ResourceType, detailDto.ResourceId.Value);
+                        // Update properties
+                        detail.WorkCode = detailDto.WorkCode;
+                        detail.ResourceType = detailDto.ResourceType;
+                        detail.Quantity = detailDto.Quantity;
+                        detail.Unit = detailDto.Unit;
+                        detail.UnitPrice = detailDto.UnitPrice;
+                        detail.Total = detailDto.Quantity * detailDto.UnitPrice;
+                        
+                        // Important: Set ResourceId to null first to avoid FK constraint issues
+                        detail.ResourceId = null;
+                        detail.Updater = actionBy;
+                        
+                        _context.Update(detail);
+                        
+                        // Save to ensure the detail exists before updating resources
+                        await _context.SaveChangesAsync();
+                        
+                        // Update resources based on type if ResourceId is provided
+                        if (detailDto.ResourceId.HasValue)
+                        {
+                            await SetResourceDirectly(detail.Id, detailDto.ResourceType, detailDto.ResourceId.Value);
+                        }
                     }
                 }
                 else
                 {
+                    // Clear tracking before creating a new entity
+                    _context.ChangeTracker.Clear();
+                    
                     // Create new detail
                     var detail = new ConstructPlanItemDetail
                     {
@@ -539,21 +688,19 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                     // Save to ensure the detail exists before adding resources
                     await _context.SaveChangesAsync();
                     
-                    // Step 1: Only set fields that don't trigger FK constraints
-                    detail.ResourceType = detailDto.ResourceType;
-                    detail.ResourceId = null; // Explicitly set to null to avoid FK issues
+                    // Clear tracker again before handling resources to avoid conflicts
+                    _context.ChangeTracker.Clear();
                     
-                    // Step 2: Save without any resource references
-                    _context.Update(detail);
-                    await _context.SaveChangesAsync();
-                    
-                    // Step 3: If a resource ID is provided, handle resource association via direct SQL
+                    // If a resource ID is provided, handle resource association
                     if (detailDto.ResourceId.HasValue)
                     {
                         await SetResourceDirectly(detail.Id, detailDto.ResourceType, detailDto.ResourceId.Value);
                     }
                 }
             }
+            
+            // Final clear of tracker to avoid future issues
+            _context.ChangeTracker.Clear();
         }
 
 /**
@@ -562,11 +709,11 @@ namespace Sep490_Backend.Services.ConstructionPlanService
  */
 private async Task SetResourceDirectly(int detailId, ResourceType resourceType, int resourceId)
 {
-    // First verify the resource exists in the proper table
-    bool resourceExists = false;
-    
     try 
     {
+        // First verify the resource exists in the proper table
+        bool resourceExists = false;
+        
         switch (resourceType)
         {
             case ResourceType.HUMAN:
@@ -595,93 +742,74 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
             return;
         }
 
-        // Detach all entities from EF tracking to start fresh
+        // Always clear the tracker before operating on potentially tracked entities
         _context.ChangeTracker.Clear();
         
-        // Find the detail and modify it in a completely disconnected way
-        var detail = await _context.ConstructPlanItemDetails.FindAsync(detailId);
-        if (detail == null)
+        // Use a SQL update approach instead of EF Core tracking to avoid conflicts
+        try
         {
-            return; // Detail not found, nothing to do
-        }
-
-        // Always store resource metadata in Unit field as a backup
-        detail.Unit = $"Type={resourceType},Id={resourceId}|{detail.Unit}";
-
-        // Set ResourceType normally
-        detail.ResourceType = resourceType;
-        
-        // Handle different resource types properly using different approaches
-        if (resourceType == ResourceType.MATERIAL)
-        {
-            // For materials, directly set the ResourceId and relationship
-            detail.ResourceId = resourceId;
+            // Get database connection string from context
+            var connection = _context.Database.GetConnectionString();
             
-            // Update using disconnected entity approach
-            _context.Update(detail);
-            await _context.SaveChangesAsync();
-            
-            try {
-                // Explicitly create relationship with Material
-                var material = await _context.Materials.FindAsync(resourceId);
-                if (material != null)
-                {
-                    // Ensure material has the collection initialized
-                    if (material.ConstructPlanItemDetails == null)
-                    {
-                        material.ConstructPlanItemDetails = new List<ConstructPlanItemDetail>();
-                    }
-                    
-                    // Add reference if not already there
-                    if (!material.ConstructPlanItemDetails.Any(d => d.Id == detailId))
-                    {
-                        material.ConstructPlanItemDetails.Add(detail);
-                        _context.Update(material);
-                        await _context.SaveChangesAsync();
-                    }
-                }
-            }
-            catch (Exception ex)
+            using (var conn = new NpgsqlConnection(connection))
             {
-                // Log the error but continue since we already set ResourceId
-                System.Diagnostics.Debug.WriteLine($"Error creating Material relationship: {ex.Message}");
-            }
-        }
-        else
-        {
-            // For other resource types, use the original approach
-            // Crucial step: Reset ResourceId to null first to detach from any existing FKs
-            detail.ResourceId = null;
-            
-            // Update using disconnected entity approach
-            _context.Update(detail);
-            await _context.SaveChangesAsync();
-            
-            // Now try to set the ResourceId in a separate step
-            try
-            {
-                // Refresh context to ensure clean state
-                _context.ChangeTracker.Clear();
+                await conn.OpenAsync();
                 
-                // Find the entity again
-                var detailForUpdate = await _context.ConstructPlanItemDetails.FindAsync(detailId);
-                if (detailForUpdate != null)
+                // Create a simple update command that doesn't rely on EF Core
+                string updateSql = @"
+                    UPDATE ""ConstructPlanItemDetails"" 
+                    SET ""ResourceType"" = @ResourceType, 
+                        ""ResourceId"" = @ResourceId,
+                        ""UpdatedAt"" = @UpdatedAt
+                    WHERE ""Id"" = @DetailId AND ""Deleted"" = false";
+                
+                using (var cmd = new NpgsqlCommand(updateSql, conn))
                 {
-                    // CRITICAL: Use direct update approach with minimal tracking
-                    detailForUpdate.ResourceId = resourceId;
-                    _context.Entry(detailForUpdate).Property("ResourceId").IsModified = true;
+                    cmd.Parameters.AddWithValue("ResourceType", (int)resourceType);
+                    cmd.Parameters.AddWithValue("ResourceId", resourceId);
+                    cmd.Parameters.AddWithValue("UpdatedAt", DateTime.UtcNow);
+                    cmd.Parameters.AddWithValue("DetailId", detailId);
                     
-                    // Save only this change
-                    await _context.SaveChangesAsync();
-                    
-                    // Immediately detach to avoid future issues
-                    _context.Entry(detailForUpdate).State = EntityState.Detached;
+                    await cmd.ExecuteNonQueryAsync();
                 }
             }
-            catch (Exception ex)
+        }
+        catch (Exception ex)
+        {
+            // Log error but continue with the EF approach as fallback
+            System.Diagnostics.Debug.WriteLine($"SQL update approach failed: {ex.Message}");
+            
+            // Fallback to EF Core approach
+            _context.ChangeTracker.Clear();
+            
+            var detail = await _context.ConstructPlanItemDetails
+                .AsNoTracking()
+                .FirstOrDefaultAsync(d => d.Id == detailId && !d.Deleted);
+                
+            if (detail != null)
             {
-                // Log error but continue - we still have the data in Unit field
-                System.Diagnostics.Debug.WriteLine($"Failed to set ResourceId: {ex.Message}");
+                // Create a new instance to avoid tracking conflicts
+                var detailForUpdate = new ConstructPlanItemDetail
+                {
+                    Id = detail.Id,
+                    PlanItemId = detail.PlanItemId,
+                    WorkCode = detail.WorkCode,
+                    ResourceType = resourceType,
+                    ResourceId = resourceId,
+                    Quantity = detail.Quantity,
+                    Unit = detail.Unit,
+                    UnitPrice = detail.UnitPrice,
+                    Total = detail.Total,
+                    Creator = detail.Creator,
+                    CreatedAt = detail.CreatedAt,
+                    Updater = detail.Updater,
+                    UpdatedAt = DateTime.UtcNow,
+                    Deleted = false
+                };
+                
+                _context.ConstructPlanItemDetails.Update(detailForUpdate);
+                await _context.SaveChangesAsync();
+                _context.Entry(detailForUpdate).State = EntityState.Detached;
             }
         }
     }
@@ -713,7 +841,7 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
 
         public async Task<ConstructionPlanDTO> GetById(int id, int actionBy)
         {
-            // Check if user is authorized to perform this action
+            // Check if user is authorized to view construction plans
             if (!_helperService.IsInRole(actionBy, new List<string> 
             { 
                 RoleConstValue.CONSTRUCTION_MANAGER, 
@@ -736,6 +864,17 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
                 throw new KeyNotFoundException(Message.ConstructionPlanMessage.NOT_FOUND);
             }
 
+            // Verify if user is part of the project (except for Executive Board who can access all)
+            if (!_helperService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD))
+            {
+                var isUserInProject = await _context.ProjectUsers
+                    .AnyAsync(pu => pu.ProjectId == constructionPlan.ProjectId && pu.UserId == actionBy && !pu.Deleted);
+                if (!isUserInProject)
+                {
+                    throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED_PROJECT);
+                }
+            }
+
             // Get creator
             var creator = await _context.Users.FirstOrDefaultAsync(u => u.Id == constructionPlan.Creator);
 
@@ -751,7 +890,10 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
                 CreatedBy = constructionPlan.Creator,
                 CreatedByName = creator?.FullName ?? "",
                 UpdatedBy = constructionPlan.Updater,
-                IsApproved = constructionPlan.Reviewer != null && constructionPlan.Reviewer.Count > 0 && constructionPlan.Reviewer.All(r => r.Value == true)
+                // A plan is fully approved when all reviewers have approved (status true)
+                IsApproved = constructionPlan.Reviewer != null && 
+                            constructionPlan.Reviewer.Count > 0 && 
+                            constructionPlan.Reviewer.All(r => r.Value == true)
             };
 
             // Add reviewers
@@ -759,7 +901,7 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
             {
                 foreach (var reviewer in constructionPlan.Reviewers)
                 {
-                    bool isApproved = false;
+                    bool? isApproved = null;
                     if (constructionPlan.Reviewer != null && constructionPlan.Reviewer.ContainsKey(reviewer.Id))
                     {
                         isApproved = constructionPlan.Reviewer[reviewer.Id];
@@ -851,7 +993,7 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
                                     {
                                         Id = team.Id,
                                         Name = team.TeamName,
-                                        Type = "TEAM"
+                                        Type = 1
                                     };
                                 }
                                 break;
@@ -864,7 +1006,7 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
                                     {
                                         Id = vehicle.Id,
                                         Name = vehicle.LicensePlate,
-                                        Type = "VEHICLE"
+                                        Type = 2
                                     };
                                 }
                                 break;
@@ -877,7 +1019,7 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
                                     {
                                         Id = material.Id,
                                         Name = material.MaterialName,
-                                        Type = "MATERIAL"
+                                        Type = 3
                                     };
                                 }
                                 break;
@@ -911,6 +1053,14 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
             {
                 throw new KeyNotFoundException(Message.ConstructionPlanMessage.NOT_FOUND);
             }
+            
+            // Verify if user is part of the project
+            var isUserInProject = await _context.ProjectUsers
+                .AnyAsync(pu => pu.ProjectId == constructionPlan.ProjectId && pu.UserId == actionBy && !pu.Deleted);
+            if (!isUserInProject)
+            {
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED_PROJECT);
+            }
 
             // Use the extension method for cascade soft delete
             await _context.SoftDeleteAsync(constructionPlan, actionBy);
@@ -929,19 +1079,25 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
             // Clear the main construction plan cache
             await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY);
             
-            // Clear project-specific caches
+            // Clear project-specific caches to ensure project-related data is refreshed
             await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_CACHE_KEY);
+            await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_LIST_CACHE_KEY);
+            await _cacheService.DeleteAsync(string.Format(RedisCacheKey.PROJECT_BY_ID_CACHE_KEY, projectId));
             
-            // Clear any plan-specific caches
-            var planSpecificCacheKey = $"CONSTRUCTION_PLAN:{planId}";
+            // Clear specific plan caches
+            string planSpecificCacheKey = $"CONSTRUCTION_PLAN:ID:{planId}";
             await _cacheService.DeleteAsync(planSpecificCacheKey);
             
-            // Clear project-specific plan caches
-            var projectPlanCacheKey = $"CONSTRUCTION_PLAN:PROJECT:{projectId}";
+            // Clear project-specific construction plan caches
+            string projectPlanCacheKey = $"CONSTRUCTION_PLAN:PROJECT:{projectId}";
             await _cacheService.DeleteAsync(projectPlanCacheKey);
             
             // Clear construction team caches as they might be associated with plans
             await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_TEAM_CACHE_KEY);
+            
+            // Clear pattern-based caches using a pattern similar to ProjectService
+            await _cacheService.DeleteByPatternAsync("CONSTRUCTION_PLAN:*");
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.PROJECT_ALL_PATTERN);
         }
 
         public async Task<bool> Approve(ApproveConstructionPlanDTO model, int actionBy)
@@ -950,6 +1106,7 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
             if (!_helperService.IsInRole(actionBy, new List<string> 
             { 
                 RoleConstValue.TECHNICAL_MANAGER, 
+                RoleConstValue.RESOURCE_MANAGER,
                 RoleConstValue.EXECUTIVE_BOARD 
             }))
             {
@@ -966,38 +1123,91 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
                 throw new KeyNotFoundException(Message.ConstructionPlanMessage.NOT_FOUND);
             }
 
+            // Verify if Technical/Resource manager is part of the project
+            if (!_helperService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD))
+            {
+                var isUserInProject = await _context.ProjectUsers
+                    .AnyAsync(pu => pu.ProjectId == constructionPlan.ProjectId && pu.UserId == actionBy && !pu.Deleted);
+                if (!isUserInProject)
+                {
+                    throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED_PROJECT);
+                }
+            }
+
             // Check if user is a reviewer
             if (!constructionPlan.Reviewers.Any(r => r.Id == actionBy))
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
 
-            // Update reviewer status
+            // Initialize reviewer dictionary if needed
             if (constructionPlan.Reviewer == null)
             {
-                constructionPlan.Reviewer = new Dictionary<int, bool>();
+                constructionPlan.Reviewer = new Dictionary<int, bool?>();
             }
 
-            constructionPlan.Reviewer[actionBy] = true;
+            // Get user's role
+            var userRole = constructionPlan.Reviewers.FirstOrDefault(r => r.Id == actionBy)?.Role;
+
+            // Implement approval logic based on role
+            if (userRole == RoleConstValue.RESOURCE_MANAGER)
+            {
+                // Case 1: Resource manager approves - only change their own status
+                constructionPlan.Reviewer[actionBy] = true;
+            }
+            else if (userRole == RoleConstValue.TECHNICAL_MANAGER)
+            {
+                // Case 2: Technical manager approves - change their status and Resource Manager's
+                constructionPlan.Reviewer[actionBy] = true;
+                
+                // Find and update Resource Manager's status
+                var resourceManager = constructionPlan.Reviewers
+                    .FirstOrDefault(r => r.Role == RoleConstValue.RESOURCE_MANAGER);
+                    
+                if (resourceManager != null)
+                {
+                    constructionPlan.Reviewer[resourceManager.Id] = true;
+                }
+            }
+            else if (userRole == RoleConstValue.EXECUTIVE_BOARD)
+            {
+                // Case 3: Executive Board approves - change all statuses to true
+                constructionPlan.Reviewer[actionBy] = true;
+                
+                // Find and update Technical Manager's status
+                var technicalManager = constructionPlan.Reviewers
+                    .FirstOrDefault(r => r.Role == RoleConstValue.TECHNICAL_MANAGER);
+                    
+                if (technicalManager != null)
+                {
+                    constructionPlan.Reviewer[technicalManager.Id] = true;
+                }
+                
+                // Find and update Resource Manager's status
+                var resourceManager = constructionPlan.Reviewers
+                    .FirstOrDefault(r => r.Role == RoleConstValue.RESOURCE_MANAGER);
+                    
+                if (resourceManager != null)
+                {
+                    constructionPlan.Reviewer[resourceManager.Id] = true;
+                }
+            }
+
             constructionPlan.Updater = actionBy;
 
             _context.ConstructionPlans.Update(constructionPlan);
             await _context.SaveChangesAsync();
 
-            // Clear only the main cache
-            await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY);
+            // Invalidate all related caches
+            await InvalidateConstructionPlanCaches(constructionPlan.Id, constructionPlan.ProjectId);
             
             return true;
         }
 
         public async Task<bool> Reject(ApproveConstructionPlanDTO model, int actionBy)
         {
-            // Check if user is authorized to perform this action
-            if (!_helperService.IsInRole(actionBy, new List<string> 
-            { 
-                RoleConstValue.TECHNICAL_MANAGER, 
-                RoleConstValue.EXECUTIVE_BOARD 
-            }))
+            // Only Executive Board can reject construction plans
+            if (!_helperService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD))
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
@@ -1013,27 +1223,37 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
             }
 
             // Check if user is a reviewer
-            if (!constructionPlan.Reviewers.Any(r => r.Id == actionBy))
+            if (!constructionPlan.Reviewers.Any(r => r.Id == actionBy && r.Role == RoleConstValue.EXECUTIVE_BOARD))
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
 
-            // Update reviewer status
+            // Initialize reviewer dictionary if needed
             if (constructionPlan.Reviewer == null)
             {
-                constructionPlan.Reviewer = new Dictionary<int, bool>();
+                constructionPlan.Reviewer = new Dictionary<int, bool?>();
             }
 
+            // Case 4: Executive Board rejects - mark their status as false, reset others to null
             constructionPlan.Reviewer[actionBy] = false;
-            constructionPlan.Updater = actionBy;
+            
+            // Reset Technical and Resource Manager statuses to null
+            foreach (var reviewer in constructionPlan.Reviewers)
+            {
+                if (reviewer.Role == RoleConstValue.TECHNICAL_MANAGER || 
+                    reviewer.Role == RoleConstValue.RESOURCE_MANAGER)
+                {
+                    constructionPlan.Reviewer[reviewer.Id] = null;
+                }
+            }
 
-            // TODO: Store rejection reason if needed
+            constructionPlan.Updater = actionBy;
 
             _context.ConstructionPlans.Update(constructionPlan);
             await _context.SaveChangesAsync();
 
-            // Clear only the main cache
-            await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY);
+            // Invalidate all related caches
+            await InvalidateConstructionPlanCaches(constructionPlan.Id, constructionPlan.ProjectId);
             
             return true;
         }
@@ -1057,10 +1277,19 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
             {
                 throw new KeyNotFoundException(Message.ConstructionPlanMessage.NOT_FOUND);
             }
+            
+            // Verify if user is part of the project
+            var isUserInProject = await _context.ProjectUsers
+                .AnyAsync(pu => pu.ProjectId == constructionPlan.ProjectId && pu.UserId == actionBy && !pu.Deleted);
+            if (!isUserInProject)
+            {
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED_PROJECT);
+            }
 
             // Get plan item
             var planItem = await _context.ConstructPlanItems
                 .Include(pi => pi.ConstructionTeams)
+                .Include(pi => pi.ConstructionPlan) // Ensure we load the related ConstructionPlan
                 .FirstOrDefaultAsync(pi => pi.PlanId == model.PlanId && pi.WorkCode == model.WorkCode && !pi.Deleted);
 
             if (planItem == null)
@@ -1086,8 +1315,8 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
 
             await _context.SaveChangesAsync();
 
-            // Clear only the main cache
-            await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY);
+            // Invalidate all related caches
+            await InvalidateConstructionPlanCaches(model.PlanId, constructionPlan.ProjectId);
             
             return true;
         }
@@ -1105,6 +1334,14 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
             if (project == null)
             {
                 throw new KeyNotFoundException(Message.ConstructionPlanMessage.INVALID_PROJECT);
+            }
+            
+            // Verify if user is part of the project
+            var isUserInProject = await _context.ProjectUsers
+                .AnyAsync(pu => pu.ProjectId == model.ProjectId && pu.UserId == actionBy && !pu.Deleted);
+            if (!isUserInProject)
+            {
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED_PROJECT);
             }
 
             // Check if plan name already exists for this project
@@ -1135,13 +1372,13 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
                 PlanName = model.PlanName,
                 ProjectId = model.ProjectId,
                 Creator = actionBy,
-                Reviewer = new Dictionary<int, bool>()
+                Reviewer = new Dictionary<int, bool?>() // Changed to nullable bool
             };
 
             // Initialize reviewers collection
             constructionPlan.Reviewers = new List<User>();
 
-            // Find the first Technical Manager for this project
+            // Find the Technical Manager for this project
             var technicalManager = await _context.ProjectUsers
                 .Include(pu => pu.User)
                 .Where(pu => pu.ProjectId == model.ProjectId 
@@ -1151,7 +1388,17 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
                 .Select(pu => pu.User)
                 .FirstOrDefaultAsync();
 
-            // Find the first Executive Board member
+            // Find the Resource Manager for this project
+            var resourceManager = await _context.ProjectUsers
+                .Include(pu => pu.User)
+                .Where(pu => pu.ProjectId == model.ProjectId 
+                      && !pu.Deleted 
+                      && pu.User.Role == RoleConstValue.RESOURCE_MANAGER 
+                      && !pu.User.Deleted)
+                .Select(pu => pu.User)
+                .FirstOrDefaultAsync();
+
+            // Find the Executive Board member
             var executiveBoard = await _context.Users
                 .Where(u => u.Role == RoleConstValue.EXECUTIVE_BOARD && !u.Deleted)
                 .FirstOrDefaultAsync();
@@ -1160,14 +1407,23 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
             if (technicalManager != null)
             {
                 constructionPlan.Reviewers.Add(technicalManager);
-                constructionPlan.Reviewer.Add(technicalManager.Id, false);
+                constructionPlan.Reviewer.Add(technicalManager.Id, null); // Initialize as null
+            }
+            
+            // Add the Resource Manager as reviewer if found
+            if (resourceManager != null && (technicalManager == null || technicalManager.Id != resourceManager.Id))
+            {
+                constructionPlan.Reviewers.Add(resourceManager);
+                constructionPlan.Reviewer.Add(resourceManager.Id, null); // Initialize as null
             }
 
             // Add the Executive Board member as reviewer if found
-            if (executiveBoard != null && (technicalManager == null || technicalManager.Id != executiveBoard.Id))
+            if (executiveBoard != null && 
+                (technicalManager == null || technicalManager.Id != executiveBoard.Id) &&
+                (resourceManager == null || resourceManager.Id != executiveBoard.Id))
             {
                 constructionPlan.Reviewers.Add(executiveBoard);
-                constructionPlan.Reviewer.Add(executiveBoard.Id, false);
+                constructionPlan.Reviewer.Add(executiveBoard.Id, null); // Initialize as null
             }
 
             // Save construction plan
@@ -1268,10 +1524,10 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
 
                 await _context.SaveChangesAsync();
                 
-                // Clear only the main cache
-                await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY);
+                // After successful import and saving to database, invalidate all caches
+                await InvalidateConstructionPlanCaches(constructionPlan.Id, constructionPlan.ProjectId);
 
-                // Return the created plan
+                // Return the result
                 return await GetById(constructionPlan.Id, actionBy);
             }
             catch (Exception ex)

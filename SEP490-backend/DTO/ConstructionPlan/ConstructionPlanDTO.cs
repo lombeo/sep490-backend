@@ -96,7 +96,7 @@ namespace Sep490_Backend.DTO.ConstructionPlan
         public string Name { get; set; } = string.Empty;
         
         [Required(ErrorMessage = "Resource type is required")]
-        public string Type { get; set; } = string.Empty;
+        public int Type { get; set; }
     }
 
     public class ReviewerDTO
@@ -110,7 +110,7 @@ namespace Sep490_Backend.DTO.ConstructionPlan
         [EmailAddress(ErrorMessage = "Invalid email format")]
         public string Email { get; set; } = string.Empty;
         
-        public bool IsApproved { get; set; }
+        public bool? IsApproved { get; set; }
         
         [Required(ErrorMessage = "Reviewer role is required")]
         public string Role { get; set; } = string.Empty;

@@ -21,7 +21,7 @@ namespace Sep490_Backend.Infra.Entities
         public string PlanName { get; set; }
         
         [JsonConverter(typeof(ReviewerDictionaryConverter))]
-        public Dictionary<int, bool>? Reviewer { get; set; } //UserId, isApproved
+        public Dictionary<int, bool?>? Reviewer { get; set; } //UserId, isApproved (true, false, or null)
         public int ProjectId { get; set; }
 
         // Navigation properties

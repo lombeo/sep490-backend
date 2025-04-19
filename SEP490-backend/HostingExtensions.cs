@@ -84,6 +84,8 @@ namespace Sep490_Backend
             })
             .AddJsonOptions(options =>
             {
+                options.JsonSerializerOptions.PropertyNamingPolicy = null;
+                options.JsonSerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
                 options.JsonSerializerOptions.Converters.Add(new Sep490_Backend.Infra.Helps.ReviewerDictionaryConverter());
             })
             .AddNewtonsoftJson(options =>

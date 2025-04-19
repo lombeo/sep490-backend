@@ -15,12 +15,10 @@ namespace Sep490_Backend.Controllers
     public class ContractController : BaseAPIController
     {
         private readonly IContractService _contractService;
-        private readonly IDataService _dataService;
 
-        public ContractController(IContractService contractService, IDataService dataService)
+        public ContractController(IContractService contractService)
         {
             _contractService = contractService;
-            _dataService = dataService;
         }
 
         [HttpDelete("delete-contract/{projectId}")]

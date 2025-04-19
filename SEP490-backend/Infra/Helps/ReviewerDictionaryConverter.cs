@@ -6,50 +6,64 @@ using Newtonsoft.Json.Linq;
 
 namespace Sep490_Backend.Infra.Helps
 {
-    public class ReviewerDictionaryConverter : System.Text.Json.Serialization.JsonConverter<Dictionary<int, bool>>
+    public class ReviewerDictionaryConverter : System.Text.Json.Serialization.JsonConverter<Dictionary<int, bool?>>
     {
-        public override Dictionary<int, bool> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        public override Dictionary<int, bool?> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
             if (reader.TokenType == JsonTokenType.Null)
             {
-                return new Dictionary<int, bool>();
+                return new Dictionary<int, bool?>();
             }
 
             if (reader.TokenType == JsonTokenType.String)
             {
                 var jsonString = reader.GetString();
-                return System.Text.Json.JsonSerializer.Deserialize<Dictionary<int, bool>>(jsonString!, options) ?? new Dictionary<int, bool>();
+                return System.Text.Json.JsonSerializer.Deserialize<Dictionary<int, bool?>>(jsonString!, options) ?? new Dictionary<int, bool?>();
             }
 
             using var doc = JsonDocument.ParseValue(ref reader);
-            var dictionary = new Dictionary<int, bool>();
+            var dictionary = new Dictionary<int, bool?>();
 
             foreach (var property in doc.RootElement.EnumerateObject())
             {
                 if (int.TryParse(property.Name, out var key))
                 {
-                    dictionary[key] = property.Value.GetBoolean();
+                    if (property.Value.ValueKind == JsonValueKind.Null)
+                    {
+                        dictionary[key] = null;
+                    }
+                    else
+                    {
+                        dictionary[key] = property.Value.GetBoolean();
+                    }
                 }
             }
 
             return dictionary;
         }
 
-        public override void Write(Utf8JsonWriter writer, Dictionary<int, bool> value, JsonSerializerOptions options)
+        public override void Write(Utf8JsonWriter writer, Dictionary<int, bool?> value, JsonSerializerOptions options)
         {
             writer.WriteStartObject();
 
             foreach (var item in value)
             {
                 writer.WritePropertyName(item.Key.ToString());
-                writer.WriteBooleanValue(item.Value);
+                if (item.Value.HasValue)
+                {
+                    writer.WriteBooleanValue(item.Value.Value);
+                }
+                else
+                {
+                    writer.WriteNullValue();
+                }
             }
 
             writer.WriteEndObject();
         }
     }
 
-    public class ReviewerDictionaryValueConverter : ValueConverter<Dictionary<int, bool>, string>
+    public class ReviewerDictionaryValueConverter : ValueConverter<Dictionary<int, bool?>, string>
     {
         public ReviewerDictionaryValueConverter() 
             : base(
@@ -58,9 +72,9 @@ namespace Sep490_Backend.Infra.Helps
         {
         }
 
-        private static string ConvertToDatabase(Dictionary<int, bool> dictionary)
+        private static string ConvertToDatabase(Dictionary<int, bool?> dictionary)
         {
-            dictionary ??= new Dictionary<int, bool>();
+            dictionary ??= new Dictionary<int, bool?>();
             if (dictionary.Count == 0)
             {
                 return "{}";
@@ -68,18 +82,18 @@ namespace Sep490_Backend.Infra.Helps
             return Newtonsoft.Json.JsonConvert.SerializeObject(dictionary);
         }
 
-        private static Dictionary<int, bool> ConvertFromDatabase(string value)
+        private static Dictionary<int, bool?> ConvertFromDatabase(string value)
         {
             if (string.IsNullOrEmpty(value))
             {
-                return new Dictionary<int, bool>();
+                return new Dictionary<int, bool?>();
             }
 
             try
             {
                 // First try to deserialize as a standard dictionary
-                var result = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<int, bool>>(value);
-                return result ?? new Dictionary<int, bool>();
+                var result = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<int, bool?>>(value);
+                return result ?? new Dictionary<int, bool?>();
             }
             catch
             {
@@ -92,27 +106,27 @@ namespace Sep490_Backend.Infra.Helps
                     {
                         // If it's just a number (like "1"), create a dictionary with that key
                         var userId = token.Value<int>();
-                        return new Dictionary<int, bool> { { userId, false } };
+                        return new Dictionary<int, bool?> { { userId, null } };
                     }
                     else if (token.Type == JTokenType.Array)
                     {
                         // If it's an array, create a dictionary with default entries
-                        var result = new Dictionary<int, bool>();
+                        var result = new Dictionary<int, bool?>();
                         var array = (JArray)token;
                         for (int i = 0; i < array.Count; i++)
                         {
-                            result[i] = true;
+                            result[i] = null;
                         }
                         return result;
                     }
 
                     // For other unexpected formats, return empty dictionary
-                    return new Dictionary<int, bool>();
+                    return new Dictionary<int, bool?>();
                 }
                 catch
                 {
                     // If all parsing fails, return an empty dictionary
-                    return new Dictionary<int, bool>();
+                    return new Dictionary<int, bool?>();
                 }
             }
         }

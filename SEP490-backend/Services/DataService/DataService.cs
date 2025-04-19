@@ -578,7 +578,7 @@ namespace Sep490_Backend.Services.DataService
                 {
                     foreach (var reviewer in plan.Reviewers)
                     {
-                        bool isApproved = false;
+                        bool? isApproved = false;
                         if (plan.Reviewer != null && plan.Reviewer.ContainsKey(reviewer.Id))
                         {
                             isApproved = plan.Reviewer[reviewer.Id];

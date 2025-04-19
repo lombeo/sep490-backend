@@ -132,14 +132,6 @@ namespace Sep490_Backend.Infra.Entities
                             j.ToTable("ConstructionPlanReviewers");
                         });
 
-                // Many-to-many relationship with User for ResourceAllocations
-                entity.HasMany(u => u.ResourceAllocations)
-                    .WithOne(d => d.User)
-                    .HasForeignKey(d => d.ResourceId)
-                    .HasConstraintName("FK_ConstructPlanItemDetails_Users_ResourceId")
-                    .HasPrincipalKey(u => u.Id)
-                    .OnDelete(DeleteBehavior.SetNull);
-
                 // Resource Mobilization relationships
                 entity.HasMany(e => e.RequestedMobilizations)
                       .WithOne(rm => rm.Requester)
