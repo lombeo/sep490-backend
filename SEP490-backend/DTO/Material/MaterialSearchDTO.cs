@@ -3,8 +3,6 @@
     public class MaterialSearchDTO : BaseQuery
     {
         public string? Keyword { get; set; }
-        public string? MaterialCode { get; set; }
-        public string? MaterialName { get; set; }
         public string? Unit { get; set; }
     }
 }

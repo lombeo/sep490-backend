@@ -401,14 +401,9 @@ namespace Sep490_Backend.Services.DataService
             var query = _context.Materials.Where(t => !t.Deleted).AsQueryable();
 
             // Apply filters
-            if (!string.IsNullOrEmpty(model.MaterialCode))
+            if (!string.IsNullOrEmpty(model.Keyword))
             {
-                query = query.Where(t => t.MaterialCode.ToLower().Contains(model.MaterialCode.ToLower()));
-            }
-
-            if (!string.IsNullOrEmpty(model.MaterialName))
-            {
-                query = query.Where(t => t.MaterialName.ToLower().Contains(model.MaterialName.ToLower()));
+                query = query.Where(t => model.Keyword.ToLower().Contains(t.MaterialCode.ToLower()) || model.Keyword.ToLower().Contains(t.MaterialName.ToLower()));
             }
 
             // Count total before pagination
@@ -429,7 +424,7 @@ namespace Sep490_Backend.Services.DataService
         
         private string GetMaterialSearchCacheKey(MaterialSearchDTO model)
         {
-            return $"{RedisCacheKey.MATERIAL_CACHE_KEY}_CODE_{model.MaterialCode ?? "all"}_NAME_{model.MaterialName ?? "all"}_PAGE_{model.PageIndex}_SIZE_{model.PageSize}";
+            return $"{RedisCacheKey.MATERIAL_CACHE_KEY}_KEYWORD_{model.Keyword ?? "all"}_PAGE_{model.PageIndex}_SIZE_{model.PageSize}";
         }
 
         public async Task<List<ConstructionTeam>> ListConstructionTeam(ConstructionTeamSearchDTO model)
