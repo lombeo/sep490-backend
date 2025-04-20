@@ -226,12 +226,14 @@ namespace Sep490_Backend.Controllers
         /// Gets all inventory resources with optional filtering
         /// </summary>
         /// <param name="type">Optional filter by resource type</param>
+        /// <param name="projectId">Optional filter by project ID</param>
         /// <param name="pageIndex">Page number for pagination (default: 1)</param>
         /// <param name="pageSize">Page size for pagination (default: 10)</param>
         /// <returns>List of inventory resources</returns>
         [HttpGet("inventory/list")]
         public async Task<ResponseDTO<List<ResourceInventoryDTO>>> GetInventoryResources(
             [FromQuery] ResourceType? type = null,
+            [FromQuery] int? projectId = null,
             [FromQuery] int pageIndex = 1,
             [FromQuery] int pageSize = 10)
         {
@@ -243,7 +245,7 @@ namespace Sep490_Backend.Controllers
             };
             
             var result = await HandleException(
-                _resourceReqService.ViewInventoryResources(type, query),
+                _resourceReqService.ViewInventoryResources(type, projectId, query),
                 Message.CommonMessage.ACTION_SUCCESS
             );
             

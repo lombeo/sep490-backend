@@ -35,7 +35,7 @@ namespace Sep490_Backend.Services.ResourceReqService
         Task InvalidateMobilizationCacheForProject(int projectId);
         Task InvalidateAllMobilizationCaches();
         
-        Task<List<ResourceInventoryDTO>> ViewInventoryResources(ResourceType? type, BaseQuery query);
+        Task<List<ResourceInventoryDTO>> ViewInventoryResources(ResourceType? type, int? projectId, BaseQuery query);
         Task<ResourceInventoryDTO> GetInventoryResourceById(int id);
         Task<ResourceInventory> AddInventoryResource(AddResourceInventoryDTO model, int actionBy);
         Task<ResourceInventory> UpdateInventoryResource(UpdateResourceInventoryDTO model, int actionBy);
@@ -1182,10 +1182,13 @@ namespace Sep490_Backend.Services.ResourceReqService
         /// Retrieves inventory resources with optional filtering
         /// </summary>
         /// <param name="type">Optional filter by resource type</param>
+        /// <param name="projectId">Optional filter by project ID</param>
         /// <param name="query">BaseQuery object containing pagination parameters</param>
         /// <returns>List of inventory resources</returns>
         public async Task<List<ResourceInventoryDTO>> ViewInventoryResources(
-            ResourceType? type, BaseQuery query)
+            ResourceType? type, 
+            int? projectId,
+            BaseQuery query)
         {
             // Check authorization - allow access for:
             // 1. Resource Managers
@@ -1206,18 +1209,26 @@ namespace Sep490_Backend.Services.ResourceReqService
                 {
                     throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
                 }
+                
+                // If a specific project was requested, verify user has access to it
+                if (projectId.HasValue && !userProjects.Contains(projectId.Value))
+                {
+                    throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED_PROJECT);
+                }
             }
 
-            // Build cache key based on parameters - include user ID to avoid cache conflicts between users
+            // Build cache key based on parameters - include user ID and projectId to avoid cache conflicts
             string cacheKey;
+            string projectPart = projectId.HasValue ? $":PROJECT:{projectId}" : "";
+            
             if (type.HasValue && type.Value != ResourceType.NONE)
             {
                 cacheKey = string.Format(RedisCacheKey.RESOURCE_INVENTORY_BY_TYPE_CACHE_KEY, type.Value) + 
-                    $":USER:{query.ActionBy}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+                    $"{projectPart}:USER:{query.ActionBy}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
             }
             else
             {
-                cacheKey = $"{RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY}:USER:{query.ActionBy}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+                cacheKey = $"{RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY}{projectPart}:USER:{query.ActionBy}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
             }
 
             // Try to get from cache first
@@ -1232,8 +1243,13 @@ namespace Sep490_Backend.Services.ResourceReqService
             var dbQuery = _context.ResourceInventory
                 .Where(r => !r.Deleted);
 
-            // If not Executive Board or Resource Manager, filter by user's projects
-            if (!isExecutiveBoard)
+            // If filtering by project ID
+            if (projectId.HasValue)
+            {
+                dbQuery = dbQuery.Where(r => r.ProjectId == projectId.Value);
+            }
+            // If not Executive Board, filter by user's projects
+            else if (!isExecutiveBoard)
             {
                 // Get user's projects from ProjectUser table
                 var userProjects = await _context.ProjectUsers
