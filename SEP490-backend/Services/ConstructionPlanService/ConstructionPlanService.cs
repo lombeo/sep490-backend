@@ -1117,6 +1117,7 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
             // Get construction plan
             var constructionPlan = await _context.ConstructionPlans
                 .Include(cp => cp.Reviewers)
+                .Include(cp => cp.Project)
                 .FirstOrDefaultAsync(cp => cp.Id == model.PlanId && !cp.Deleted);
 
             if (constructionPlan == null)
@@ -1192,6 +1193,17 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
                 {
                     constructionPlan.Reviewer[resourceManager.Id] = true;
                 }
+                
+                // Update project status to InProgress
+                if (constructionPlan.Project != null)
+                {
+                    constructionPlan.Project.Status = ProjectStatusEnum.InProgress;
+                    constructionPlan.Project.Updater = actionBy;
+                    _context.Projects.Update(constructionPlan.Project);
+                }
+                
+                // Copy all resources from ConstructionPlanItemDetail to ResourceInventory
+                await CopyResourcesFromPlanToInventory(constructionPlan.Id, constructionPlan.ProjectId, actionBy);
             }
 
             constructionPlan.Updater = actionBy;
@@ -1203,6 +1215,125 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
             await InvalidateConstructionPlanCaches(constructionPlan.Id, constructionPlan.ProjectId);
             
             return true;
+        }
+
+        /// <summary>
+        /// Copies all resources from ConstructionPlanItemDetail to ResourceInventory
+        /// </summary>
+        /// <param name="planId">ID of the approved construction plan</param>
+        /// <param name="projectId">ID of the project</param>
+        /// <param name="actionBy">ID of the user performing the action</param>
+        private async Task CopyResourcesFromPlanToInventory(int planId, int projectId, int actionBy)
+        {
+            // Get all plan items
+            var planItems = await _context.ConstructPlanItems
+                .Where(pi => pi.PlanId == planId && !pi.Deleted)
+                .ToListAsync();
+            
+            if (!planItems.Any())
+            {
+                return;
+            }
+            
+            // Create a list to track all inventory resources to be added
+            List<ResourceInventory> inventoryResourcesToAdd = new List<ResourceInventory>();
+            
+            // Process each plan item
+            foreach (var planItem in planItems)
+            {
+                // Get all details for this plan item
+                var details = await _context.ConstructPlanItemDetails
+                    .Where(d => d.PlanItemId == planItem.Id && !d.Deleted)
+                    .ToListAsync();
+                
+                foreach (var detail in details)
+                {
+                    // Skip details without resource ID
+                    if (!detail.ResourceId.HasValue)
+                    {
+                        continue;
+                    }
+                    
+                    // Get existing inventory resource for this resource ID and type
+                    var existingInventory = await _context.ResourceInventory
+                        .FirstOrDefaultAsync(r => 
+                            r.ResourceType == detail.ResourceType && 
+                            r.ResourceId == detail.ResourceId && 
+                            r.ProjectId == projectId &&
+                            !r.Deleted);
+                    
+                    if (existingInventory != null)
+                    {
+                        // Update existing inventory
+                        existingInventory.Quantity += detail.Quantity;
+                        existingInventory.UpdatedAt = DateTime.UtcNow;
+                        existingInventory.Updater = actionBy;
+                        
+                        _context.ResourceInventory.Update(existingInventory);
+                    }
+                    else
+                    {
+                        // Determine resource name based on type
+                        string resourceName = "";
+                        
+                        switch (detail.ResourceType)
+                        {
+                            case ResourceType.HUMAN:
+                                var team = await _context.ConstructionTeams
+                                    .FirstOrDefaultAsync(t => t.Id == detail.ResourceId);
+                                resourceName = team?.TeamName ?? $"Team {detail.ResourceId}";
+                                break;
+                            
+                            case ResourceType.MACHINE:
+                                var vehicle = await _context.Vehicles
+                                    .FirstOrDefaultAsync(v => v.Id == detail.ResourceId);
+                                resourceName = vehicle?.LicensePlate ?? $"Vehicle {detail.ResourceId}";
+                                break;
+                            
+                            case ResourceType.MATERIAL:
+                                var material = await _context.Materials
+                                    .FirstOrDefaultAsync(m => m.Id == detail.ResourceId);
+                                resourceName = material?.MaterialName ?? $"Material {detail.ResourceId}";
+                                break;
+                            
+                            default:
+                                resourceName = $"Resource {detail.ResourceId}";
+                                break;
+                        }
+                        
+                        // Create new inventory resource
+                        var newResource = new ResourceInventory
+                        {
+                            Name = resourceName,
+                            Description = $"Resource from construction plan {planId}, item {planItem.WorkCode}, detail {detail.WorkCode}",
+                            ResourceId = detail.ResourceId,
+                            ProjectId = projectId,
+                            ResourceType = detail.ResourceType,
+                            Quantity = detail.Quantity,
+                            Unit = detail.Unit ?? "Unit",
+                            Status = true,
+                            Creator = actionBy,
+                            Updater = actionBy,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow
+                        };
+                        
+                        inventoryResourcesToAdd.Add(newResource);
+                    }
+                }
+            }
+            
+            // Add all new resources at once
+            if (inventoryResourcesToAdd.Any())
+            {
+                await _context.ResourceInventory.AddRangeAsync(inventoryResourcesToAdd);
+            }
+            
+            // Save changes
+            await _context.SaveChangesAsync();
+            
+            // Invalidate resource inventory cache
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
         }
 
         public async Task<bool> Reject(ApproveConstructionPlanDTO model, int actionBy)
