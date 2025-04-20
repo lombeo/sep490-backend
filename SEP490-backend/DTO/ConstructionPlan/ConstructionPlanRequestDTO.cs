@@ -69,6 +69,7 @@ namespace Sep490_Backend.DTO.ConstructionPlan
 
     public class AssignTeamDTO : BaseRequest
     {
+        public int? Id { get; set; }
         public int PlanId { get; set; }
         
         [Required(ErrorMessage = "Work code is required for team assignment")]

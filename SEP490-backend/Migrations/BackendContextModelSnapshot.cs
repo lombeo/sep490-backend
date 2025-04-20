@@ -46,12 +46,12 @@ namespace Sep490_Backend.Migrations
                     b.Property<int>("ConstructionTeamId")
                         .HasColumnType("integer");
 
-                    b.Property<string>("ConstructPlanItemWorkCode")
-                        .HasColumnType("text");
+                    b.Property<int>("ConstructPlanItemId")
+                        .HasColumnType("integer");
 
-                    b.HasKey("ConstructionTeamId", "ConstructPlanItemWorkCode");
+                    b.HasKey("ConstructionTeamId", "ConstructPlanItemId");
 
-                    b.HasIndex("ConstructPlanItemWorkCode");
+                    b.HasIndex("ConstructPlanItemId");
 
                     b.ToTable("ConstructionTeamPlanItems", (string)null);
                 });
@@ -100,8 +100,11 @@ namespace Sep490_Backend.Migrations
 
             modelBuilder.Entity("Sep490_Backend.Infra.Entities.ConstructPlanItem", b =>
                 {
-                    b.Property<string>("WorkCode")
-                        .HasColumnType("text");
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<DateTime?>("CreatedAt")
                         .HasColumnType("timestamp without time zone");
@@ -154,18 +157,27 @@ namespace Sep490_Backend.Migrations
                     b.Property<int>("Updater")
                         .HasColumnType("integer");
 
+                    b.Property<string>("WorkCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<string>("WorkName")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
-                    b.HasKey("WorkCode");
+                    b.HasKey("Id");
 
                     b.HasIndex("EndDate");
 
                     b.HasIndex("PlanId");
 
                     b.HasIndex("StartDate");
+
+                    b.HasIndex("WorkCode")
+                        .IsUnique()
+                        .HasFilter("\"Deleted\" = false");
 
                     b.HasIndex("ParentIndex", "PlanId");
 
@@ -196,10 +208,8 @@ namespace Sep490_Backend.Migrations
                     b.Property<int?>("MaterialId")
                         .HasColumnType("integer");
 
-                    b.Property<string>("PlanItemId")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                    b.Property<int>("PlanItemId")
+                        .HasColumnType("integer");
 
                     b.Property<int>("Quantity")
                         .HasColumnType("integer");
@@ -1463,10 +1473,10 @@ namespace Sep490_Backend.Migrations
                 {
                     b.HasOne("Sep490_Backend.Infra.Entities.ConstructPlanItem", null)
                         .WithMany()
-                        .HasForeignKey("ConstructPlanItemWorkCode")
+                        .HasForeignKey("ConstructPlanItemId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
-                        .HasConstraintName("FK_ConstructionTeamPlanItems_ConstructPlanItems_ConstructPlanItemWorkCode");
+                        .HasConstraintName("FK_ConstructionTeamPlanItems_ConstructPlanItems_ConstructPlanItemId");
 
                     b.HasOne("Sep490_Backend.Infra.Entities.ConstructionTeam", null)
                         .WithMany()

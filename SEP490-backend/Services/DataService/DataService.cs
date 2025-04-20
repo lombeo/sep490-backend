@@ -478,18 +478,6 @@ namespace Sep490_Backend.Services.DataService
 
         public async Task<List<ConstructionPlanDTO>> ListConstructionPlan(ConstructionPlanQuery model)
         {
-            // Verify access rights
-            if (!_helpService.IsInRole(model.ActionBy, new List<string> 
-            { 
-                RoleConstValue.CONSTRUCTION_MANAGER, 
-                RoleConstValue.TECHNICAL_MANAGER, 
-                RoleConstValue.RESOURCE_MANAGER,
-                RoleConstValue.EXECUTIVE_BOARD 
-            }))
-            {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
-            }
-
             var user = StaticVariable.UserMemory.FirstOrDefault(u => u.Id == model.ActionBy);
             bool isExecutiveBoard = user != null && user.Role == RoleConstValue.EXECUTIVE_BOARD;
 
@@ -507,7 +495,7 @@ namespace Sep490_Backend.Services.DataService
                 // Filter by user access if not Executive Board
                 if (!isExecutiveBoard)
                 {
-                    // Get projects the user has access to
+                    // Get projects the user participates in
                     var userProjects = await _context.ProjectUsers
                         .Where(pu => pu.UserId == model.ActionBy && !pu.Deleted)
                         .Select(pu => pu.ProjectId)
@@ -540,6 +528,7 @@ namespace Sep490_Backend.Services.DataService
             // Apply user access filter to database query if not Executive Board
             if (!isExecutiveBoard)
             {
+                // Get projects the user participates in
                 var userProjects = await _context.ProjectUsers
                     .Where(pu => pu.UserId == model.ActionBy && !pu.Deleted)
                     .Select(pu => pu.ProjectId)

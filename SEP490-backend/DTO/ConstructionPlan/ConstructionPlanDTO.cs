@@ -34,6 +34,8 @@ namespace Sep490_Backend.DTO.ConstructionPlan
 
     public class ConstructPlanItemDTO
     {
+        public int Id { get; set; }
+        
         [Required(ErrorMessage = "Work code is required for construction item tracking")]
         public string WorkCode { get; set; } = string.Empty;
         
@@ -67,7 +69,7 @@ namespace Sep490_Backend.DTO.ConstructionPlan
         public int Id { get; set; }
         
         [Required(ErrorMessage = "Plan item ID is required for resource allocation")]
-        public string PlanItemId { get; set; } = string.Empty;
+        public int PlanItemId { get; set; }
         
         [Required(ErrorMessage = "Work code is required for construction activity")]
         public string WorkCode { get; set; } = string.Empty;

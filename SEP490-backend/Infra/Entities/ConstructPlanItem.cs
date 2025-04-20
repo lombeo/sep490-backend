@@ -4,7 +4,8 @@ namespace Sep490_Backend.Infra.Entities
 {
     public class ConstructPlanItem : CommonEntity
     {
-        public string WorkCode { get; set; } //unique
+        public int Id { get; set; }
+        public string WorkCode { get; set; } //unique when Deleted=false
         public string Index { get; set; }
         public int PlanId { get; set; } //ConstrucionPlan
         public string? ParentIndex { get; set; } //ConstructPlanItem
@@ -32,7 +33,11 @@ namespace Sep490_Backend.Infra.Entities
             modelBuilder.Entity<ConstructPlanItem>(entity =>
             {
                 entity.ToTable("ConstructPlanItems");
-                entity.HasKey(e => e.WorkCode);
+                entity.HasKey(e => e.Id);
+
+                entity.Property(e => e.WorkCode)
+                    .IsRequired()
+                    .HasMaxLength(50);
 
                 entity.Property(e => e.Index)
                     .IsRequired()
@@ -78,6 +83,9 @@ namespace Sep490_Backend.Infra.Entities
                 entity.HasIndex(e => e.PlanId);
                 entity.HasIndex(e => e.StartDate);
                 entity.HasIndex(e => e.EndDate);
+                
+                // Add a unique index on WorkCode with filter for Deleted=false
+                entity.HasIndex(e => e.WorkCode).HasFilter("\"Deleted\" = false").IsUnique();
 
                 // Create a unique index that scopes Index to PlanId
                 entity.HasIndex(e => new { e.PlanId, e.Index }).HasFilter("\"Deleted\" = false").IsUnique();
@@ -102,12 +110,12 @@ namespace Sep490_Backend.Infra.Entities
                         j => j
                             .HasOne<ConstructPlanItem>()
                             .WithMany()
-                            .HasForeignKey("ConstructPlanItemWorkCode")
-                            .HasConstraintName("FK_ConstructionTeamPlanItems_ConstructPlanItems_ConstructPlanItemWorkCode")
+                            .HasForeignKey("ConstructPlanItemId")
+                            .HasConstraintName("FK_ConstructionTeamPlanItems_ConstructPlanItems_ConstructPlanItemId")
                             .OnDelete(DeleteBehavior.Cascade),
                         j => 
                         {
-                            j.HasKey("ConstructionTeamId", "ConstructPlanItemWorkCode");
+                            j.HasKey("ConstructionTeamId", "ConstructPlanItemId");
                             j.ToTable("ConstructionTeamPlanItems");
                         });
 

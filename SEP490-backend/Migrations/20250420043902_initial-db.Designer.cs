@@ -15,8 +15,8 @@ using Sep490_Backend.Infra;
 namespace Sep490_Backend.Migrations
 {
     [DbContext(typeof(BackendContext))]
-    [Migration("20250416195710_AddVehicleNameAndChangeVehicleTypeToString")]
-    partial class AddVehicleNameAndChangeVehicleTypeToString
+    [Migration("20250420043902_initial-db")]
+    partial class initialdb
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -49,12 +49,12 @@ namespace Sep490_Backend.Migrations
                     b.Property<int>("ConstructionTeamId")
                         .HasColumnType("integer");
 
-                    b.Property<string>("ConstructPlanItemWorkCode")
-                        .HasColumnType("text");
+                    b.Property<int>("ConstructPlanItemId")
+                        .HasColumnType("integer");
 
-                    b.HasKey("ConstructionTeamId", "ConstructPlanItemWorkCode");
+                    b.HasKey("ConstructionTeamId", "ConstructPlanItemId");
 
-                    b.HasIndex("ConstructPlanItemWorkCode");
+                    b.HasIndex("ConstructPlanItemId");
 
                     b.ToTable("ConstructionTeamPlanItems", (string)null);
                 });
@@ -103,8 +103,11 @@ namespace Sep490_Backend.Migrations
 
             modelBuilder.Entity("Sep490_Backend.Infra.Entities.ConstructPlanItem", b =>
                 {
-                    b.Property<string>("WorkCode")
-                        .HasColumnType("text");
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<DateTime?>("CreatedAt")
                         .HasColumnType("timestamp without time zone");
@@ -157,18 +160,27 @@ namespace Sep490_Backend.Migrations
                     b.Property<int>("Updater")
                         .HasColumnType("integer");
 
+                    b.Property<string>("WorkCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<string>("WorkName")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
-                    b.HasKey("WorkCode");
+                    b.HasKey("Id");
 
                     b.HasIndex("EndDate");
 
                     b.HasIndex("PlanId");
 
                     b.HasIndex("StartDate");
+
+                    b.HasIndex("WorkCode")
+                        .IsUnique()
+                        .HasFilter("\"Deleted\" = false");
 
                     b.HasIndex("ParentIndex", "PlanId");
 
@@ -199,10 +211,8 @@ namespace Sep490_Backend.Migrations
                     b.Property<int?>("MaterialId")
                         .HasColumnType("integer");
 
-                    b.Property<string>("PlanItemId")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                    b.Property<int>("PlanItemId")
+                        .HasColumnType("integer");
 
                     b.Property<int>("Quantity")
                         .HasColumnType("integer");
@@ -257,6 +267,109 @@ namespace Sep490_Backend.Migrations
                     b.HasIndex("WorkCode");
 
                     b.ToTable("ConstructPlanItemDetails", (string)null);
+                });
+
+            modelBuilder.Entity("Sep490_Backend.Infra.Entities.ConstructionLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Advice")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<JsonDocument>("Attachments")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("Creator")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("Deleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<JsonDocument>("Images")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("LogCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("LogDate")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("LogName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("Problem")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("Progress")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Quality")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<JsonDocument>("Resources")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Safety")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("Updater")
+                        .HasColumnType("integer");
+
+                    b.Property<JsonDocument>("Weather")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<JsonDocument>("WorkAmount")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LogCode")
+                        .IsUnique();
+
+                    b.HasIndex("LogDate");
+
+                    b.HasIndex("ProjectId");
+
+                    b.ToTable("ConstructionLogs", (string)null);
                 });
 
             modelBuilder.Entity("Sep490_Backend.Infra.Entities.ConstructionPlan", b =>
@@ -1008,6 +1121,11 @@ namespace Sep490_Backend.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<int>("RequestType")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
                     b.Property<List<RequestDetails>>("ResourceMobilizationDetails")
                         .IsRequired()
                         .HasColumnType("jsonb");
@@ -1038,6 +1156,8 @@ namespace Sep490_Backend.Migrations
                         .HasFilter("\"Deleted\" = false");
 
                     b.HasIndex("RequestDate");
+
+                    b.HasIndex("RequestType");
 
                     b.HasIndex("Status");
 
@@ -1356,10 +1476,10 @@ namespace Sep490_Backend.Migrations
                 {
                     b.HasOne("Sep490_Backend.Infra.Entities.ConstructPlanItem", null)
                         .WithMany()
-                        .HasForeignKey("ConstructPlanItemWorkCode")
+                        .HasForeignKey("ConstructPlanItemId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
-                        .HasConstraintName("FK_ConstructionTeamPlanItems_ConstructPlanItems_ConstructPlanItemWorkCode");
+                        .HasConstraintName("FK_ConstructionTeamPlanItems_ConstructPlanItems_ConstructPlanItemId");
 
                     b.HasOne("Sep490_Backend.Infra.Entities.ConstructionTeam", null)
                         .WithMany()
@@ -1400,30 +1520,6 @@ namespace Sep490_Backend.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("Sep490_Backend.Infra.Entities.ConstructionTeam", "ConstructionTeam")
-                        .WithMany()
-                        .HasForeignKey("ResourceId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("FK_ConstructPlanItemDetails_ConstructionTeams_ResourceId");
-
-                    b.HasOne("Sep490_Backend.Infra.Entities.Material", "Material")
-                        .WithMany()
-                        .HasForeignKey("ResourceId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("FK_ConstructPlanItemDetails_Materials_ResourceId");
-
-                    b.HasOne("Sep490_Backend.Infra.Entities.User", "User")
-                        .WithMany()
-                        .HasForeignKey("ResourceId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("FK_ConstructPlanItemDetails_Users_ResourceId");
-
-                    b.HasOne("Sep490_Backend.Infra.Entities.Vehicle", "Vehicle")
-                        .WithMany()
-                        .HasForeignKey("ResourceId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("FK_ConstructPlanItemDetails_Vehicles_ResourceId");
-
                     b.HasOne("Sep490_Backend.Infra.Entities.User", null)
                         .WithMany("ResourceAllocations")
                         .HasForeignKey("UserId");
@@ -1433,14 +1529,17 @@ namespace Sep490_Backend.Migrations
                         .HasForeignKey("VehicleId");
 
                     b.Navigation("ConstructPlanItem");
+                });
 
-                    b.Navigation("ConstructionTeam");
+            modelBuilder.Entity("Sep490_Backend.Infra.Entities.ConstructionLog", b =>
+                {
+                    b.HasOne("Sep490_Backend.Infra.Entities.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
-                    b.Navigation("Material");
-
-                    b.Navigation("User");
-
-                    b.Navigation("Vehicle");
+                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("Sep490_Backend.Infra.Entities.ConstructionPlan", b =>

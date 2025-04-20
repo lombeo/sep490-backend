@@ -7,7 +7,7 @@ namespace Sep490_Backend.Infra.Entities
     public class ConstructPlanItemDetail : CommonEntity
     {
         public int Id { get; set; }
-        public string PlanItemId { get; set; } //ConstructPlanItem - WorkCode
+        public int PlanItemId { get; set; } //ConstructPlanItem - Id (changed from WorkCode)
         public string WorkCode { get; set; }
         public ResourceType ResourceType { get; set; }
         public int Quantity { get; set; }
@@ -30,8 +30,7 @@ namespace Sep490_Backend.Infra.Entities
                 entity.HasKey(e => e.Id);
 
                 entity.Property(e => e.PlanItemId)
-                    .IsRequired()
-                    .HasMaxLength(50);
+                    .IsRequired();
 
                 entity.Property(e => e.WorkCode)
                     .IsRequired()

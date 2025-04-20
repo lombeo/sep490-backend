@@ -208,7 +208,7 @@ namespace Sep490_Backend.Services.ConstructionPlanService
 
                             var detail = new ConstructPlanItemDetail
                             {
-                                PlanItemId = planItem.WorkCode,
+                                PlanItemId = Convert.ToInt32(planItem.Id),
                                 WorkCode = detailWorkCode,
                                 ResourceType = detailDto.ResourceType,
                                 Quantity = detailDto.Quantity,
@@ -588,7 +588,7 @@ namespace Sep490_Backend.Services.ConstructionPlanService
             
             // Get existing details
             var existingDetails = await _context.ConstructPlanItemDetails
-                .Where(d => d.PlanItemId == planItem.WorkCode && !d.Deleted)
+                .Where(d => d.PlanItemId == planItem.Id && !d.Deleted)
                 .ToListAsync();
             
             // Create ID set for fast lookup
@@ -671,7 +671,7 @@ namespace Sep490_Backend.Services.ConstructionPlanService
                     // Create new detail
                     var detail = new ConstructPlanItemDetail
                     {
-                        PlanItemId = planItem.WorkCode,
+                        PlanItemId = Convert.ToInt32(planItem.Id),
                         WorkCode = detailDto.WorkCode,
                         ResourceType = detailDto.ResourceType,
                         Quantity = detailDto.Quantity,
@@ -792,7 +792,7 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
                 var detailForUpdate = new ConstructPlanItemDetail
                 {
                     Id = detail.Id,
-                    PlanItemId = detail.PlanItemId,
+                    PlanItemId = int.Parse(detail.PlanItemId.ToString()),
                     WorkCode = detail.WorkCode,
                     ResourceType = resourceType,
                     ResourceId = resourceId,
@@ -928,6 +928,7 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
             {
                 var planItemDto = new ConstructPlanItemDTO
                 {
+                    Id = planItem.Id,
                     WorkCode = planItem.WorkCode,
                     Index = planItem.Index,
                     PlanId = planItem.PlanId,
@@ -962,7 +963,7 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
 
                 // Get item details
                 var itemDetails = await _context.ConstructPlanItemDetails
-                    .Where(d => d.PlanItemId == planItem.WorkCode && !d.Deleted)
+                    .Where(d => d.PlanItemId == planItem.Id && !d.Deleted)
                     .ToListAsync();
 
                 foreach (var detail in itemDetails)
@@ -1286,11 +1287,15 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED_PROJECT);
             }
 
-            // Get plan item
+            // Get plan item - modify to search by Id instead of WorkCode
+            // Update this part once we update the DTO to include item id
             var planItem = await _context.ConstructPlanItems
                 .Include(pi => pi.ConstructionTeams)
-                .Include(pi => pi.ConstructionPlan) // Ensure we load the related ConstructionPlan
-                .FirstOrDefaultAsync(pi => pi.PlanId == model.PlanId && pi.WorkCode == model.WorkCode && !pi.Deleted);
+                .Include(pi => pi.ConstructionPlan) 
+                .FirstOrDefaultAsync(pi => pi.PlanId == model.PlanId && 
+                                           ((model.Id.HasValue && pi.Id == model.Id) || 
+                                            (!model.Id.HasValue && pi.WorkCode == model.WorkCode)) && 
+                                           !pi.Deleted);
 
             if (planItem == null)
             {
