@@ -7,7 +7,6 @@ namespace Sep490_Backend.Infra.Entities
     {
         public int Id { get; set; }
         public string Name { get; set; }
-        public string Description { get; set; }
         public int? ResourceId { get; set; }
         public int? ProjectId { get; set; }
         public ResourceType ResourceType { get; set; }
@@ -28,9 +27,6 @@ namespace Sep490_Backend.Infra.Entities
                 entity.Property(e => e.Name)
                     .IsRequired()
                     .HasMaxLength(200);
-
-                entity.Property(e => e.Description)
-                    .HasColumnType("text");
 
                 entity.Property(e => e.ResourceId)
                     .IsRequired(false);
@@ -58,6 +54,9 @@ namespace Sep490_Backend.Infra.Entities
 
                 entity.HasIndex(e => e.ResourceType);
                 entity.HasIndex(e => e.Name);
+                
+                entity.HasIndex(e => new { e.ResourceId, e.ProjectId, e.ResourceType })
+                    .HasFilter("\"Deleted\" = false");
             });
         }
     }

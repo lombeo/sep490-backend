@@ -1005,112 +1005,118 @@ namespace Sep490_Backend.Services.ResourceReqService
         /// <param name="actionBy">ID of the user performing the action</param>
         private async Task AddNewResources(ResourceMobilizationReqs request, int actionBy)
         {
+            // Create a dictionary to group resources by ResourceId, ProjectId, and ResourceType
+            var resourceGroups = new Dictionary<(int? ResourceId, int ProjectId, ResourceType ResourceType), 
+                (string Name, int Quantity, string Unit)>();
+            
             foreach (var detail in request.ResourceMobilizationDetails)
             {
                 // Different handling based on resource type
+                string resourceName = "";
+                
                 switch (detail.ResourceType)
                 {
                     case ResourceType.MATERIAL:
-                        // Logic to add new material would go here
-                        // First check if it already exists in inventory
-                        var existingMaterial = await _context.ResourceInventory
-                            .FirstOrDefaultAsync(r => 
-                                r.ResourceType == ResourceType.MATERIAL && 
-                                r.ResourceId == detail.ResourceId &&
-                                !r.Deleted);
-                        
-                        if (existingMaterial == null)
-                        {
-                            // Create new inventory resource
-                            var newMaterialResource = new ResourceInventory
-                            {
-                                Name = detail.Name ?? "New Material Resource",
-                                Description = detail.Description ?? "",
-                                ResourceId = detail.ResourceId,
-                                ProjectId = request.ProjectId,
-                                ResourceType = ResourceType.MATERIAL,
-                                Quantity = detail.Quantity,
-                                Unit = detail.Unit ?? "Unit",
-                                Status = true,
-                                Creator = actionBy,
-                                Updater = actionBy,
-                                CreatedAt = DateTime.UtcNow,
-                                UpdatedAt = DateTime.UtcNow
-                            };
-                            
-                            await _context.ResourceInventory.AddAsync(newMaterialResource);
-                        }
+                        var material = await _context.Materials
+                            .FirstOrDefaultAsync(m => m.Id == detail.ResourceId && !m.Deleted);
+                        resourceName = material?.MaterialName ?? $"Material {detail.ResourceId}";
                         break;
                         
                     case ResourceType.MACHINE:
-                        // Logic to add new machine would go here
-                        var existingMachine = await _context.ResourceInventory
-                            .FirstOrDefaultAsync(r => 
-                                r.ResourceType == ResourceType.MACHINE && 
-                                r.ResourceId == detail.ResourceId &&
-                                !r.Deleted);
-                        
-                        if (existingMachine == null)
-                        {
-                            // Create new inventory resource
-                            var newMachineResource = new ResourceInventory
-                            {
-                                Name = detail.Name ?? "New Machine Resource",
-                                Description = detail.Description ?? "",
-                                ResourceId = detail.ResourceId,
-                                ProjectId = request.ProjectId,
-                                ResourceType = ResourceType.MACHINE,
-                                Quantity = detail.Quantity,
-                                Unit = detail.Unit ?? "Unit",
-                                Status = true,
-                                Creator = actionBy,
-                                Updater = actionBy,
-                                CreatedAt = DateTime.UtcNow,
-                                UpdatedAt = DateTime.UtcNow
-                            };
-                            
-                            await _context.ResourceInventory.AddAsync(newMachineResource);
-                        }
+                        var vehicle = await _context.Vehicles
+                            .FirstOrDefaultAsync(v => v.Id == detail.ResourceId && !v.Deleted);
+                        resourceName = vehicle?.LicensePlate ?? $"Vehicle {detail.ResourceId}";
                         break;
                         
                     case ResourceType.HUMAN:
-                        // Similar logic for human resources
-                        var existingHuman = await _context.ResourceInventory
-                            .FirstOrDefaultAsync(r => 
-                                r.ResourceType == ResourceType.HUMAN && 
-                                r.ResourceId == detail.ResourceId &&
-                                !r.Deleted);
-                        
-                        if (existingHuman == null)
-                        {
-                            // Create new inventory resource
-                            var newHumanResource = new ResourceInventory
-                            {
-                                Name = detail.Name ?? "New Human Resource",
-                                Description = detail.Description ?? "",
-                                ResourceId = detail.ResourceId,
-                                ProjectId = request.ProjectId,
-                                ResourceType = ResourceType.HUMAN,
-                                Quantity = detail.Quantity,
-                                Unit = detail.Unit ?? "Person",
-                                Status = true,
-                                Creator = actionBy,
-                                Updater = actionBy,
-                                CreatedAt = DateTime.UtcNow,
-                                UpdatedAt = DateTime.UtcNow
-                            };
-                            
-                            await _context.ResourceInventory.AddAsync(newHumanResource);
-                        }
+                        var team = await _context.ConstructionTeams
+                            .FirstOrDefaultAsync(t => t.Id == detail.ResourceId && !t.Deleted);
+                        resourceName = team?.TeamName ?? $"Team {detail.ResourceId}";
                         break;
+                        
+                    default:
+                        resourceName = $"Resource {detail.ResourceId}";
+                        break;
+                }
+                
+                // Create a key for grouping
+                var key = (detail.ResourceId, request.ProjectId, detail.ResourceType);
+                
+                // If the key already exists in the dictionary, update the quantity
+                if (resourceGroups.ContainsKey(key))
+                {
+                    var existing = resourceGroups[key];
+                    resourceGroups[key] = (existing.Name, existing.Quantity + detail.Quantity, existing.Unit);
+                }
+                else
+                {
+                    // Otherwise, add a new entry
+                    resourceGroups[key] = (resourceName, detail.Quantity, detail.Unit ?? "Unit");
                 }
             }
             
-            // Save all changes
-            await _context.SaveChangesAsync();
+            // Begin transaction for atomic operations
+            using var transaction = await _context.Database.BeginTransactionAsync();
             
-            // Invalidate inventory cache
-            await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
+            try
+            {
+                // Process each resource group
+                foreach (var group in resourceGroups)
+                {
+                    var key = group.Key;
+                    var value = group.Value;
+                    
+                    // First check if it already exists in inventory
+                    var existingResource = await _context.ResourceInventory
+                        .FirstOrDefaultAsync(r => 
+                            r.ResourceType == key.ResourceType && 
+                            r.ResourceId == key.ResourceId &&
+                            r.ProjectId == key.ProjectId &&
+                            !r.Deleted);
+                        
+                    if (existingResource != null)
+                    {
+                        // Update existing resource
+                        existingResource.Quantity += value.Quantity;
+                        existingResource.UpdatedAt = DateTime.UtcNow;
+                        existingResource.Updater = actionBy;
+                        
+                        _context.ResourceInventory.Update(existingResource);
+                    }
+                    else
+                    {
+                        // Create new inventory resource
+                        var newResource = new ResourceInventory
+                        {
+                            Name = value.Name,
+                            ResourceId = key.ResourceId,
+                            ProjectId = key.ProjectId,
+                            ResourceType = key.ResourceType,
+                            Quantity = value.Quantity,
+                            Unit = value.Unit,
+                            Status = true,
+                            Creator = actionBy,
+                            Updater = actionBy,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow
+                        };
+                        
+                        await _context.ResourceInventory.AddAsync(newResource);
+                    }
+                }
+                
+                // Save all changes
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+                
+                // Invalidate inventory cache
+                await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                throw new DbUpdateException($"Failed to add new resources: {ex.Message}", ex);
+            }
         }
 
         /// <summary>
@@ -1145,7 +1151,6 @@ namespace Sep490_Backend.Services.ResourceReqService
                     var newResource = new ResourceInventory
                     {
                         Name = detail.Name ?? $"Resource {detail.ResourceId}",
-                        Description = detail.Description ?? "",
                         ResourceId = detail.ResourceId,
                         ProjectId = request.ProjectId,
                         ResourceType = detail.ResourceType,
@@ -1230,7 +1235,6 @@ namespace Sep490_Backend.Services.ResourceReqService
                 {
                     Id = r.Id,
                     Name = r.Name,
-                    Description = r.Description,
                     ResourceId = r.ResourceId,
                     ProjectId = r.ProjectId,
                     ResourceType = r.ResourceType,
@@ -1279,7 +1283,6 @@ namespace Sep490_Backend.Services.ResourceReqService
             {
                 Id = resource.Id,
                 Name = resource.Name,
-                Description = resource.Description,
                 ResourceId = resource.ResourceId,
                 ProjectId = resource.ProjectId,
                 ResourceType = resource.ResourceType,
@@ -1345,7 +1348,6 @@ namespace Sep490_Backend.Services.ResourceReqService
                 var newResource = new ResourceInventory
                 {
                     Name = model.Name,
-                    Description = model.Description,
                     ResourceId = model.ResourceId,
                     ProjectId = model.ProjectId,
                     ResourceType = model.ResourceType,
@@ -1436,7 +1438,6 @@ namespace Sep490_Backend.Services.ResourceReqService
 
                 // Update properties
                 resource.Name = model.Name;
-                resource.Description = model.Description;
                 resource.ResourceId = model.ResourceId;
                 resource.ProjectId = model.ProjectId;
                 resource.ResourceType = model.ResourceType;

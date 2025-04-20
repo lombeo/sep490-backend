@@ -1361,8 +1361,10 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
                 return;
             }
             
-            // Create a list to track all inventory resources to be added
-            List<ResourceInventory> inventoryResourcesToAdd = new List<ResourceInventory>();
+            // Dictionary to group resources by ResourceId, ProjectId, and ResourceType
+            // Key is a tuple of (ResourceId, ProjectId, ResourceType), Value is an object with aggregated info
+            var resourceGroups = new Dictionary<(int? ResourceId, int ProjectId, ResourceType ResourceType), 
+                (string Name, int Quantity, string Unit)>();
             
             // Process each plan item
             foreach (var planItem in planItems)
@@ -1380,18 +1382,49 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
                         continue;
                     }
                     
-                    // Get existing inventory resource for this resource ID and type
+                    // Create a key for the resource group
+                    var key = (detail.ResourceId, projectId, detail.ResourceType);
+                    
+                    // Get the resource name based on type
+                    string resourceName = await GetResourceName(detail.ResourceType, detail.ResourceId.Value);
+                    
+                    // If the key already exists in the dictionary, update the quantity
+                    if (resourceGroups.ContainsKey(key))
+                    {
+                        var existing = resourceGroups[key];
+                        resourceGroups[key] = (existing.Name, existing.Quantity + detail.Quantity, existing.Unit);
+                    }
+                    else
+                    {
+                        // Otherwise, add a new entry
+                        resourceGroups[key] = (resourceName, detail.Quantity, detail.Unit ?? "Unit");
+                    }
+                }
+            }
+            
+            // Begin transaction
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            
+            try
+            {
+                // Process each resource group
+                foreach (var group in resourceGroups)
+                {
+                    var key = group.Key;
+                    var value = group.Value;
+                    
+                    // Check if this resource already exists in inventory
                     var existingInventory = await _context.ResourceInventory
                         .FirstOrDefaultAsync(r => 
-                            r.ResourceType == detail.ResourceType && 
-                            r.ResourceId == detail.ResourceId && 
-                            r.ProjectId == projectId &&
+                            r.ResourceType == key.ResourceType && 
+                            r.ResourceId == key.ResourceId && 
+                            r.ProjectId == key.ProjectId &&
                             !r.Deleted);
                     
                     if (existingInventory != null)
                     {
                         // Update existing inventory
-                        existingInventory.Quantity += detail.Quantity;
+                        existingInventory.Quantity += value.Quantity;
                         existingInventory.UpdatedAt = DateTime.UtcNow;
                         existingInventory.Updater = actionBy;
                         
@@ -1399,44 +1432,15 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
                     }
                     else
                     {
-                        // Determine resource name based on type
-                        string resourceName = "";
-                        
-                        switch (detail.ResourceType)
-                        {
-                            case ResourceType.HUMAN:
-                                var team = await _context.ConstructionTeams
-                                    .FirstOrDefaultAsync(t => t.Id == detail.ResourceId);
-                                resourceName = team?.TeamName ?? $"Team {detail.ResourceId}";
-                                break;
-                            
-                            case ResourceType.MACHINE:
-                                var vehicle = await _context.Vehicles
-                                    .FirstOrDefaultAsync(v => v.Id == detail.ResourceId);
-                                resourceName = vehicle?.LicensePlate ?? $"Vehicle {detail.ResourceId}";
-                                break;
-                            
-                            case ResourceType.MATERIAL:
-                                var material = await _context.Materials
-                                    .FirstOrDefaultAsync(m => m.Id == detail.ResourceId);
-                                resourceName = material?.MaterialName ?? $"Material {detail.ResourceId}";
-                                break;
-                            
-                            default:
-                                resourceName = $"Resource {detail.ResourceId}";
-                                break;
-                        }
-                        
                         // Create new inventory resource
                         var newResource = new ResourceInventory
                         {
-                            Name = resourceName,
-                            Description = $"Resource from construction plan {planId}, item {planItem.WorkCode}, detail {detail.WorkCode}",
-                            ResourceId = detail.ResourceId,
-                            ProjectId = projectId,
-                            ResourceType = detail.ResourceType,
-                            Quantity = detail.Quantity,
-                            Unit = detail.Unit ?? "Unit",
+                            Name = value.Name,
+                            ResourceId = key.ResourceId,
+                            ProjectId = key.ProjectId,
+                            ResourceType = key.ResourceType,
+                            Quantity = value.Quantity,
+                            Unit = value.Unit,
                             Status = true,
                             Creator = actionBy,
                             Updater = actionBy,
@@ -1444,22 +1448,49 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
                             UpdatedAt = DateTime.UtcNow
                         };
                         
-                        inventoryResourcesToAdd.Add(newResource);
+                        await _context.ResourceInventory.AddAsync(newResource);
                     }
                 }
+                
+                // Save changes
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+                
+                // Invalidate resource inventory cache
+                await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
             }
-            
-            // Add all new resources at once
-            if (inventoryResourcesToAdd.Any())
+            catch (Exception ex)
             {
-                await _context.ResourceInventory.AddRangeAsync(inventoryResourcesToAdd);
+                await transaction.RollbackAsync();
+                throw new DbUpdateException($"Failed to copy resources to inventory: {ex.Message}", ex);
             }
-            
-            // Save changes
-            await _context.SaveChangesAsync();
-            
-            // Invalidate resource inventory cache
-            await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
+        }
+
+        /// <summary>
+        /// Gets the resource name based on resource type and ID
+        /// </summary>
+        private async Task<string> GetResourceName(ResourceType resourceType, int resourceId)
+        {
+            switch (resourceType)
+            {
+                case ResourceType.HUMAN:
+                    var team = await _context.ConstructionTeams
+                        .FirstOrDefaultAsync(t => t.Id == resourceId && !t.Deleted);
+                    return team?.TeamName ?? $"Team {resourceId}";
+                    
+                case ResourceType.MACHINE:
+                    var vehicle = await _context.Vehicles
+                        .FirstOrDefaultAsync(v => v.Id == resourceId && !v.Deleted);
+                    return vehicle?.LicensePlate ?? $"Vehicle {resourceId}";
+                    
+                case ResourceType.MATERIAL:
+                    var material = await _context.Materials
+                        .FirstOrDefaultAsync(m => m.Id == resourceId && !m.Deleted);
+                    return material?.MaterialName ?? $"Material {resourceId}";
+                    
+                default:
+                    return $"Resource {resourceId}";
+            }
         }
 
         public async Task<bool> Reject(ApproveConstructionPlanDTO model, int actionBy)
