@@ -1187,21 +1187,37 @@ namespace Sep490_Backend.Services.ResourceReqService
         public async Task<List<ResourceInventoryDTO>> ViewInventoryResources(
             ResourceType? type, BaseQuery query)
         {
-            // Check authorization - this method is accessible by Resource Manager
-            if (!_helperService.IsInRole(query.ActionBy, RoleConstValue.RESOURCE_MANAGER))
+            // Check authorization - allow access for:
+            // 1. Resource Managers
+            // 2. Executive Board members (can see all)
+            // 3. Users who are part of projects for which inventory exists
+            bool isExecutiveBoard = _helperService.IsInRole(query.ActionBy, RoleConstValue.EXECUTIVE_BOARD);
+            
+            if (!isExecutiveBoard)
             {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+                // Get user's projects from ProjectUser table
+                var userProjects = await _context.ProjectUsers
+                    .Where(pu => pu.UserId == query.ActionBy && !pu.Deleted)
+                    .Select(pu => pu.ProjectId)
+                    .ToListAsync();
+                
+                // If user isn't part of any projects, deny access
+                if (!userProjects.Any())
+                {
+                    throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+                }
             }
 
-            // Build cache key based on parameters
+            // Build cache key based on parameters - include user ID to avoid cache conflicts between users
             string cacheKey;
             if (type.HasValue && type.Value != ResourceType.NONE)
             {
-                cacheKey = string.Format(RedisCacheKey.RESOURCE_INVENTORY_BY_TYPE_CACHE_KEY, type.Value) + $":PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+                cacheKey = string.Format(RedisCacheKey.RESOURCE_INVENTORY_BY_TYPE_CACHE_KEY, type.Value) + 
+                    $":USER:{query.ActionBy}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
             }
             else
             {
-                cacheKey = $"{RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
+                cacheKey = $"{RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY}:USER:{query.ActionBy}:PAGE:{query.PageIndex}:SIZE:{query.PageSize}";
             }
 
             // Try to get from cache first
@@ -1215,6 +1231,19 @@ namespace Sep490_Backend.Services.ResourceReqService
             // Start with base query
             var dbQuery = _context.ResourceInventory
                 .Where(r => !r.Deleted);
+
+            // If not Executive Board or Resource Manager, filter by user's projects
+            if (!isExecutiveBoard)
+            {
+                // Get user's projects from ProjectUser table
+                var userProjects = await _context.ProjectUsers
+                    .Where(pu => pu.UserId == query.ActionBy && !pu.Deleted)
+                    .Select(pu => pu.ProjectId)
+                    .ToListAsync();
+                
+                // Only show resources for projects the user is part of
+                dbQuery = dbQuery.Where(r => r.ProjectId.HasValue && userProjects.Contains(r.ProjectId.Value));
+            }
 
             // Apply filters if provided
             if (type.HasValue && type.Value != ResourceType.NONE)
