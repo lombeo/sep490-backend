@@ -262,5 +262,21 @@
             public const string UNAUTHORIZED = "E-CL-005"; // You are not authorized to perform this action!
             public const string ONLY_CONSTRUCTION_MANAGER = "E-CL-006"; // Only the Construction Manager can create or update construction logs!
         }
+
+        public static class ConstructionProgressMessage
+        {
+            public const string NOT_FOUND = "Construction progress not found";
+            public const string INVALID_PROJECT = "Invalid project";
+            public const string INVALID_PLAN = "Invalid construction plan";
+            public const string PLAN_NOT_APPROVED = "Construction plan is not approved yet";
+            public const string INVALID_PROGRESS = "Invalid progress value (must be 0-100)";
+            public const string INVALID_STATUS = "Invalid status value";
+            public const string PROGRESS_EXISTS = "Construction progress already exists for this plan";
+            public const string GET_DETAIL_SUCCESS = "Get construction progress detail successfully";
+            public const string SEARCH_SUCCESS = "Search construction progress successfully";
+            public const string CREATE_SUCCESS = "Create construction progress successfully";
+            public const string UPDATE_SUCCESS = "Update construction progress successfully";
+            public const string DELETE_SUCCESS = "Delete construction progress successfully";
+        }
     }
 }

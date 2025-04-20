@@ -58,5 +58,12 @@
         public const string CONSTRUCTION_LOG_LIST_CACHE_KEY = "CONSTRUCTION_LOG:LIST"; // Cache key for construction log list
         public const string CONSTRUCTION_LOG_BY_TASK_CACHE_KEY = "CONSTRUCTION_LOG:TASK:{0}"; // Cache key for construction logs by task index
         public const string CONSTRUCTION_LOG_ALL_PATTERN = "CONSTRUCTION_LOG:*"; // Pattern for all construction log cache keys
+
+        // Construction Progress cache keys
+        public const string CONSTRUCTION_PROGRESS_CACHE_KEY = "CONSTRUCTION_PROGRESS";
+        public const string CONSTRUCTION_PROGRESS_BY_ID_CACHE_KEY = "CONSTRUCTION_PROGRESS:ID:{0}";
+        public const string CONSTRUCTION_PROGRESS_BY_PLAN_CACHE_KEY = "CONSTRUCTION_PROGRESS:PLAN:{0}";
+        public const string CONSTRUCTION_PROGRESS_BY_PROJECT_CACHE_KEY = "CONSTRUCTION_PROGRESS:PROJECT:{0}";
+        public const string CONSTRUCTION_PROGRESS_ALL_PATTERN = "CONSTRUCTION_PROGRESS:*";
     }
 }

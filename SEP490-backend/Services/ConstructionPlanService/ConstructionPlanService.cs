@@ -1204,6 +1204,9 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
                 
                 // Copy all resources from ConstructionPlanItemDetail to ResourceInventory
                 await CopyResourcesFromPlanToInventory(constructionPlan.Id, constructionPlan.ProjectId, actionBy);
+                
+                // Create ConstructionProgress from the approved plan
+                await CreateConstructionProgressFromPlan(constructionPlan.Id, constructionPlan.ProjectId, actionBy);
             }
 
             constructionPlan.Updater = actionBy;
@@ -1215,6 +1218,129 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
             await InvalidateConstructionPlanCaches(constructionPlan.Id, constructionPlan.ProjectId);
             
             return true;
+        }
+
+        /// <summary>
+        /// Creates a new ConstructionProgress based on an approved ConstructionPlan
+        /// </summary>
+        /// <param name="planId">ID of the approved construction plan</param>
+        /// <param name="projectId">ID of the project</param>
+        /// <param name="actionBy">ID of the user performing the action</param>
+        private async Task CreateConstructionProgressFromPlan(int planId, int projectId, int actionBy)
+        {
+            // Check if progress already exists for this plan
+            var existingProgress = await _context.ConstructionProgresses
+                .FirstOrDefaultAsync(cp => cp.PlanId == planId && !cp.Deleted);
+            
+            if (existingProgress != null)
+            {
+                // Progress already exists, no need to create it again
+                return;
+            }
+            
+            // Create construction progress
+            var constructionProgress = new ConstructionProgress
+            {
+                ProjectId = projectId,
+                PlanId = planId,
+                Creator = actionBy
+            };
+            
+            // Add to database
+            await _context.ConstructionProgresses.AddAsync(constructionProgress);
+            await _context.SaveChangesAsync();
+            
+            // Get all plan items
+            var planItems = await _context.ConstructPlanItems
+                .Where(pi => pi.PlanId == planId && !pi.Deleted)
+                .ToListAsync();
+            
+            if (!planItems.Any())
+            {
+                return;
+            }
+            
+            // Create progress items from plan items
+            var progressItems = new List<ConstructionProgressItem>();
+            foreach (var planItem in planItems)
+            {
+                var progressItem = new ConstructionProgressItem
+                {
+                    ProgressId = constructionProgress.Id,
+                    WorkCode = planItem.WorkCode,
+                    Index = planItem.Index,
+                    ParentIndex = planItem.ParentIndex,
+                    WorkName = planItem.WorkName,
+                    Unit = planItem.Unit,
+                    Quantity = planItem.Quantity,
+                    UnitPrice = planItem.UnitPrice,
+                    TotalPrice = planItem.TotalPrice,
+                    Progress = 0, // Initial progress is 0%
+                    Status = ProgressStatusEnum.NotStarted, // Initial status is not started
+                    PlanStartDate = planItem.StartDate,
+                    PlanEndDate = planItem.EndDate,
+                    ActualStartDate = null, // ActualStartDate is null initially
+                    ActualEndDate = null, // ActualEndDate is null initially
+                    ItemRelations = planItem.ItemRelations != null ? new Dictionary<string, string>(planItem.ItemRelations) : new Dictionary<string, string>(),
+                    Creator = actionBy
+                };
+                
+                progressItems.Add(progressItem);
+            }
+            
+            // Add all progress items
+            await _context.ConstructionProgressItems.AddRangeAsync(progressItems);
+            await _context.SaveChangesAsync();
+            
+            // Now get the plan item details and create progress item details
+            foreach (var progressItem in progressItems)
+            {
+                // Find corresponding plan item
+                var planItem = planItems.FirstOrDefault(pi => pi.WorkCode == progressItem.WorkCode);
+                if (planItem == null)
+                {
+                    continue;
+                }
+                
+                // Get plan item details
+                var planItemDetails = await _context.ConstructPlanItemDetails
+                    .Where(d => d.PlanItemId == planItem.Id && !d.Deleted)
+                    .ToListAsync();
+                
+                if (!planItemDetails.Any())
+                {
+                    continue;
+                }
+                
+                // Create progress item details
+                var progressItemDetails = new List<ConstructionProgressItemDetail>();
+                foreach (var planDetail in planItemDetails)
+                {
+                    var progressDetail = new ConstructionProgressItemDetail
+                    {
+                        ProgressItemId = progressItem.Id,
+                        WorkCode = planDetail.WorkCode,
+                        ResourceType = planDetail.ResourceType,
+                        Quantity = planDetail.Quantity,
+                        Unit = planDetail.Unit,
+                        UnitPrice = planDetail.UnitPrice,
+                        Total = planDetail.Total,
+                        ResourceId = planDetail.ResourceId,
+                        Creator = actionBy
+                    };
+                    
+                    progressItemDetails.Add(progressDetail);
+                }
+                
+                // Add all progress item details
+                await _context.ConstructionProgressItemDetails.AddRangeAsync(progressItemDetails);
+            }
+            
+            // Save everything
+            await _context.SaveChangesAsync();
+            
+            // Clear related caches
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.CONSTRUCTION_PROGRESS_ALL_PATTERN);
         }
 
         /// <summary>
