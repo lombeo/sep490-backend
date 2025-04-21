@@ -42,12 +42,12 @@ namespace Sep490_Backend.DTO.InspectionReport
         public DateTime InspectEndDate { get; set; }
         public int ProgressId { get; set; }
         public int PlanId { get; set; }
-        public string Location { get; set; }
-        public List<IFormFile> AttachmentFiles { get; set; }
+        public string? Location { get; set; }
+        public List<IFormFile>? AttachmentFiles { get; set; }
         public InspectionDecision? InspectionDecision { get; set; }
         public InspectionReportStatus? Status { get; set; }
-        public string QualityNote { get; set; }
-        public string OtherNote { get; set; }
+        public string? QualityNote { get; set; }
+        public string? OtherNote { get; set; }
     }
 
     public class SearchInspectionReportDTO : BaseQuery
@@ -58,6 +58,6 @@ namespace Sep490_Backend.DTO.InspectionReport
         public DateTime? EndDate { get; set; }
         public InspectionReportStatus? Status { get; set; }
         public InspectionDecision? Decision { get; set; }
-        public string Keyword { get; set; }
+        public string? Keyword { get; set; }
     }
 } 

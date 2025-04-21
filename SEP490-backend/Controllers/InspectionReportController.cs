@@ -51,7 +51,7 @@ namespace Sep490_Backend.Controllers
             return result;
         }
 
-        [HttpPut("{id}/approve")]
+        [HttpPut("approve/{id}")]
         public async Task<ResponseDTO<InspectionReportDTO>> Approve(int id)
         {
             var model = new SaveInspectionReportDTO
@@ -64,7 +64,7 @@ namespace Sep490_Backend.Controllers
             return result;
         }
 
-        [HttpPut("{id}/reject")]
+        [HttpPut("reject/{id}")]
         public async Task<ResponseDTO<InspectionReportDTO>> Reject(int id)
         {
             var model = new SaveInspectionReportDTO
