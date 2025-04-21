@@ -73,9 +73,9 @@ namespace Sep490_Backend.DTO.ConstructionPlan
         
         [Required(ErrorMessage = "Work code is required for construction activity")]
         public string WorkCode { get; set; } = string.Empty;
-        
+
         [Required(ErrorMessage = "Resource type is required for construction management")]
-        public string ResourceType { get; set; } = string.Empty;
+        public int ResourceType { get; set; }
         
         public int Quantity { get; set; }
         

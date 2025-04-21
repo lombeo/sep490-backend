@@ -366,7 +366,7 @@ namespace Sep490_Backend.Services.ConstructionProgressService
                         Id = detail.Id,
                         ProgressItemId = detail.ProgressItemId,
                         WorkCode = detail.WorkCode,
-                        ResourceType = detail.ResourceType.ToString(),
+                        ResourceType = (int)detail.ResourceType,
                         Quantity = detail.Quantity,
                         Unit = detail.Unit ?? string.Empty,
                         UnitPrice = detail.UnitPrice,

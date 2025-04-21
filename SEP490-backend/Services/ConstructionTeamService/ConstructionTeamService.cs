@@ -54,7 +54,7 @@ namespace Sep490_Backend.Services.ConstructionTeamService
             var errors = new List<ResponseError>();
 
             // Authorization check - only Construction Manager can manage teams
-            if (!_helperService.IsInRole(actionBy, RoleConstValue.CONSTRUCTION_MANAGER))
+            if (!_helperService.IsInRole(actionBy, RoleConstValue.ADMIN))
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }

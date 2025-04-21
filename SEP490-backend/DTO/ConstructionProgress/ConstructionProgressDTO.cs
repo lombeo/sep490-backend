@@ -45,7 +45,7 @@ namespace Sep490_Backend.DTO.ConstructionProgress
         public int Id { get; set; }
         public int ProgressItemId { get; set; }
         public string WorkCode { get; set; } = string.Empty;
-        public string ResourceType { get; set; } = string.Empty;
+        public int ResourceType { get; set; }
         public int Quantity { get; set; }
         public string? Unit { get; set; }
         public decimal UnitPrice { get; set; }
