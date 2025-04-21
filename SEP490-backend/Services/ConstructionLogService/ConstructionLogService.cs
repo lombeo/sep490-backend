@@ -819,8 +819,8 @@ namespace Sep490_Backend.Services.ConstructionLogService
                         foreach (var resource in matchingResources)
                         {
                             // Calculate hours from start/end time
-                            var startTime = TimeSpan.Parse(resource.StartTime);
-                            var endTime = TimeSpan.Parse(resource.EndTime);
+                            var startTime = resource.StartTime;
+                            var endTime = resource.EndTime;
                             var hours = (endTime - startTime).TotalHours;
                             
                             string unit = "giờ";

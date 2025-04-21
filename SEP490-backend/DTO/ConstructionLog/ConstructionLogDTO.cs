@@ -78,8 +78,8 @@ namespace Sep490_Backend.DTO.ConstructionLog
         public int ResourceType { get; set; } // 1: Labor, 2: Machinery, 3: Material
         public decimal Quantity { get; set; }
         public int ResourceId { get; set; }
-        public string StartTime { get; set; }
-        public string EndTime { get; set; }
+        public DateTime StartTime { get; set; }
+        public DateTime EndTime { get; set; }
     }
 
     // DTO for work amount entries
