@@ -77,45 +77,6 @@ namespace Sep490_Backend.Services.ConstructionLogService
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
-            
-            // Check if a log already exists for this project on this date
-            // Only check when creating a new log or changing the date of an existing log
-            bool isDuplicateDate = false;
-            
-            if (model.Id == 0) // Creating new log
-            {
-                // Check if any log already exists for this project on this date
-                isDuplicateDate = await _context.ConstructionLogs
-                    .AnyAsync(cl => cl.ProjectId == model.ProjectId && 
-                              cl.LogDate.Date == model.LogDate.Date && 
-                              !cl.Deleted);
-            }
-            else // Updating existing log
-            {
-                // Get the existing log
-                var existingLog = await _context.ConstructionLogs
-                    .FirstOrDefaultAsync(cl => cl.Id == model.Id && !cl.Deleted);
-                    
-                if (existingLog == null)
-                {
-                    throw new KeyNotFoundException(Message.ConstructionLogMessage.NOT_FOUND);
-                }
-                
-                // If changing the date, check for duplicate
-                if (existingLog.LogDate.Date != model.LogDate.Date)
-                {
-                    isDuplicateDate = await _context.ConstructionLogs
-                        .AnyAsync(cl => cl.ProjectId == model.ProjectId && 
-                                  cl.LogDate.Date == model.LogDate.Date && 
-                                  cl.Id != model.Id && 
-                                  !cl.Deleted);
-                }
-            }
-            
-            if (isDuplicateDate)
-            {
-                throw new InvalidOperationException(Message.ConstructionLogMessage.DUPLICATE_LOG_DATE);
-            }
 
             // Generate LogCode based on Project Code
             string logCode;
