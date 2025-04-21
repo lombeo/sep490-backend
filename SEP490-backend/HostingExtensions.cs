@@ -68,6 +68,7 @@ namespace Sep490_Backend
             builder.Services.AddControllers(options =>
             {
                 options.ModelBinderProviders.Insert(0, new Infra.ModelBinders.ContractDetailModelBinderProvider());
+                options.ModelBinderProviders.Insert(0, new Infra.ModelBinders.ConstructionLogArrayModelBinderProvider());
                 
                 // Add cache profiles for different scenarios
                 options.CacheProfiles.Add("Default", new Microsoft.AspNetCore.Mvc.CacheProfile

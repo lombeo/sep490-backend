@@ -3,6 +3,13 @@ using System.Text.Json;
 
 namespace Sep490_Backend.Infra.Entities
 {
+    public enum ConstructionLogStatus
+    {
+        Rejected = 0,
+        Approved = 1,
+        WaitingForApproval = 2
+    }
+
     public class ConstructionLog : CommonEntity
     {
         public int Id { get; set; }
@@ -21,6 +28,7 @@ namespace Sep490_Backend.Infra.Entities
         public JsonDocument Images { get; set; }
         public JsonDocument Attachments { get; set; }
         public string Note { get; set; }
+        public ConstructionLogStatus Status { get; set; } = ConstructionLogStatus.WaitingForApproval;
 
         // Navigation property
         public virtual Project Project { get; set; }
@@ -83,6 +91,9 @@ namespace Sep490_Backend.Infra.Entities
 
                 entity.Property(e => e.Note)
                       .HasMaxLength(2000);
+
+                entity.Property(e => e.Status)
+                      .HasDefaultValue(ConstructionLogStatus.WaitingForApproval);
 
                 entity.Property(e => e.CreatedAt)
                       .HasColumnType("timestamp without time zone");

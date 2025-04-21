@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Http;
+using Sep490_Backend.Infra.Entities;
 
 namespace Sep490_Backend.DTO.ConstructionLog
 {
@@ -20,9 +21,10 @@ namespace Sep490_Backend.DTO.ConstructionLog
         public string Progress { get; set; }
         public string Problem { get; set; }
         public string Advice { get; set; }
-        public List<string> Images { get; set; }
+        public List<AttachmentDTO> Images { get; set; }
         public List<AttachmentDTO> Attachments { get; set; }
         public string Note { get; set; }
+        public ConstructionLogStatus Status { get; set; }
         public DateTime CreatedAt { get; set; }
         public int Creator { get; set; }
         public DateTime UpdatedAt { get; set; }
@@ -35,20 +37,22 @@ namespace Sep490_Backend.DTO.ConstructionLog
     {
         public int Id { get; set; }
         public int ProjectId { get; set; }
-        public string LogCode { get; set; }
         public string LogName { get; set; }
         public DateTime LogDate { get; set; }
-        public List<ConstructionLogResourceDTO> Resources { get; set; }
-        public List<WorkAmountDTO> WorkAmount { get; set; }
-        public List<WeatherDTO> Weather { get; set; }
+        public List<ConstructionLogResourceDTO>? Resources { get; set; }
+        public List<WorkAmountDTO>? WorkAmount { get; set; }
+        public List<WeatherDTO>? Weather { get; set; }
         public string Safety { get; set; }
         public string Quality { get; set; }
         public string Progress { get; set; }
         public string Problem { get; set; }
         public string Advice { get; set; }
-        public List<string> Images { get; set; }
-        public List<IFormFile> AttachmentFiles { get; set; }
+        public List<string>? Images { get; set; }
+        public List<IFormFile>? ImageFiles { get; set; }
+        public IFormFile? ImageFile { get; set; }
+        public List<IFormFile>? AttachmentFiles { get; set; }
         public string Note { get; set; }
+        public ConstructionLogStatus? Status { get; set; }
     }
 
     // DTO for searching construction logs
@@ -59,7 +63,8 @@ namespace Sep490_Backend.DTO.ConstructionLog
         public string? LogName { get; set; }
         public DateTime? FromDate { get; set; }
         public DateTime? ToDate { get; set; }
-        public int? TaskIndex { get; set; }
+        public string? TaskIndex { get; set; }
+        public ConstructionLogStatus? Status { get; set; }
         public int Page { get; set; } = 1;
         public int PageSize { get; set; } = 10;
         public int ActionBy { get; set; }
@@ -69,7 +74,7 @@ namespace Sep490_Backend.DTO.ConstructionLog
     public class ConstructionLogResourceDTO
     {
         public int? Id { get; set; }
-        public int TaskIndex { get; set; }
+        public string TaskIndex { get; set; }
         public int ResourceType { get; set; } // 1: Labor, 2: Machinery, 3: Material
         public decimal Quantity { get; set; }
         public int ResourceId { get; set; }
@@ -81,7 +86,7 @@ namespace Sep490_Backend.DTO.ConstructionLog
     public class WorkAmountDTO
     {
         public int? Id { get; set; }
-        public int TaskIndex { get; set; }
+        public string TaskIndex { get; set; }
         public decimal WorkAmount { get; set; }
     }
 

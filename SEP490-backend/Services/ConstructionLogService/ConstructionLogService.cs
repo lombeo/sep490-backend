@@ -10,6 +10,7 @@ using Sep490_Backend.Services.GoogleDriveService;
 using System.Text.Json;
 using System.Linq;
 using Sep490_Backend.Controllers;
+using Microsoft.AspNetCore.Http;
 
 namespace Sep490_Backend.Services.ConstructionLogService
 {
@@ -20,7 +21,7 @@ namespace Sep490_Backend.Services.ConstructionLogService
         Task<List<ConstructionLogDTO>> List(SearchConstructionLogDTO model);
         Task<ConstructionLogDTO> Detail(int id, int actionBy);
         Task<List<ConstructionLogDTO>> GetByProject(int projectId, int actionBy);
-        Task<ResourceLogByTaskDTO> GetResourceLogByTask(int projectId, int taskIndex, int actionBy);
+        Task<ResourceLogByTaskDTO> GetResourceLogByTask(int projectId, string taskIndex, int actionBy);
     }
 
     public class ConstructionLogService : IConstructionLogService
@@ -29,25 +30,36 @@ namespace Sep490_Backend.Services.ConstructionLogService
         private readonly ICacheService _cacheService;
         private readonly IHelperService _helperService;
         private readonly IGoogleDriveService _googleDriveService;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
         public ConstructionLogService(
             BackendContext context,
             ICacheService cacheService,
             IHelperService helperService,
-            IGoogleDriveService googleDriveService)
+            IGoogleDriveService googleDriveService,
+            IHttpContextAccessor httpContextAccessor)
         {
             _context = context;
             _cacheService = cacheService;
             _helperService = helperService;
             _googleDriveService = googleDriveService;
+            _httpContextAccessor = httpContextAccessor;
         }
 
         public async Task<ConstructionLogDTO> Save(SaveConstructionLogDTO model, int actionBy)
         {
             // Check if user is a Construction Manager
-            if (!_helperService.IsInRole(actionBy, RoleConstValue.CONSTRUCTION_MANAGER))
+            if (!_helperService.IsInRole(actionBy, RoleConstValue.CONSTRUCTION_MANAGER) &&
+                !_helperService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD))
             {
                 throw new UnauthorizedAccessException(Message.ConstructionLogMessage.ONLY_CONSTRUCTION_MANAGER);
+            }
+
+            // If only updating the status (approve/reject), handle specially
+            if (model.Id != 0 && model.Status.HasValue && 
+                (model.LogName == null && model.ProjectId == 0 && model.LogDate == default))
+            {
+                return await UpdateConstructionLogStatus(model.Id, model.Status.Value, actionBy);
             }
 
             // Check if project exists
@@ -66,23 +78,38 @@ namespace Sep490_Backend.Services.ConstructionLogService
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
 
-            var errors = new List<ResponseError>();
-
-            // Validate log code uniqueness if it's a new log or the code has changed
-            var existingLogs = await _context.ConstructionLogs
-                .Where(cl => !cl.Deleted && cl.LogCode == model.LogCode)
-                .ToListAsync();
-
+            // Generate LogCode based on Project Code
+            string logCode;
             if (model.Id == 0) // Creating new log
             {
+                // Get the latest index for this project
+                int nextIndex = 1;
+                var existingLogs = await _context.ConstructionLogs
+                    .Where(cl => cl.ProjectId == model.ProjectId && !cl.Deleted)
+                    .ToListAsync();
+                
                 if (existingLogs.Any())
                 {
-                    errors.Add(new ResponseError
+                    // Extract indices from existing log codes that match the pattern
+                    var pattern = $"{project.ProjectCode}_Log_";
+                    var indices = existingLogs
+                        .Where(cl => cl.LogCode.StartsWith(pattern))
+                        .Select(cl => 
+                        {
+                            if (int.TryParse(cl.LogCode.Substring(pattern.Length), out int index))
+                                return index;
+                            return 0;
+                        })
+                        .Where(i => i > 0)
+                        .ToList();
+                    
+                    if (indices.Any())
                     {
-                        Message = Message.ConstructionLogMessage.LOG_CODE_EXISTS,
-                        Field = nameof(model.LogCode)
-                    });
+                        nextIndex = indices.Max() + 1;
+                    }
                 }
+                
+                logCode = $"{project.ProjectCode}_Log_{nextIndex}";
             }
             else // Updating existing log
             {
@@ -93,23 +120,13 @@ namespace Sep490_Backend.Services.ConstructionLogService
                     throw new KeyNotFoundException(Message.ConstructionLogMessage.NOT_FOUND);
                 }
                 
-                if (existingLog.LogCode != model.LogCode && existingLogs.Any())
-                {
-                    errors.Add(new ResponseError
-                    {
-                        Message = Message.ConstructionLogMessage.LOG_CODE_EXISTS,
-                        Field = nameof(model.LogCode)
-                    });
-                }
-            }
-
-            if (errors.Count > 0)
-            {
-                throw new ValidationException(errors);
+                // Keep existing log code
+                logCode = existingLog.LogCode;
             }
 
             // Handle file attachments
             List<AttachmentDTO> attachmentInfos = new List<AttachmentDTO>();
+            List<AttachmentDTO> imageInfos = new List<AttachmentDTO>();
             
             // Get existing attachments if updating
             if (model.Id != 0)
@@ -132,6 +149,30 @@ namespace Sep490_Backend.Services.ConstructionLogService
                         {
                             // Log error but continue with upload
                             Console.WriteLine($"Failed to delete old attachments: {ex.Message}");
+                        }
+                    }
+                }
+                
+                // Get existing images if updating
+                if (existingLog?.Images != null)
+                {
+                    imageInfos = JsonSerializer.Deserialize<List<AttachmentDTO>>(existingLog.Images.RootElement.ToString());
+                    
+                    // Delete old images if there are new ones - check for field name "images" which is a file in the form
+                    if (model.ImageFiles != null && model.ImageFiles.Any() || model.ImageFile != null || 
+                        (_httpContextAccessor.HttpContext?.Request.Form.Files != null && 
+                         _httpContextAccessor.HttpContext.Request.Form.Files.Any(f => f.Name == "images")))
+                    {
+                        try
+                        {
+                            var linksToDelete = imageInfos.Select(a => a.WebContentLink).ToList();
+                            await _googleDriveService.DeleteFilesByLinks(linksToDelete);
+                            imageInfos.Clear();
+                        }
+                        catch (Exception ex)
+                        {
+                            // Log error but continue with upload
+                            Console.WriteLine($"Failed to delete old images: {ex.Message}");
                         }
                     }
                 }
@@ -163,6 +204,106 @@ namespace Sep490_Backend.Services.ConstructionLogService
                     }
                 }
             }
+            
+            // Handle single image file from form field named "images"
+            var imagesFiles = _httpContextAccessor.HttpContext?.Request.Form.Files
+                .Where(f => f.Name == "images").ToList();
+            
+            if (imagesFiles != null && imagesFiles.Any())
+            {
+                foreach (var file in imagesFiles)
+                {
+                    // Validate image file type
+                    if (!_googleDriveService.IsValidImageFile(file.FileName, file.ContentType))
+                    {
+                        throw new ArgumentException($"Invalid image file type: {file.FileName}. Only JPEG, PNG, GIF, BMP, WebP and TIFF are allowed.");
+                    }
+                    
+                    using (var stream = file.OpenReadStream())
+                    {
+                        var uploadResult = await _googleDriveService.UploadFile(
+                            stream,
+                            file.FileName,
+                            file.ContentType
+                        );
+
+                        // Parse Google Drive response to get file ID
+                        var fileId = uploadResult.Split("id=").Last().Split("&").First();
+                        
+                        imageInfos.Add(new AttachmentDTO
+                        {
+                            Id = fileId,
+                            Name = file.FileName,
+                            WebViewLink = $"https://drive.google.com/file/d/{fileId}/view",
+                            WebContentLink = uploadResult
+                        });
+                    }
+                }
+            }
+            // If no images found directly in the form, try the ImageFiles or ImageFile properties
+            else if (model.ImageFiles != null && model.ImageFiles.Any())
+            {
+                // Upload new images
+                foreach (var file in model.ImageFiles)
+                {
+                    // Validate image file type
+                    if (!_googleDriveService.IsValidImageFile(file.FileName, file.ContentType))
+                    {
+                        throw new ArgumentException($"Invalid image file type: {file.FileName}. Only JPEG, PNG, GIF, BMP, WebP and TIFF are allowed.");
+                    }
+                    
+                    using (var stream = file.OpenReadStream())
+                    {
+                        var uploadResult = await _googleDriveService.UploadFile(
+                            stream,
+                            file.FileName,
+                            file.ContentType
+                        );
+
+                        // Parse Google Drive response to get file ID
+                        var fileId = uploadResult.Split("id=").Last().Split("&").First();
+                        
+                        imageInfos.Add(new AttachmentDTO
+                        {
+                            Id = fileId,
+                            Name = file.FileName,
+                            WebViewLink = $"https://drive.google.com/file/d/{fileId}/view",
+                            WebContentLink = uploadResult
+                        });
+                    }
+                }
+            }
+            // Handle single image file upload (for backward compatibility with frontend)
+            else if (model.ImageFile != null)
+            {
+                var file = model.ImageFile;
+                
+                // Validate image file type
+                if (!_googleDriveService.IsValidImageFile(file.FileName, file.ContentType))
+                {
+                    throw new ArgumentException($"Invalid image file type: {file.FileName}. Only JPEG, PNG, GIF, BMP, WebP and TIFF are allowed.");
+                }
+                
+                using (var stream = file.OpenReadStream())
+                {
+                    var uploadResult = await _googleDriveService.UploadFile(
+                        stream,
+                        file.FileName,
+                        file.ContentType
+                    );
+
+                    // Parse Google Drive response to get file ID
+                    var fileId = uploadResult.Split("id=").Last().Split("&").First();
+                    
+                    imageInfos.Add(new AttachmentDTO
+                    {
+                        Id = fileId,
+                        Name = file.FileName,
+                        WebViewLink = $"https://drive.google.com/file/d/{fileId}/view",
+                        WebContentLink = uploadResult
+                    });
+                }
+            }
 
             ConstructionLog constructionLog;
             
@@ -177,30 +318,49 @@ namespace Sep490_Backend.Services.ConstructionLogService
                 
                 // Update properties
                 constructionLog.ProjectId = model.ProjectId;
-                constructionLog.LogCode = model.LogCode;
+                constructionLog.LogCode = logCode; // Use the auto-generated or existing log code
                 constructionLog.LogName = model.LogName;
                 constructionLog.LogDate = model.LogDate;
                 constructionLog.Resources = model.Resources != null 
                     ? JsonDocument.Parse(JsonSerializer.Serialize(model.Resources))
-                    : null;
+                    : JsonDocument.Parse(JsonSerializer.Serialize(new List<ConstructionLogResourceDTO>()));
                 constructionLog.WorkAmount = model.WorkAmount != null 
                     ? JsonDocument.Parse(JsonSerializer.Serialize(model.WorkAmount))
-                    : null;
+                    : JsonDocument.Parse(JsonSerializer.Serialize(new List<WorkAmountDTO>()));
                 constructionLog.Weather = model.Weather != null 
                     ? JsonDocument.Parse(JsonSerializer.Serialize(model.Weather))
-                    : null;
+                    : JsonDocument.Parse(JsonSerializer.Serialize(new List<WeatherDTO>()));
                 constructionLog.Safety = model.Safety;
                 constructionLog.Quality = model.Quality;
                 constructionLog.Progress = model.Progress;
                 constructionLog.Problem = model.Problem;
                 constructionLog.Advice = model.Advice;
-                constructionLog.Images = model.Images != null && model.Images.Any() 
-                    ? JsonDocument.Parse(JsonSerializer.Serialize(model.Images))
-                    : null;
+                constructionLog.Images = imageInfos.Any() 
+                    ? JsonDocument.Parse(JsonSerializer.Serialize(imageInfos))
+                    : (model.Images != null && model.Images.Any()
+                        ? JsonDocument.Parse(JsonSerializer.Serialize(model.Images.Select(url => new AttachmentDTO
+                        {
+                            WebContentLink = url,
+                            WebViewLink = url,
+                            Name = "Legacy Image",
+                            Id = Guid.NewGuid().ToString()
+                        }).ToList()))
+                        : JsonDocument.Parse(JsonSerializer.Serialize(new List<AttachmentDTO>())));
                 constructionLog.Attachments = attachmentInfos.Any() 
                     ? JsonDocument.Parse(JsonSerializer.Serialize(attachmentInfos))
-                    : null;
+                    : JsonDocument.Parse(JsonSerializer.Serialize(new List<AttachmentDTO>()));
                 constructionLog.Note = model.Note;
+                
+                // Update Status if provided, otherwise reset to WaitingForApproval if there are significant changes
+                if (model.Status.HasValue)
+                {
+                    constructionLog.Status = model.Status.Value;
+                }
+                else if (HasSignificantChanges(constructionLog, model))
+                {
+                    constructionLog.Status = ConstructionLogStatus.WaitingForApproval;
+                }
+                
                 constructionLog.UpdatedAt = DateTime.UtcNow;
                 constructionLog.Updater = actionBy;
                 
@@ -211,30 +371,39 @@ namespace Sep490_Backend.Services.ConstructionLogService
                 constructionLog = new ConstructionLog
                 {
                     ProjectId = model.ProjectId,
-                    LogCode = model.LogCode,
+                    LogCode = logCode, // Use the auto-generated log code
                     LogName = model.LogName,
                     LogDate = model.LogDate,
                     Resources = model.Resources != null 
                         ? JsonDocument.Parse(JsonSerializer.Serialize(model.Resources))
-                        : null,
+                        : JsonDocument.Parse(JsonSerializer.Serialize(new List<ConstructionLogResourceDTO>())),
                     WorkAmount = model.WorkAmount != null 
                         ? JsonDocument.Parse(JsonSerializer.Serialize(model.WorkAmount))
-                        : null,
+                        : JsonDocument.Parse(JsonSerializer.Serialize(new List<WorkAmountDTO>())),
                     Weather = model.Weather != null 
                         ? JsonDocument.Parse(JsonSerializer.Serialize(model.Weather))
-                        : null,
+                        : JsonDocument.Parse(JsonSerializer.Serialize(new List<WeatherDTO>())),
                     Safety = model.Safety,
                     Quality = model.Quality,
                     Progress = model.Progress,
                     Problem = model.Problem,
                     Advice = model.Advice,
-                    Images = model.Images != null && model.Images.Any() 
-                        ? JsonDocument.Parse(JsonSerializer.Serialize(model.Images))
-                        : null,
+                    Images = imageInfos.Any() 
+                        ? JsonDocument.Parse(JsonSerializer.Serialize(imageInfos))
+                        : (model.Images != null && model.Images.Any()
+                            ? JsonDocument.Parse(JsonSerializer.Serialize(model.Images.Select(url => new AttachmentDTO
+                            {
+                                WebContentLink = url,
+                                WebViewLink = url,
+                                Name = "Legacy Image",
+                                Id = Guid.NewGuid().ToString()
+                            }).ToList()))
+                            : JsonDocument.Parse(JsonSerializer.Serialize(new List<AttachmentDTO>()))),
                     Attachments = attachmentInfos.Any() 
                         ? JsonDocument.Parse(JsonSerializer.Serialize(attachmentInfos))
-                        : null,
+                        : JsonDocument.Parse(JsonSerializer.Serialize(new List<AttachmentDTO>())),
                     Note = model.Note,
+                    Status = model.Status ?? ConstructionLogStatus.WaitingForApproval,
                     CreatedAt = DateTime.UtcNow,
                     Creator = actionBy,
                     UpdatedAt = DateTime.UtcNow,
@@ -254,6 +423,47 @@ namespace Sep490_Backend.Services.ConstructionLogService
             var result = await MapToConstructionLogDTO(constructionLog);
             
             return result;
+        }
+
+        private async Task<ConstructionLogDTO> UpdateConstructionLogStatus(int id, ConstructionLogStatus status, int actionBy)
+        {
+            // Only executive board members can approve/reject
+            if (!_helperService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD))
+            {
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+            }
+            
+            var constructionLog = await _context.ConstructionLogs.FirstOrDefaultAsync(cl => cl.Id == id && !cl.Deleted);
+            
+            if (constructionLog == null)
+            {
+                throw new KeyNotFoundException(Message.ConstructionLogMessage.NOT_FOUND);
+            }
+            
+            // Check if the log is in the waiting for approval state
+            if (constructionLog.Status != ConstructionLogStatus.WaitingForApproval)
+            {
+                if (status == ConstructionLogStatus.Approved)
+                {
+                    throw new InvalidOperationException(Message.ConstructionLogMessage.ONLY_WAITING_APPROVAL_CAN_BE_APPROVED);
+                }
+                else if (status == ConstructionLogStatus.Rejected)
+                {
+                    throw new InvalidOperationException(Message.ConstructionLogMessage.ONLY_WAITING_APPROVAL_CAN_BE_REJECTED);
+                }
+            }
+            
+            constructionLog.Status = status;
+            constructionLog.UpdatedAt = DateTime.UtcNow;
+            constructionLog.Updater = actionBy;
+            
+            _context.Update(constructionLog);
+            await _context.SaveChangesAsync();
+            
+            // Invalidate related caches
+            await InvalidateConstructionLogCaches(constructionLog.Id, constructionLog.ProjectId);
+            
+            return await MapToConstructionLogDTO(constructionLog);
         }
 
         public async Task<int> Delete(int id, int actionBy)
@@ -296,7 +506,7 @@ namespace Sep490_Backend.Services.ConstructionLogService
 
         public async Task<List<ConstructionLogDTO>> List(SearchConstructionLogDTO model)
         {
-            string cacheKey = $"{RedisCacheKey.CONSTRUCTION_LOG_LIST_CACHE_KEY}:{model.ProjectId}:{model.FromDate}:{model.ToDate}:{model.LogCode}:{model.LogName}:{model.TaskIndex}:{model.Page}:{model.PageSize}";
+            string cacheKey = $"{RedisCacheKey.CONSTRUCTION_LOG_LIST_CACHE_KEY}:{model.ProjectId}:{model.FromDate}:{model.ToDate}:{model.LogCode}:{model.LogName}:{model.TaskIndex}:{model.Status}:{model.Page}:{model.PageSize}";
             
             var cachedResult = await _cacheService.GetAsync<List<ConstructionLogDTO>>(cacheKey);
             if (cachedResult != null)
@@ -369,7 +579,12 @@ namespace Sep490_Backend.Services.ConstructionLogService
                 query = query.Where(cl => cl.LogDate <= model.ToDate);
             }
             
-            if (model.TaskIndex.HasValue)
+            if (model.Status.HasValue)
+            {
+                query = query.Where(cl => cl.Status == model.Status.Value);
+            }
+            
+            if (!string.IsNullOrWhiteSpace(model.TaskIndex))
             {
                 // For task index filtering, we need to look inside the JSON data
                 var constructionLogs = await query.ToListAsync();
@@ -532,7 +747,7 @@ namespace Sep490_Backend.Services.ConstructionLogService
             return result;
         }
 
-        public async Task<ResourceLogByTaskDTO> GetResourceLogByTask(int projectId, int taskIndex, int actionBy)
+        public async Task<ResourceLogByTaskDTO> GetResourceLogByTask(int projectId, string taskIndex, int actionBy)
         {
             string cacheKey = $"{RedisCacheKey.CONSTRUCTION_LOG_BY_TASK_CACHE_KEY}:{projectId}:{taskIndex}";
             
@@ -658,12 +873,13 @@ namespace Sep490_Backend.Services.ConstructionLogService
                 Problem = log.Problem,
                 Advice = log.Advice,
                 Images = log.Images != null 
-                    ? JsonSerializer.Deserialize<List<string>>(log.Images.RootElement.ToString())
-                    : new List<string>(),
+                    ? JsonSerializer.Deserialize<List<AttachmentDTO>>(log.Images.RootElement.ToString())
+                    : new List<AttachmentDTO>(),
                 Attachments = log.Attachments != null 
                     ? JsonSerializer.Deserialize<List<AttachmentDTO>>(log.Attachments.RootElement.ToString())
                     : new List<AttachmentDTO>(),
                 Note = log.Note,
+                Status = log.Status,
                 CreatedAt = log.CreatedAt ?? DateTime.MinValue,
                 Creator = log.Creator,
                 UpdatedAt = log.UpdatedAt ?? DateTime.MinValue,
@@ -698,6 +914,148 @@ namespace Sep490_Backend.Services.ConstructionLogService
             await _cacheService.DeleteByPatternAsync($"{RedisCacheKey.CONSTRUCTION_LOG_BY_TASK_CACHE_KEY}:{projectId}:*");
             await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_LOG_CACHE_KEY);
             await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_LOG_LIST_CACHE_KEY);
+        }
+
+        // Helper method to check if significant changes were made to the log
+        private bool HasSignificantChanges(ConstructionLog existingLog, SaveConstructionLogDTO model)
+        {
+            // Check if any major fields have changed
+            if (existingLog.LogName != model.LogName ||
+                existingLog.LogDate != model.LogDate ||
+                existingLog.Safety != model.Safety ||
+                existingLog.Quality != model.Quality ||
+                existingLog.Progress != model.Progress ||
+                existingLog.Problem != model.Problem ||
+                existingLog.Advice != model.Advice ||
+                existingLog.Note != model.Note)
+            {
+                return true;
+            }
+
+            // Check if resources have changed
+            if (model.Resources != null)
+            {
+                var existingResources = JsonSerializer.Deserialize<List<ConstructionLogResourceDTO>>(existingLog.Resources.RootElement.ToString());
+                if (!AreResourcesEqual(existingResources, model.Resources))
+                {
+                    return true;
+                }
+            }
+
+            // Check if work amount has changed
+            if (model.WorkAmount != null)
+            {
+                var existingWorkAmount = JsonSerializer.Deserialize<List<WorkAmountDTO>>(existingLog.WorkAmount.RootElement.ToString());
+                if (!AreWorkAmountsEqual(existingWorkAmount, model.WorkAmount))
+                {
+                    return true;
+                }
+            }
+
+            // Check if weather has changed
+            if (model.Weather != null)
+            {
+                var existingWeather = JsonSerializer.Deserialize<List<WeatherDTO>>(existingLog.Weather.RootElement.ToString());
+                if (!AreWeatherEqual(existingWeather, model.Weather))
+                {
+                    return true;
+                }
+            }
+
+            // Check if attachments or images have changed
+            if ((model.AttachmentFiles != null && model.AttachmentFiles.Any()) ||
+                (model.ImageFiles != null && model.ImageFiles.Any()) ||
+                model.ImageFile != null ||
+                (_httpContextAccessor.HttpContext?.Request.Form.Files != null && 
+                 _httpContextAccessor.HttpContext.Request.Form.Files.Any(f => f.Name == "images")))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool AreResourcesEqual(List<ConstructionLogResourceDTO> list1, List<ConstructionLogResourceDTO> list2)
+        {
+            if (list1 == null && list2 == null) return true;
+            if (list1 == null || list2 == null) return false;
+            if (list1.Count != list2.Count) return false;
+
+            // Compare each resource
+            for (int i = 0; i < list1.Count; i++)
+            {
+                var r1 = list1[i];
+                var r2 = list2[i];
+                
+                if (r1.TaskIndex != r2.TaskIndex ||
+                    r1.ResourceType != r2.ResourceType ||
+                    r1.Quantity != r2.Quantity ||
+                    r1.ResourceId != r2.ResourceId ||
+                    r1.StartTime != r2.StartTime ||
+                    r1.EndTime != r2.EndTime)
+                {
+                    return false;
+                }
+            }
+            
+            return true;
+        }
+
+        private bool AreWorkAmountsEqual(List<WorkAmountDTO> list1, List<WorkAmountDTO> list2)
+        {
+            if (list1 == null && list2 == null) return true;
+            if (list1 == null || list2 == null) return false;
+            if (list1.Count != list2.Count) return false;
+
+            // Compare each work amount
+            for (int i = 0; i < list1.Count; i++)
+            {
+                var w1 = list1[i];
+                var w2 = list2[i];
+                
+                if (w1.TaskIndex != w2.TaskIndex ||
+                    w1.WorkAmount != w2.WorkAmount)
+                {
+                    return false;
+                }
+            }
+            
+            return true;
+        }
+
+        private bool AreWeatherEqual(List<WeatherDTO> list1, List<WeatherDTO> list2)
+        {
+            if (list1 == null && list2 == null) return true;
+            if (list1 == null || list2 == null) return false;
+            if (list1.Count != list2.Count) return false;
+
+            // Compare each weather entry
+            for (int i = 0; i < list1.Count; i++)
+            {
+                var w1 = list1[i];
+                var w2 = list2[i];
+                
+                if (w1.Type != w2.Type)
+                {
+                    return false;
+                }
+                
+                // Compare values
+                if (w1.Values.Count != w2.Values.Count)
+                {
+                    return false;
+                }
+                
+                for (int j = 0; j < w1.Values.Count; j++)
+                {
+                    if (w1.Values[j] != w2.Values[j])
+                    {
+                        return false;
+                    }
+                }
+            }
+            
+            return true;
         }
     }
 } 

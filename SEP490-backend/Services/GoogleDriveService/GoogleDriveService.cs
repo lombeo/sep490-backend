@@ -13,6 +13,7 @@ namespace Sep490_Backend.Services.GoogleDriveService
         Task DeleteFile(string fileId);
         Task DeleteFilesByLinks(List<string> fileLinks);
         bool IsValidFileType(string fileName, string mimeType);
+        bool IsValidImageFile(string fileName, string mimeType);
     }
 
     public class GoogleDriveService : IGoogleDriveService
@@ -25,6 +26,16 @@ namespace Sep490_Backend.Services.GoogleDriveService
             "application/pdf",
             "application/msword",
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        };
+        private readonly string[] AllowedImageMimeTypes = new[]
+        {
+            "image/jpeg",
+            "image/jpg",
+            "image/png",
+            "image/gif",
+            "image/bmp",
+            "image/webp",
+            "image/tiff"
         };
         private const int MaxFileSizeInMB = 10;
 
@@ -62,6 +73,11 @@ namespace Sep490_Backend.Services.GoogleDriveService
             return AllowedMimeTypes.Contains(mimeType);
         }
 
+        public bool IsValidImageFile(string fileName, string mimeType)
+        {
+            return AllowedImageMimeTypes.Contains(mimeType);
+        }
+
         public async Task<string> UploadFile(Stream fileStream, string fileName, string mimeType)
         {
             try
@@ -71,9 +87,21 @@ namespace Sep490_Backend.Services.GoogleDriveService
                     throw new ArgumentException("File stream is empty or null.");
                 }
 
-                if (!IsValidFileType(fileName, mimeType))
+                // Check file type based on mime type
+                bool isImage = mimeType.StartsWith("image/");
+                if (isImage)
                 {
-                    throw new ArgumentException("Invalid file type. Only PDF and Word documents are allowed.");
+                    if (!IsValidImageFile(fileName, mimeType))
+                    {
+                        throw new ArgumentException("Invalid image file type. Only JPEG, PNG, GIF, BMP, WebP and TIFF are allowed.");
+                    }
+                }
+                else
+                {
+                    if (!IsValidFileType(fileName, mimeType))
+                    {
+                        throw new ArgumentException("Invalid file type. Only PDF and Word documents are allowed.");
+                    }
                 }
 
                 if (fileStream.Length > MaxFileSizeInMB * 1024 * 1024)

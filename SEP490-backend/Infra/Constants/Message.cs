@@ -253,6 +253,8 @@
             public const string GET_DETAIL_SUCCESS = "S-CL-005"; // Get construction log details successfully!
             public const string GET_BY_PROJECT_SUCCESS = "S-CL-006"; // Get construction logs by project successfully!
             public const string GET_BY_TASK_SUCCESS = "S-CL-007"; // Get construction logs by task successfully!
+            public const string APPROVE_SUCCESS = "S-CL-008"; // Approve construction log successfully!
+            public const string REJECT_SUCCESS = "S-CL-009"; // Reject construction log successfully!
             
             // Error messages
             public const string NOT_FOUND = "E-CL-001"; // Construction log not found!
@@ -261,6 +263,9 @@
             public const string INVALID_DATE = "E-CL-004"; // Invalid date format or value!
             public const string UNAUTHORIZED = "E-CL-005"; // You are not authorized to perform this action!
             public const string ONLY_CONSTRUCTION_MANAGER = "E-CL-006"; // Only the Construction Manager can create or update construction logs!
+            public const string APPROVAL_REQUIRED = "E-CL-007"; // Construction log requires approval!
+            public const string ONLY_WAITING_APPROVAL_CAN_BE_APPROVED = "E-CL-008"; // Only logs waiting for approval can be approved!
+            public const string ONLY_WAITING_APPROVAL_CAN_BE_REJECTED = "E-CL-009"; // Only logs waiting for approval can be rejected!
         }
 
         public static class ConstructionProgressMessage

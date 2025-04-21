@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Sep490_Backend.DTO.Common;
 using Sep490_Backend.DTO.ConstructionLog;
 using Sep490_Backend.Infra.Constants;
+using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Services.ConstructionLogService;
 
 namespace Sep490_Backend.Controllers
@@ -42,7 +43,7 @@ namespace Sep490_Backend.Controllers
         }
 
         [HttpGet("project/{projectId}/task/{taskIndex}")]
-        public async Task<ResponseDTO<ResourceLogByTaskDTO>> GetResourceLogByTask(int projectId, int taskIndex)
+        public async Task<ResponseDTO<ResourceLogByTaskDTO>> GetResourceLogByTask(int projectId, string taskIndex)
         {
             var result = await HandleException(_constructionLogService.GetResourceLogByTask(projectId, taskIndex, UserId), Message.ConstructionLogMessage.GET_BY_TASK_SUCCESS);
             return result;
@@ -54,6 +55,32 @@ namespace Sep490_Backend.Controllers
         {
             var successMessage = model.Id == 0 ? Message.ConstructionLogMessage.CREATE_SUCCESS : Message.ConstructionLogMessage.UPDATE_SUCCESS;
             var result = await HandleException(_constructionLogService.Save(model, UserId), successMessage);
+            return result;
+        }
+
+        [HttpPut("{id}/approve")]
+        public async Task<ResponseDTO<ConstructionLogDTO>> Approve(int id)
+        {
+            var model = new SaveConstructionLogDTO
+            {
+                Id = id,
+                Status = ConstructionLogStatus.Approved
+            };
+            
+            var result = await HandleException(_constructionLogService.Save(model, UserId), Message.ConstructionLogMessage.APPROVE_SUCCESS);
+            return result;
+        }
+
+        [HttpPut("{id}/reject")]
+        public async Task<ResponseDTO<ConstructionLogDTO>> Reject(int id)
+        {
+            var model = new SaveConstructionLogDTO
+            {
+                Id = id,
+                Status = ConstructionLogStatus.Rejected
+            };
+            
+            var result = await HandleException(_constructionLogService.Save(model, UserId), Message.ConstructionLogMessage.REJECT_SUCCESS);
             return result;
         }
 
