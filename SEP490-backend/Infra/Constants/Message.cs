@@ -266,6 +266,7 @@
             public const string APPROVAL_REQUIRED = "E-CL-007"; // Construction log requires approval!
             public const string ONLY_WAITING_APPROVAL_CAN_BE_APPROVED = "E-CL-008"; // Only logs waiting for approval can be approved!
             public const string ONLY_WAITING_APPROVAL_CAN_BE_REJECTED = "E-CL-009"; // Only logs waiting for approval can be rejected!
+            public const string DUPLICATE_LOG_DATE = "E-CL-010"; // A construction log already exists for this project on this date!
         }
 
         public static class ConstructionProgressMessage
