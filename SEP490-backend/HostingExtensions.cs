@@ -34,6 +34,7 @@ using Sep490_Backend.Services.ActionLogService;
 using System.Net;
 using Sep490_Backend.Services.ConstructionLogService;
 using Sep490_Backend.Services.ConstructionProgressService;
+using Sep490_Backend.Services.InspectionReportService;
 
 namespace Sep490_Backend
 {
@@ -123,6 +124,7 @@ namespace Sep490_Backend
             builder.Services.AddScoped<IActionLogService, ActionLogService>();
             builder.Services.AddScoped<IConstructionLogService, ConstructionLogService>();
             builder.Services.AddScoped<IConstructionProgressService, ConstructionProgressService>();
+            builder.Services.AddScoped<IInspectionReportService, InspectionReportService>();
             builder.Services.AddHostedService<DefaultBackgroundService>();
 
             builder.Services.AddEndpointsApiExplorer();

@@ -15,5 +15,7 @@ namespace Sep490_Backend.DTO
         
         [Required(ErrorMessage = "Web content link is required")]
         public string WebContentLink { get; set; } = string.Empty;
+        
+        public string? MimeType { get; set; }
     }
 }

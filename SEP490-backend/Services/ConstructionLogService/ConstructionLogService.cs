@@ -11,6 +11,7 @@ using System.Text.Json;
 using System.Linq;
 using Sep490_Backend.Controllers;
 using Microsoft.AspNetCore.Http;
+using Sep490_Backend.DTO;
 
 namespace Sep490_Backend.Services.ConstructionLogService
 {
@@ -125,8 +126,8 @@ namespace Sep490_Backend.Services.ConstructionLogService
             }
 
             // Handle file attachments
-            List<AttachmentDTO> attachmentInfos = new List<AttachmentDTO>();
-            List<AttachmentDTO> imageInfos = new List<AttachmentDTO>();
+            List<AttachmentInfo> attachmentInfos = new List<AttachmentInfo>();
+            List<AttachmentInfo> imageInfos = new List<AttachmentInfo>();
             
             // Get existing attachments if updating
             if (model.Id != 0)
@@ -134,7 +135,7 @@ namespace Sep490_Backend.Services.ConstructionLogService
                 var existingLog = await _context.ConstructionLogs.FirstOrDefaultAsync(cl => cl.Id == model.Id && !cl.Deleted);
                 if (existingLog?.Attachments != null)
                 {
-                    attachmentInfos = JsonSerializer.Deserialize<List<AttachmentDTO>>(existingLog.Attachments.RootElement.ToString());
+                    attachmentInfos = JsonSerializer.Deserialize<List<AttachmentInfo>>(existingLog.Attachments.RootElement.ToString());
                     
                     // Delete old attachments if there are new ones
                     if (model.AttachmentFiles != null && model.AttachmentFiles.Any())
@@ -156,7 +157,7 @@ namespace Sep490_Backend.Services.ConstructionLogService
                 // Get existing images if updating
                 if (existingLog?.Images != null)
                 {
-                    imageInfos = JsonSerializer.Deserialize<List<AttachmentDTO>>(existingLog.Images.RootElement.ToString());
+                    imageInfos = JsonSerializer.Deserialize<List<AttachmentInfo>>(existingLog.Images.RootElement.ToString());
                     
                     // Delete old images if there are new ones - check for field name "images" which is a file in the form
                     if (model.ImageFiles != null && model.ImageFiles.Any() || model.ImageFile != null || 
@@ -194,7 +195,7 @@ namespace Sep490_Backend.Services.ConstructionLogService
                         // Parse Google Drive response to get file ID
                         var fileId = uploadResult.Split("id=").Last().Split("&").First();
                         
-                        attachmentInfos.Add(new AttachmentDTO
+                        attachmentInfos.Add(new AttachmentInfo
                         {
                             Id = fileId,
                             Name = file.FileName,
@@ -230,7 +231,7 @@ namespace Sep490_Backend.Services.ConstructionLogService
                         // Parse Google Drive response to get file ID
                         var fileId = uploadResult.Split("id=").Last().Split("&").First();
                         
-                        imageInfos.Add(new AttachmentDTO
+                        imageInfos.Add(new AttachmentInfo
                         {
                             Id = fileId,
                             Name = file.FileName,
@@ -263,7 +264,7 @@ namespace Sep490_Backend.Services.ConstructionLogService
                         // Parse Google Drive response to get file ID
                         var fileId = uploadResult.Split("id=").Last().Split("&").First();
                         
-                        imageInfos.Add(new AttachmentDTO
+                        imageInfos.Add(new AttachmentInfo
                         {
                             Id = fileId,
                             Name = file.FileName,
@@ -295,7 +296,7 @@ namespace Sep490_Backend.Services.ConstructionLogService
                     // Parse Google Drive response to get file ID
                     var fileId = uploadResult.Split("id=").Last().Split("&").First();
                     
-                    imageInfos.Add(new AttachmentDTO
+                    imageInfos.Add(new AttachmentInfo
                     {
                         Id = fileId,
                         Name = file.FileName,
@@ -338,17 +339,17 @@ namespace Sep490_Backend.Services.ConstructionLogService
                 constructionLog.Images = imageInfos.Any() 
                     ? JsonDocument.Parse(JsonSerializer.Serialize(imageInfos))
                     : (model.Images != null && model.Images.Any()
-                        ? JsonDocument.Parse(JsonSerializer.Serialize(model.Images.Select(url => new AttachmentDTO
+                        ? JsonDocument.Parse(JsonSerializer.Serialize(model.Images.Select(url => new AttachmentInfo
                         {
                             WebContentLink = url,
                             WebViewLink = url,
                             Name = "Legacy Image",
                             Id = Guid.NewGuid().ToString()
                         }).ToList()))
-                        : JsonDocument.Parse(JsonSerializer.Serialize(new List<AttachmentDTO>())));
+                        : JsonDocument.Parse(JsonSerializer.Serialize(new List<AttachmentInfo>())));
                 constructionLog.Attachments = attachmentInfos.Any() 
                     ? JsonDocument.Parse(JsonSerializer.Serialize(attachmentInfos))
-                    : JsonDocument.Parse(JsonSerializer.Serialize(new List<AttachmentDTO>()));
+                    : JsonDocument.Parse(JsonSerializer.Serialize(new List<AttachmentInfo>()));
                 constructionLog.Note = model.Note;
                 
                 // Update Status if provided, otherwise reset to WaitingForApproval if there are significant changes
@@ -391,17 +392,17 @@ namespace Sep490_Backend.Services.ConstructionLogService
                     Images = imageInfos.Any() 
                         ? JsonDocument.Parse(JsonSerializer.Serialize(imageInfos))
                         : (model.Images != null && model.Images.Any()
-                            ? JsonDocument.Parse(JsonSerializer.Serialize(model.Images.Select(url => new AttachmentDTO
+                            ? JsonDocument.Parse(JsonSerializer.Serialize(model.Images.Select(url => new AttachmentInfo
                             {
                                 WebContentLink = url,
                                 WebViewLink = url,
                                 Name = "Legacy Image",
                                 Id = Guid.NewGuid().ToString()
                             }).ToList()))
-                            : JsonDocument.Parse(JsonSerializer.Serialize(new List<AttachmentDTO>()))),
+                            : JsonDocument.Parse(JsonSerializer.Serialize(new List<AttachmentInfo>()))),
                     Attachments = attachmentInfos.Any() 
                         ? JsonDocument.Parse(JsonSerializer.Serialize(attachmentInfos))
-                        : JsonDocument.Parse(JsonSerializer.Serialize(new List<AttachmentDTO>())),
+                        : JsonDocument.Parse(JsonSerializer.Serialize(new List<AttachmentInfo>())),
                     Note = model.Note,
                     Status = model.Status ?? ConstructionLogStatus.WaitingForApproval,
                     CreatedAt = DateTime.UtcNow,
@@ -873,11 +874,11 @@ namespace Sep490_Backend.Services.ConstructionLogService
                 Problem = log.Problem,
                 Advice = log.Advice,
                 Images = log.Images != null 
-                    ? JsonSerializer.Deserialize<List<AttachmentDTO>>(log.Images.RootElement.ToString())
-                    : new List<AttachmentDTO>(),
+                    ? JsonSerializer.Deserialize<List<AttachmentInfo>>(log.Images.RootElement.ToString())
+                    : new List<AttachmentInfo>(),
                 Attachments = log.Attachments != null 
-                    ? JsonSerializer.Deserialize<List<AttachmentDTO>>(log.Attachments.RootElement.ToString())
-                    : new List<AttachmentDTO>(),
+                    ? JsonSerializer.Deserialize<List<AttachmentInfo>>(log.Attachments.RootElement.ToString())
+                    : new List<AttachmentInfo>(),
                 Note = log.Note,
                 Status = log.Status,
                 CreatedAt = log.CreatedAt ?? DateTime.MinValue,

@@ -283,5 +283,20 @@
             public const string UPDATE_SUCCESS = "Update construction progress successfully";
             public const string DELETE_SUCCESS = "Delete construction progress successfully";
         }
+
+        public static class InspectionReportMessage
+        {
+            public const string SEARCH_SUCCESS = "Get inspection reports successfully";
+            public const string GET_DETAIL_SUCCESS = "Get inspection report detail successfully";
+            public const string GET_BY_PROJECT_SUCCESS = "Get inspection reports by project successfully";
+            public const string CREATE_SUCCESS = "Create inspection report successfully";
+            public const string UPDATE_SUCCESS = "Update inspection report successfully";
+            public const string DELETE_SUCCESS = "Delete inspection report successfully";
+            public const string APPROVE_SUCCESS = "Approve inspection report successfully";
+            public const string REJECT_SUCCESS = "Reject inspection report successfully";
+            public const string NOT_FOUND = "Inspection report not found";
+            public const string PROJECT_NOT_FOUND = "Project not found";
+            public const string ONLY_QUALITY_ASSURANCE = "Only Quality Assurance can create/update/delete inspection reports";
+        }
     }
 }

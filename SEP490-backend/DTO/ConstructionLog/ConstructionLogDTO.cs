@@ -21,8 +21,8 @@ namespace Sep490_Backend.DTO.ConstructionLog
         public string Progress { get; set; }
         public string Problem { get; set; }
         public string Advice { get; set; }
-        public List<AttachmentDTO> Images { get; set; }
-        public List<AttachmentDTO> Attachments { get; set; }
+        public List<AttachmentInfo> Images { get; set; }
+        public List<AttachmentInfo> Attachments { get; set; }
         public string Note { get; set; }
         public ConstructionLogStatus Status { get; set; }
         public DateTime CreatedAt { get; set; }
@@ -95,15 +95,6 @@ namespace Sep490_Backend.DTO.ConstructionLog
     {
         public string Type { get; set; }
         public List<string> Values { get; set; }
-    }
-
-    // DTO for attachments
-    public class AttachmentDTO
-    {
-        public string Id { get; set; }
-        public string Name { get; set; }
-        public string WebViewLink { get; set; }
-        public string WebContentLink { get; set; }
     }
 
     // DTO for resource logs by task

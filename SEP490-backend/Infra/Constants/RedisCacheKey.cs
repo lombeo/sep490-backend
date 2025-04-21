@@ -65,5 +65,12 @@
         public const string CONSTRUCTION_PROGRESS_BY_PLAN_CACHE_KEY = "CONSTRUCTION_PROGRESS:PLAN:{0}";
         public const string CONSTRUCTION_PROGRESS_BY_PROJECT_CACHE_KEY = "CONSTRUCTION_PROGRESS:PROJECT:{0}";
         public const string CONSTRUCTION_PROGRESS_ALL_PATTERN = "CONSTRUCTION_PROGRESS:*";
+        
+        // Inspection Report cache keys
+        public const string INSPECTION_REPORT_CACHE_KEY = "INSPECTION_REPORT"; // Main cache key for all inspection reports
+        public const string INSPECTION_REPORT_BY_ID_CACHE_KEY = "INSPECTION_REPORT:ID:{0}"; // Cache key for specific inspection report by ID
+        public const string INSPECTION_REPORT_BY_PROJECT_CACHE_KEY = "INSPECTION_REPORT:PROJECT:{0}"; // Cache key for inspection reports by project
+        public const string INSPECTION_REPORT_LIST_CACHE_KEY = "INSPECTION_REPORT:LIST"; // Cache key for inspection report list
+        public const string INSPECTION_REPORT_ALL_PATTERN = "INSPECTION_REPORT:*"; // Pattern for all inspection report cache keys
     }
 }
