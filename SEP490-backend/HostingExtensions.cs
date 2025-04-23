@@ -90,6 +90,9 @@ namespace Sep490_Backend
                 options.JsonSerializerOptions.PropertyNamingPolicy = null;
                 options.JsonSerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
                 options.JsonSerializerOptions.Converters.Add(new Sep490_Backend.Infra.Helps.ReviewerDictionaryConverter());
+                options.JsonSerializerOptions.Converters.Add(new Sep490_Backend.Infra.Services.DateTimeJsonConverter());
+                options.JsonSerializerOptions.Converters.Add(new Sep490_Backend.Infra.Services.NullableDateTimeJsonConverter());
+                options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
             })
             .AddNewtonsoftJson(options =>
             {

@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Sep490_Backend.DTO.Common;
 using Sep490_Backend.DTO.ConstructionLog;
 using Sep490_Backend.Infra;
 using Sep490_Backend.Infra.Constants;
@@ -8,10 +7,8 @@ using Sep490_Backend.Services.CacheService;
 using Sep490_Backend.Services.HelperService;
 using Sep490_Backend.Services.GoogleDriveService;
 using System.Text.Json;
-using System.Linq;
-using Sep490_Backend.Controllers;
-using Microsoft.AspNetCore.Http;
 using Sep490_Backend.DTO;
+using Sep490_Backend.Infra.Services;
 
 namespace Sep490_Backend.Services.ConstructionLogService
 {
@@ -32,6 +29,14 @@ namespace Sep490_Backend.Services.ConstructionLogService
         private readonly IHelperService _helperService;
         private readonly IGoogleDriveService _googleDriveService;
         private readonly IHttpContextAccessor _httpContextAccessor;
+
+        // Static JsonSerializerOptions to be reused across all methods
+        private static readonly JsonSerializerOptions DefaultSerializerOptions = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new DateTimeJsonConverter() }
+        };
 
         public ConstructionLogService(
             BackendContext context,
@@ -323,21 +328,21 @@ namespace Sep490_Backend.Services.ConstructionLogService
                 constructionLog.LogName = model.LogName;
                 constructionLog.LogDate = model.LogDate;
                 constructionLog.Resources = model.Resources != null 
-                    ? JsonDocument.Parse(JsonSerializer.Serialize(model.Resources))
-                    : JsonDocument.Parse(JsonSerializer.Serialize(new List<ConstructionLogResourceDTO>()));
+                    ? JsonDocument.Parse(JsonSerializer.Serialize(model.Resources, DefaultSerializerOptions))
+                    : JsonDocument.Parse(JsonSerializer.Serialize(new List<ConstructionLogResourceDTO>(), DefaultSerializerOptions));
                 constructionLog.WorkAmount = model.WorkAmount != null 
-                    ? JsonDocument.Parse(JsonSerializer.Serialize(model.WorkAmount))
-                    : JsonDocument.Parse(JsonSerializer.Serialize(new List<WorkAmountDTO>()));
+                    ? JsonDocument.Parse(JsonSerializer.Serialize(model.WorkAmount, DefaultSerializerOptions))
+                    : JsonDocument.Parse(JsonSerializer.Serialize(new List<WorkAmountDTO>(), DefaultSerializerOptions));
                 constructionLog.Weather = model.Weather != null 
-                    ? JsonDocument.Parse(JsonSerializer.Serialize(model.Weather))
-                    : JsonDocument.Parse(JsonSerializer.Serialize(new List<WeatherDTO>()));
+                    ? JsonDocument.Parse(JsonSerializer.Serialize(model.Weather, DefaultSerializerOptions))
+                    : JsonDocument.Parse(JsonSerializer.Serialize(new List<WeatherDTO>(), DefaultSerializerOptions));
                 constructionLog.Safety = model.Safety;
                 constructionLog.Quality = model.Quality;
                 constructionLog.Progress = model.Progress;
                 constructionLog.Problem = model.Problem;
                 constructionLog.Advice = model.Advice;
                 constructionLog.Images = imageInfos.Any() 
-                    ? JsonDocument.Parse(JsonSerializer.Serialize(imageInfos))
+                    ? JsonDocument.Parse(JsonSerializer.Serialize(imageInfos, DefaultSerializerOptions))
                     : (model.Images != null && model.Images.Any()
                         ? JsonDocument.Parse(JsonSerializer.Serialize(model.Images.Select(url => new AttachmentInfo
                         {
@@ -345,11 +350,11 @@ namespace Sep490_Backend.Services.ConstructionLogService
                             WebViewLink = url,
                             Name = "Legacy Image",
                             Id = Guid.NewGuid().ToString()
-                        }).ToList()))
-                        : JsonDocument.Parse(JsonSerializer.Serialize(new List<AttachmentInfo>())));
+                        }).ToList(), DefaultSerializerOptions))
+                        : JsonDocument.Parse(JsonSerializer.Serialize(new List<AttachmentInfo>(), DefaultSerializerOptions)));
                 constructionLog.Attachments = attachmentInfos.Any() 
-                    ? JsonDocument.Parse(JsonSerializer.Serialize(attachmentInfos))
-                    : JsonDocument.Parse(JsonSerializer.Serialize(new List<AttachmentInfo>()));
+                    ? JsonDocument.Parse(JsonSerializer.Serialize(attachmentInfos, DefaultSerializerOptions))
+                    : JsonDocument.Parse(JsonSerializer.Serialize(new List<AttachmentInfo>(), DefaultSerializerOptions));
                 constructionLog.Note = model.Note;
                 
                 // Update Status if provided, otherwise reset to WaitingForApproval if there are significant changes
@@ -376,21 +381,21 @@ namespace Sep490_Backend.Services.ConstructionLogService
                     LogName = model.LogName,
                     LogDate = model.LogDate,
                     Resources = model.Resources != null 
-                        ? JsonDocument.Parse(JsonSerializer.Serialize(model.Resources))
-                        : JsonDocument.Parse(JsonSerializer.Serialize(new List<ConstructionLogResourceDTO>())),
+                        ? JsonDocument.Parse(JsonSerializer.Serialize(model.Resources, DefaultSerializerOptions))
+                        : JsonDocument.Parse(JsonSerializer.Serialize(new List<ConstructionLogResourceDTO>(), DefaultSerializerOptions)),
                     WorkAmount = model.WorkAmount != null 
-                        ? JsonDocument.Parse(JsonSerializer.Serialize(model.WorkAmount))
-                        : JsonDocument.Parse(JsonSerializer.Serialize(new List<WorkAmountDTO>())),
+                        ? JsonDocument.Parse(JsonSerializer.Serialize(model.WorkAmount, DefaultSerializerOptions))
+                        : JsonDocument.Parse(JsonSerializer.Serialize(new List<WorkAmountDTO>(), DefaultSerializerOptions)),
                     Weather = model.Weather != null 
-                        ? JsonDocument.Parse(JsonSerializer.Serialize(model.Weather))
-                        : JsonDocument.Parse(JsonSerializer.Serialize(new List<WeatherDTO>())),
+                        ? JsonDocument.Parse(JsonSerializer.Serialize(model.Weather, DefaultSerializerOptions))
+                        : JsonDocument.Parse(JsonSerializer.Serialize(new List<WeatherDTO>(), DefaultSerializerOptions)),
                     Safety = model.Safety,
                     Quality = model.Quality,
                     Progress = model.Progress,
                     Problem = model.Problem,
                     Advice = model.Advice,
                     Images = imageInfos.Any() 
-                        ? JsonDocument.Parse(JsonSerializer.Serialize(imageInfos))
+                        ? JsonDocument.Parse(JsonSerializer.Serialize(imageInfos, DefaultSerializerOptions))
                         : (model.Images != null && model.Images.Any()
                             ? JsonDocument.Parse(JsonSerializer.Serialize(model.Images.Select(url => new AttachmentInfo
                             {
@@ -398,11 +403,11 @@ namespace Sep490_Backend.Services.ConstructionLogService
                                 WebViewLink = url,
                                 Name = "Legacy Image",
                                 Id = Guid.NewGuid().ToString()
-                            }).ToList()))
-                            : JsonDocument.Parse(JsonSerializer.Serialize(new List<AttachmentInfo>()))),
+                            }).ToList(), DefaultSerializerOptions))
+                            : JsonDocument.Parse(JsonSerializer.Serialize(new List<AttachmentInfo>(), DefaultSerializerOptions))),
                     Attachments = attachmentInfos.Any() 
-                        ? JsonDocument.Parse(JsonSerializer.Serialize(attachmentInfos))
-                        : JsonDocument.Parse(JsonSerializer.Serialize(new List<AttachmentInfo>())),
+                        ? JsonDocument.Parse(JsonSerializer.Serialize(attachmentInfos, DefaultSerializerOptions))
+                        : JsonDocument.Parse(JsonSerializer.Serialize(new List<AttachmentInfo>(), DefaultSerializerOptions)),
                     Note = model.Note,
                     Status = model.Status ?? ConstructionLogStatus.WaitingForApproval,
                     CreatedAt = DateTime.UtcNow,
@@ -598,7 +603,7 @@ namespace Sep490_Backend.Services.ConstructionLogService
                     // Check work amount for task index
                     if (log.WorkAmount != null)
                     {
-                        var workAmounts = JsonSerializer.Deserialize<List<WorkAmountDTO>>(log.WorkAmount.RootElement.ToString());
+                        var workAmounts = JsonSerializer.Deserialize<List<WorkAmountDTO>>(log.WorkAmount.RootElement.ToString(), DefaultSerializerOptions);
                         if (workAmounts != null && workAmounts.Any(wa => wa.TaskIndex == model.TaskIndex))
                         {
                             hasMatchingTask = true;
@@ -608,7 +613,7 @@ namespace Sep490_Backend.Services.ConstructionLogService
                     // Check resources for task index
                     if (!hasMatchingTask && log.Resources != null)
                     {
-                        var resources = JsonSerializer.Deserialize<List<ConstructionLogResourceDTO>>(log.Resources.RootElement.ToString());
+                        var resources = JsonSerializer.Deserialize<List<ConstructionLogResourceDTO>>(log.Resources.RootElement.ToString(), DefaultSerializerOptions);
                         if (resources != null && resources.Any(r => r.TaskIndex == model.TaskIndex))
                         {
                             hasMatchingTask = true;
@@ -819,9 +824,14 @@ namespace Sep490_Backend.Services.ConstructionLogService
                         foreach (var resource in matchingResources)
                         {
                             // Calculate hours from start/end time
-                            var startTime = resource.StartTime;
-                            var endTime = resource.EndTime;
-                            var hours = (endTime - startTime).TotalHours;
+                            var startTime = resource.StartTime ?? DateTime.MinValue;
+                            var endTime = resource.EndTime ?? DateTime.MinValue;
+                            var hours = 0.0;
+                            
+                            if (startTime != DateTime.MinValue && endTime != DateTime.MinValue)
+                            {
+                                hours = (endTime - startTime).TotalHours;
+                            }
                             
                             string unit = "giờ";
                             if (resource.ResourceType == 3) // Material
@@ -860,13 +870,13 @@ namespace Sep490_Backend.Services.ConstructionLogService
                 LogName = log.LogName,
                 LogDate = log.LogDate,
                 Resources = log.Resources != null 
-                    ? JsonSerializer.Deserialize<List<ConstructionLogResourceDTO>>(log.Resources.RootElement.ToString())
+                    ? JsonSerializer.Deserialize<List<ConstructionLogResourceDTO>>(log.Resources.RootElement.ToString(), DefaultSerializerOptions)
                     : new List<ConstructionLogResourceDTO>(),
                 WorkAmount = log.WorkAmount != null 
-                    ? JsonSerializer.Deserialize<List<WorkAmountDTO>>(log.WorkAmount.RootElement.ToString())
+                    ? JsonSerializer.Deserialize<List<WorkAmountDTO>>(log.WorkAmount.RootElement.ToString(), DefaultSerializerOptions)
                     : new List<WorkAmountDTO>(),
                 Weather = log.Weather != null 
-                    ? JsonSerializer.Deserialize<List<WeatherDTO>>(log.Weather.RootElement.ToString())
+                    ? JsonSerializer.Deserialize<List<WeatherDTO>>(log.Weather.RootElement.ToString(), DefaultSerializerOptions)
                     : new List<WeatherDTO>(),
                 Safety = log.Safety,
                 Quality = log.Quality,
@@ -874,10 +884,10 @@ namespace Sep490_Backend.Services.ConstructionLogService
                 Problem = log.Problem,
                 Advice = log.Advice,
                 Images = log.Images != null 
-                    ? JsonSerializer.Deserialize<List<AttachmentInfo>>(log.Images.RootElement.ToString())
+                    ? JsonSerializer.Deserialize<List<AttachmentInfo>>(log.Images.RootElement.ToString(), DefaultSerializerOptions)
                     : new List<AttachmentInfo>(),
                 Attachments = log.Attachments != null 
-                    ? JsonSerializer.Deserialize<List<AttachmentInfo>>(log.Attachments.RootElement.ToString())
+                    ? JsonSerializer.Deserialize<List<AttachmentInfo>>(log.Attachments.RootElement.ToString(), DefaultSerializerOptions)
                     : new List<AttachmentInfo>(),
                 Note = log.Note,
                 Status = log.Status,
@@ -936,7 +946,7 @@ namespace Sep490_Backend.Services.ConstructionLogService
             // Check if resources have changed
             if (model.Resources != null)
             {
-                var existingResources = JsonSerializer.Deserialize<List<ConstructionLogResourceDTO>>(existingLog.Resources.RootElement.ToString());
+                var existingResources = JsonSerializer.Deserialize<List<ConstructionLogResourceDTO>>(existingLog.Resources.RootElement.ToString(), DefaultSerializerOptions);
                 if (!AreResourcesEqual(existingResources, model.Resources))
                 {
                     return true;
@@ -946,7 +956,7 @@ namespace Sep490_Backend.Services.ConstructionLogService
             // Check if work amount has changed
             if (model.WorkAmount != null)
             {
-                var existingWorkAmount = JsonSerializer.Deserialize<List<WorkAmountDTO>>(existingLog.WorkAmount.RootElement.ToString());
+                var existingWorkAmount = JsonSerializer.Deserialize<List<WorkAmountDTO>>(existingLog.WorkAmount.RootElement.ToString(), DefaultSerializerOptions);
                 if (!AreWorkAmountsEqual(existingWorkAmount, model.WorkAmount))
                 {
                     return true;
@@ -956,7 +966,7 @@ namespace Sep490_Backend.Services.ConstructionLogService
             // Check if weather has changed
             if (model.Weather != null)
             {
-                var existingWeather = JsonSerializer.Deserialize<List<WeatherDTO>>(existingLog.Weather.RootElement.ToString());
+                var existingWeather = JsonSerializer.Deserialize<List<WeatherDTO>>(existingLog.Weather.RootElement.ToString(), DefaultSerializerOptions);
                 if (!AreWeatherEqual(existingWeather, model.Weather))
                 {
                     return true;

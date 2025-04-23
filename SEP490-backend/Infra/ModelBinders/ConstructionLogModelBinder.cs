@@ -66,9 +66,14 @@ namespace Sep490_Backend.Infra.ModelBinders
                         // Try to parse as an array first
                         if (value.StartsWith("[") && value.EndsWith("]"))
                         {
-                            // Parse JSON array
-                            var items = JsonSerializer.Deserialize(value, listType, 
-                                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                            // Parse JSON array with custom options
+                            var options = new JsonSerializerOptions
+                            {
+                                PropertyNameCaseInsensitive = true,
+                                Converters = { new DateTimeJsonConverterWithEmptyString() }
+                            };
+                            
+                            var items = JsonSerializer.Deserialize(value, listType, options);
                                 
                             if (items != null)
                             {
@@ -78,9 +83,14 @@ namespace Sep490_Backend.Infra.ModelBinders
                         }
                         else
                         {
-                            // Try to parse as a single item
-                            var item = JsonSerializer.Deserialize(value, itemType, 
-                                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                            // Try to parse as a single item with custom options
+                            var options = new JsonSerializerOptions
+                            {
+                                PropertyNameCaseInsensitive = true,
+                                Converters = { new DateTimeJsonConverterWithEmptyString() }
+                            };
+                            
+                            var item = JsonSerializer.Deserialize(value, itemType, options);
                                 
                             if (item != null)
                             {
@@ -107,9 +117,14 @@ namespace Sep490_Backend.Infra.ModelBinders
                     {
                         try
                         {
-                            // Try to parse JSON to object
-                            var item = JsonSerializer.Deserialize(value, itemType, 
-                                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                            // Try to parse JSON to object with custom options
+                            var options = new JsonSerializerOptions
+                            {
+                                PropertyNameCaseInsensitive = true,
+                                Converters = { new DateTimeJsonConverterWithEmptyString() }
+                            };
+                            
+                            var item = JsonSerializer.Deserialize(value, itemType, options);
                                 
                             if (item != null)
                             {
@@ -159,6 +174,55 @@ namespace Sep490_Backend.Infra.ModelBinders
             }
 
             return null;
+        }
+    }
+    
+    /// <summary>
+    /// Special converter that handles empty strings for nullable DateTime properties
+    /// </summary>
+    public class DateTimeJsonConverterWithEmptyString : System.Text.Json.Serialization.JsonConverter<DateTime?>
+    {
+        public override DateTime? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType == JsonTokenType.String)
+            {
+                string dateString = reader.GetString();
+                
+                // Handle empty or null string values
+                if (string.IsNullOrWhiteSpace(dateString))
+                {
+                    return null;
+                }
+                
+                // Try standard parsing
+                if (DateTime.TryParse(dateString, out DateTime date))
+                {
+                    return date;
+                }
+                
+                // Return null on parsing error instead of throwing
+                return null;
+            }
+            
+            // Handle null JSON value
+            if (reader.TokenType == JsonTokenType.Null)
+            {
+                return null;
+            }
+
+            return null;
+        }
+
+        public override void Write(Utf8JsonWriter writer, DateTime? value, JsonSerializerOptions options)
+        {
+            if (value.HasValue)
+            {
+                writer.WriteStringValue(value.Value.ToString("yyyy-MM-ddTHH:mm:ss"));
+            }
+            else
+            {
+                writer.WriteNullValue();
+            }
         }
     }
 } 
