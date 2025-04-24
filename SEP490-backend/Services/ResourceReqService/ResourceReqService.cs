@@ -1274,7 +1274,7 @@ namespace Sep490_Backend.Services.ResourceReqService
                                         detail.ResourceType,
                                         detail.Quantity,
                                         vehicle.VehicleName,
-                                        "Unit",
+                                        "Vehicle",
                                         actionBy
                                     );
                                 }
@@ -1375,34 +1375,35 @@ namespace Sep490_Backend.Services.ResourceReqService
             string unit, 
             int actionBy)
         {
-            // Check if resource already exists in project inventory
+            if (!resourceId.HasValue) return;
+
+            // Check if resource already exists in inventory
             var existingResource = await _context.ResourceInventory
                 .FirstOrDefaultAsync(r =>
-                    r.ResourceType == resourceType &&
-                    r.ResourceId == resourceId &&
                     r.ProjectId == projectId &&
+                    r.ResourceType == resourceType && 
+                    r.ResourceId == resourceId.Value && 
                     !r.Deleted);
             
+            // If resource exists, update quantity
             if (existingResource != null)
             {
-                // Update existing inventory
                 existingResource.Quantity += quantity;
                 existingResource.UpdatedAt = DateTime.UtcNow;
                 existingResource.Updater = actionBy;
-                
                 _context.ResourceInventory.Update(existingResource);
             }
             else
             {
-                // Create new inventory entry
+                // Create new resource in inventory
                 var newResource = new ResourceInventory
                 {
-                    Name = name,
-                    ResourceId = resourceId,
+                    ResourceId = resourceId.Value,
                     ProjectId = projectId,
                     ResourceType = resourceType,
-                    Quantity = quantity,
+                    Name = name,
                     Unit = unit,
+                    Quantity = quantity,
                     Status = true,
                     Creator = actionBy,
                     Updater = actionBy,
@@ -1412,6 +1413,64 @@ namespace Sep490_Backend.Services.ResourceReqService
                 
                 await _context.ResourceInventory.AddAsync(newResource);
             }
+            await _context.SaveChangesAsync();
+
+            // If this is a team resource, add all team members to ProjectUser table
+            if (resourceType == ResourceType.HUMAN && resourceId.HasValue)
+            {
+                var team = await _context.ConstructionTeams
+                    .Include(t => t.Members)
+                    .FirstOrDefaultAsync(t => t.Id == resourceId.Value && !t.Deleted);
+                
+                if (team != null)
+                {
+                    // Add all team members (including the manager) to ProjectUser table
+                    var allTeamMembers = new List<User>(team.Members);
+                    
+                    // Add the manager if not already in the Members collection
+                    var manager = await _context.Users
+                        .FirstOrDefaultAsync(u => u.Id == team.TeamManager && !u.Deleted);
+                    
+                    if (manager != null && !allTeamMembers.Any(m => m.Id == manager.Id))
+                    {
+                        allTeamMembers.Add(manager);
+                    }
+                    
+                    foreach (var member in allTeamMembers)
+                    {
+                        // Check if user is already in ProjectUser table for this project
+                        var existingProjectUser = await _context.ProjectUsers
+                            .FirstOrDefaultAsync(pu => 
+                                pu.ProjectId == projectId && 
+                                pu.UserId == member.Id && 
+                                !pu.Deleted);
+                        
+                        // Only add if not already in ProjectUser table
+                        if (existingProjectUser == null)
+                        {
+                            var projectUser = new ProjectUser
+                            {
+                                ProjectId = projectId,
+                                UserId = member.Id,
+                                IsCreator = false, // Team members are added as viewers, not creators
+                                Creator = actionBy,
+                                Updater = actionBy,
+                                CreatedAt = DateTime.UtcNow,
+                                UpdatedAt = DateTime.UtcNow
+                            };
+                            
+                            await _context.ProjectUsers.AddAsync(projectUser);
+                        }
+                    }
+                    
+                    await _context.SaveChangesAsync();
+                }
+            }
+            
+            // Invalidate related caches
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.PROJECT_CACHE_KEY);
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.PROJECT_USER_CACHE_KEY);
         }
 
         #endregion
@@ -2154,37 +2213,44 @@ namespace Sep490_Backend.Services.ResourceReqService
         /// <param name="actionBy">ID of the user performing the action</param>
         private async Task ProcessProjectToProjectAllocation(ResourceAllocationReqs request, int actionBy)
         {
+            // Process each resource allocation detail
             foreach (var detail in request.ResourceAllocationDetails)
             {
-                // Get source project inventory item if it exists
+                // Find the source inventory item for this resource
                 var sourceInventory = await _context.ResourceInventory
                     .FirstOrDefaultAsync(r => 
                         r.ProjectId == request.FromProjectId && 
                         r.ResourceType == detail.ResourceType && 
                         r.ResourceId == detail.ResourceId && 
                         !r.Deleted);
-
+                
                 if (sourceInventory == null)
                 {
-                    // Source inventory item doesn't exist, log an error or throw exception
-                    _logger.LogError($"Source inventory item not found for resource {detail.ResourceId} of type {detail.ResourceType} in project {request.FromProjectId}");
+                    _logger.LogError($"Source inventory item not found for resource ID {detail.ResourceId} of type {detail.ResourceType}");
                     continue;
                 }
-
-                // Check if there's enough quantity in source inventory
+                
+                // Check if there's enough quantity available
                 if (sourceInventory.Quantity < detail.Quantity)
                 {
-                    _logger.LogError($"Not enough quantity in source inventory for resource {detail.ResourceId} of type {detail.ResourceType}. Available: {sourceInventory.Quantity}, Requested: {detail.Quantity}");
+                    _logger.LogError($"Insufficient quantity available in source project for resource ID {detail.ResourceId}");
                     continue;
                 }
-
-                // Reduce quantity in source inventory
+                
+                // Reduce quantity in source project
                 sourceInventory.Quantity -= detail.Quantity;
                 sourceInventory.UpdatedAt = DateTime.UtcNow;
                 sourceInventory.Updater = actionBy;
+                
+                // If quantity becomes zero, mark as deleted
+                if (sourceInventory.Quantity <= 0)
+                {
+                    sourceInventory.Deleted = true;
+                }
+                
                 _context.ResourceInventory.Update(sourceInventory);
-
-                // Get destination project inventory item if it exists
+                
+                // Check if resource already exists in destination project
                 var destInventory = await _context.ResourceInventory
                     .FirstOrDefaultAsync(r => 
                         r.ProjectId == request.ToProjectId && 
@@ -2220,6 +2286,57 @@ namespace Sep490_Backend.Services.ResourceReqService
                     
                     await _context.ResourceInventory.AddAsync(newInventory);
                 }
+
+                // For team resources, update ProjectUser entries
+                if (detail.ResourceType == ResourceType.HUMAN)
+                {
+                    var team = await _context.ConstructionTeams
+                        .Include(t => t.Members)
+                        .FirstOrDefaultAsync(t => t.Id == detail.ResourceId && !t.Deleted);
+                        
+                    if (team != null)
+                    {
+                        // Collect all team members including manager
+                        var allTeamMembers = new List<User>(team.Members);
+                        
+                        // Add the manager if not already in the Members collection
+                        var manager = await _context.Users
+                            .FirstOrDefaultAsync(u => u.Id == team.TeamManager && !u.Deleted);
+                            
+                        if (manager != null && !allTeamMembers.Any(m => m.Id == manager.Id))
+                        {
+                            allTeamMembers.Add(manager);
+                        }
+                        
+                        // Add each team member to the destination project's ProjectUser table
+                        foreach (var member in allTeamMembers)
+                        {
+                            // Check if user is already in ProjectUser table for destination project
+                            var existingProjectUser = await _context.ProjectUsers
+                                .FirstOrDefaultAsync(pu => 
+                                    pu.ProjectId == request.ToProjectId && 
+                                    pu.UserId == member.Id && 
+                                    !pu.Deleted);
+                            
+                            // Only add if not already in ProjectUser table for destination project
+                            if (existingProjectUser == null)
+                            {
+                                var projectUser = new ProjectUser
+                                {
+                                    ProjectId = request.ToProjectId,
+                                    UserId = member.Id,
+                                    IsCreator = false, // Team members are added as viewers, not creators
+                                    Creator = actionBy,
+                                    Updater = actionBy,
+                                    CreatedAt = DateTime.UtcNow,
+                                    UpdatedAt = DateTime.UtcNow
+                                };
+                                
+                                await _context.ProjectUsers.AddAsync(projectUser);
+                            }
+                        }
+                    }
+                }
             }
 
             // Save changes
@@ -2227,6 +2344,7 @@ namespace Sep490_Backend.Services.ResourceReqService
             
             // Invalidate inventory cache for both projects
             await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.PROJECT_USER_CACHE_KEY);
         }
 
         /// <summary>
@@ -2244,6 +2362,7 @@ namespace Sep490_Backend.Services.ResourceReqService
 
             // Check if task exists
             var progressItem = await _context.ConstructionProgressItems
+                .Include(pi => pi.ConstructionProgress) // Include to get the ProjectId
                 .FirstOrDefaultAsync(pi => pi.Id == request.ToTaskId.Value && !pi.Deleted);
                 
             if (progressItem == null)
@@ -2251,9 +2370,45 @@ namespace Sep490_Backend.Services.ResourceReqService
                 _logger.LogError($"Task with ID {request.ToTaskId.Value} not found");
                 return;
             }
+            
+            // Get the project ID for the task's project
+            var taskProjectId = progressItem.ConstructionProgress.ProjectId;
 
             foreach (var detail in request.ResourceAllocationDetails)
             {
+                // Find source inventory item
+                var sourceInventory = await _context.ResourceInventory
+                    .FirstOrDefaultAsync(i => 
+                        i.ProjectId == request.FromProjectId && 
+                        i.ResourceType == detail.ResourceType && 
+                        i.ResourceId == detail.ResourceId && 
+                        !i.Deleted);
+                
+                if (sourceInventory == null)
+                {
+                    _logger.LogError($"Source inventory item not found for resource ID {detail.ResourceId}");
+                    continue;
+                }
+                
+                // Check if there's enough quantity
+                if (sourceInventory.Quantity < detail.Quantity)
+                {
+                    _logger.LogError($"Insufficient quantity available for resource ID {detail.ResourceId}");
+                    continue;
+                }
+                
+                // Reduce quantity in source project
+                sourceInventory.Quantity -= detail.Quantity;
+                sourceInventory.UpdatedAt = DateTime.UtcNow;
+                sourceInventory.Updater = actionBy;
+                
+                if (sourceInventory.Quantity <= 0)
+                {
+                    sourceInventory.Deleted = true;
+                }
+                
+                _context.ResourceInventory.Update(sourceInventory);
+                
                 // Check if task already has this resource
                 var taskDetail = await _context.ConstructionProgressItemDetails
                     .FirstOrDefaultAsync(d => 
@@ -2272,15 +2427,14 @@ namespace Sep490_Backend.Services.ResourceReqService
                 }
                 else
                 {
-                    // Create new task resource
+                    // Create new task resource detail
                     var newTaskDetail = new ConstructionProgressItemDetail
                     {
                         ProgressItemId = request.ToTaskId.Value,
-                        WorkCode = progressItem.WorkCode,
                         ResourceType = detail.ResourceType,
-                        Quantity = detail.Quantity,
-                        Unit = detail.Unit,
                         ResourceId = detail.ResourceId,
+                        Quantity = detail.Quantity,
+                        Unit = detail.Unit ?? sourceInventory.Unit,
                         Creator = actionBy,
                         Updater = actionBy,
                         CreatedAt = DateTime.UtcNow,
@@ -2289,13 +2443,65 @@ namespace Sep490_Backend.Services.ResourceReqService
                     
                     await _context.ConstructionProgressItemDetails.AddAsync(newTaskDetail);
                 }
+                
+                // For team resources, update ProjectUser entries for the task's project
+                if (detail.ResourceType == ResourceType.HUMAN)
+                {
+                    var team = await _context.ConstructionTeams
+                        .Include(t => t.Members)
+                        .FirstOrDefaultAsync(t => t.Id == detail.ResourceId && !t.Deleted);
+                        
+                    if (team != null)
+                    {
+                        // Collect all team members including manager
+                        var allTeamMembers = new List<User>(team.Members);
+                        
+                        // Add the manager if not already in the Members collection
+                        var manager = await _context.Users
+                            .FirstOrDefaultAsync(u => u.Id == team.TeamManager && !u.Deleted);
+                            
+                        if (manager != null && !allTeamMembers.Any(m => m.Id == manager.Id))
+                        {
+                            allTeamMembers.Add(manager);
+                        }
+                        
+                        // Add each team member to the task's project's ProjectUser table
+                        foreach (var member in allTeamMembers)
+                        {
+                            // Check if user is already in ProjectUser table for the task's project
+                            var existingProjectUser = await _context.ProjectUsers
+                                .FirstOrDefaultAsync(pu => 
+                                    pu.ProjectId == taskProjectId && 
+                                    pu.UserId == member.Id && 
+                                    !pu.Deleted);
+                            
+                            // Only add if not already in ProjectUser table for the task's project
+                            if (existingProjectUser == null)
+                            {
+                                var projectUser = new ProjectUser
+                                {
+                                    ProjectId = taskProjectId,
+                                    UserId = member.Id,
+                                    IsCreator = false, // Team members are added as viewers, not creators
+                                    Creator = actionBy,
+                                    Updater = actionBy,
+                                    CreatedAt = DateTime.UtcNow,
+                                    UpdatedAt = DateTime.UtcNow
+                                };
+                                
+                                await _context.ProjectUsers.AddAsync(projectUser);
+                            }
+                        }
+                    }
+                }
             }
-
+            
             // Save changes
             await _context.SaveChangesAsync();
             
-            // Invalidate construction progress cache
-            await _cacheService.DeleteByPatternAsync(RedisCacheKey.CONSTRUCTION_PROGRESS_ALL_PATTERN);
+            // Invalidate caches
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.PROJECT_USER_CACHE_KEY);
         }
 
         /// <summary>
@@ -2311,22 +2517,35 @@ namespace Sep490_Backend.Services.ResourceReqService
                 return;
             }
 
-            // Check if tasks exist
+            // Get source task with progress to get project ID
             var sourceTask = await _context.ConstructionProgressItems
+                .Include(pi => pi.ConstructionProgress)
                 .FirstOrDefaultAsync(pi => pi.Id == request.FromTaskId.Value && !pi.Deleted);
-                
-            var destTask = await _context.ConstructionProgressItems
-                .FirstOrDefaultAsync(pi => pi.Id == request.ToTaskId.Value && !pi.Deleted);
-                
-            if (sourceTask == null || destTask == null)
+            
+            if (sourceTask == null)
             {
-                _logger.LogError($"Source task ({request.FromTaskId}) or destination task ({request.ToTaskId}) not found");
+                _logger.LogError($"Source task with ID {request.FromTaskId.Value} not found");
                 return;
             }
+            
+            // Get destination task with progress to get project ID
+            var destTask = await _context.ConstructionProgressItems
+                .Include(pi => pi.ConstructionProgress)
+                .FirstOrDefaultAsync(pi => pi.Id == request.ToTaskId.Value && !pi.Deleted);
+            
+            if (destTask == null)
+            {
+                _logger.LogError($"Destination task with ID {request.ToTaskId.Value} not found");
+                return;
+            }
+            
+            // Get project IDs
+            var sourceProjectId = sourceTask.ConstructionProgress.ProjectId;
+            var destProjectId = destTask.ConstructionProgress.ProjectId;
 
             foreach (var detail in request.ResourceAllocationDetails)
             {
-                // Check if source task has this resource
+                // Get source task detail
                 var sourceDetail = await _context.ConstructionProgressItemDetails
                     .FirstOrDefaultAsync(d => 
                         d.ProgressItemId == request.FromTaskId.Value && 
@@ -2334,18 +2553,31 @@ namespace Sep490_Backend.Services.ResourceReqService
                         d.ResourceId == detail.ResourceId && 
                         !d.Deleted);
                 
-                if (sourceDetail == null || sourceDetail.Quantity < detail.Quantity)
+                if (sourceDetail == null)
                 {
-                    _logger.LogError($"Source task doesn't have enough of resource {detail.ResourceId} of type {detail.ResourceType}");
+                    _logger.LogError($"Source task detail not found for resource ID {detail.ResourceId}");
                     continue;
                 }
-
+                
+                // Check if enough quantity available
+                if (sourceDetail.Quantity < detail.Quantity)
+                {
+                    _logger.LogError($"Insufficient quantity available for resource ID {detail.ResourceId}");
+                    continue;
+                }
+                
                 // Reduce quantity in source task
                 sourceDetail.Quantity -= detail.Quantity;
                 sourceDetail.UpdatedAt = DateTime.UtcNow;
                 sourceDetail.Updater = actionBy;
+                
+                if (sourceDetail.Quantity <= 0)
+                {
+                    sourceDetail.Deleted = true;
+                }
+                
                 _context.ConstructionProgressItemDetails.Update(sourceDetail);
-
+                
                 // Check if destination task already has this resource
                 var destDetail = await _context.ConstructionProgressItemDetails
                     .FirstOrDefaultAsync(d => 
@@ -2356,7 +2588,7 @@ namespace Sep490_Backend.Services.ResourceReqService
                 
                 if (destDetail != null)
                 {
-                    // Update existing destination task resource
+                    // Update existing resource in destination task
                     destDetail.Quantity += detail.Quantity;
                     destDetail.UpdatedAt = DateTime.UtcNow;
                     destDetail.Updater = actionBy;
@@ -2364,30 +2596,82 @@ namespace Sep490_Backend.Services.ResourceReqService
                 }
                 else
                 {
-                    // Create new destination task resource
-                    var newDestDetail = new ConstructionProgressItemDetail
+                    // Create new resource in destination task
+                    var newDetail = new ConstructionProgressItemDetail
                     {
                         ProgressItemId = request.ToTaskId.Value,
-                        WorkCode = destTask.WorkCode,
                         ResourceType = detail.ResourceType,
+                        ResourceId = detail.ResourceId,
                         Quantity = detail.Quantity,
                         Unit = detail.Unit ?? sourceDetail.Unit,
-                        ResourceId = detail.ResourceId,
                         Creator = actionBy,
                         Updater = actionBy,
                         CreatedAt = DateTime.UtcNow,
                         UpdatedAt = DateTime.UtcNow
                     };
                     
-                    await _context.ConstructionProgressItemDetails.AddAsync(newDestDetail);
+                    await _context.ConstructionProgressItemDetails.AddAsync(newDetail);
+                }
+                
+                // For team resources, add team members to ProjectUser for destination project
+                // Only needed if source and destination projects are different
+                if (detail.ResourceType == ResourceType.HUMAN && sourceProjectId != destProjectId)
+                {
+                    var team = await _context.ConstructionTeams
+                        .Include(t => t.Members)
+                        .FirstOrDefaultAsync(t => t.Id == detail.ResourceId && !t.Deleted);
+                    
+                    if (team != null)
+                    {
+                        // Collect all team members including manager
+                        var allTeamMembers = new List<User>(team.Members);
+                        
+                        // Add the manager if not already in the Members collection
+                        var manager = await _context.Users
+                            .FirstOrDefaultAsync(u => u.Id == team.TeamManager && !u.Deleted);
+                            
+                        if (manager != null && !allTeamMembers.Any(m => m.Id == manager.Id))
+                        {
+                            allTeamMembers.Add(manager);
+                        }
+                        
+                        // Add each team member to the destination project's ProjectUser table
+                        foreach (var member in allTeamMembers)
+                        {
+                            // Check if user is already in ProjectUser table for destination project
+                            var existingProjectUser = await _context.ProjectUsers
+                                .FirstOrDefaultAsync(pu => 
+                                    pu.ProjectId == destProjectId && 
+                                    pu.UserId == member.Id && 
+                                    !pu.Deleted);
+                            
+                            // Only add if not already in ProjectUser table for destination project
+                            if (existingProjectUser == null)
+                            {
+                                var projectUser = new ProjectUser
+                                {
+                                    ProjectId = destProjectId,
+                                    UserId = member.Id,
+                                    IsCreator = false, // Team members are added as viewers, not creators
+                                    Creator = actionBy,
+                                    Updater = actionBy,
+                                    CreatedAt = DateTime.UtcNow,
+                                    UpdatedAt = DateTime.UtcNow
+                                };
+                                
+                                await _context.ProjectUsers.AddAsync(projectUser);
+                            }
+                        }
+                    }
                 }
             }
-
+            
             // Save changes
             await _context.SaveChangesAsync();
             
-            // Invalidate construction progress cache
+            // Invalidate caches
             await _cacheService.DeleteByPatternAsync(RedisCacheKey.CONSTRUCTION_PROGRESS_ALL_PATTERN);
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.PROJECT_USER_CACHE_KEY);
         }
 
         /// <summary>

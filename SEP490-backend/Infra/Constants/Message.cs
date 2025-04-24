@@ -207,7 +207,7 @@
             public const string NAME_REQUIRED = "E-CTM-005"; // Construction team name is required!
             public const string DUPLICATE_NAME = "E-CTM-006"; // Construction team name already exists!
             public const string MANAGER_NOT_FOUND = "E-CTM-007"; // Team manager not found!
-            public const string MANAGER_ROLE_REQUIRED = "E-CTM-008"; // Selected user must have Team Leader role!
+            public const string MANAGER_ROLE_REQUIRED = "E-CTM-008"; // Selected user must have Construction Manager role!
             public const string MANAGER_ALREADY_ASSIGNED = "E-CTM-009"; // This user is already managing another team!
             public const string MEMBERS_NOT_FOUND = "E-CTM-010"; // Some specified team members were not found!
             public const string MEMBERS_IN_OTHER_TEAMS = "E-CTM-011"; // Some users are already members of other teams!

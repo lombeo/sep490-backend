@@ -103,7 +103,7 @@ namespace Sep490_Backend.Services.ConstructionTeamService
                         Field = nameof(model.TeamManager).ToCamelCase()
                     });
                 }
-                else if (!_helperService.IsInRole(manager.Id, RoleConstValue.TEAM_LEADER))
+                else if (!_helperService.IsInRole(manager.Id, RoleConstValue.CONSTRUCTION_MANAGER))
                 {
                     errors.Add(new ResponseError
                     {

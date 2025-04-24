@@ -1596,20 +1596,68 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
             // Add new teams
             if (model.TeamIds != null && model.TeamIds.Any())
             {
-                foreach (var teamId in model.TeamIds)
+                // Get teams from database
+                var teams = await _context.ConstructionTeams
+                    .Include(t => t.Members)
+                    .Where(t => model.TeamIds.Contains(t.Id) && !t.Deleted)
+                    .ToListAsync();
+                    
+                foreach (var team in teams)
                 {
-                    var team = await _context.ConstructionTeams.FirstOrDefaultAsync(t => t.Id == teamId && !t.Deleted);
-                    if (team != null)
+                    // Add team to plan item
+                    planItem.ConstructionTeams.Add(team);
+                    
+                    // Now add all team members to ProjectUser table
+                    var allTeamMembers = new List<User>(team.Members);
+                    
+                    // Add manager if not already in members collection
+                    var manager = await _context.Users
+                        .FirstOrDefaultAsync(u => u.Id == team.TeamManager && !u.Deleted);
+                        
+                    if (manager != null && !allTeamMembers.Any(m => m.Id == manager.Id))
                     {
-                        planItem.ConstructionTeams.Add(team);
+                        allTeamMembers.Add(manager);
+                    }
+                    
+                    // Get project ID from the construction plan
+                    int projectId = constructionPlan.ProjectId;
+                    
+                    // Add each team member to ProjectUser if not already added
+                    foreach (var member in allTeamMembers)
+                    {
+                        // Check if already exists in ProjectUser
+                        var existingProjectUser = await _context.ProjectUsers
+                            .FirstOrDefaultAsync(pu => 
+                                pu.ProjectId == projectId && 
+                                pu.UserId == member.Id && 
+                                !pu.Deleted);
+                            
+                        // Only add if not already in ProjectUser table
+                        if (existingProjectUser == null)
+                        {
+                            var projectUser = new ProjectUser
+                            {
+                                ProjectId = projectId,
+                                UserId = member.Id,
+                                IsCreator = false, // Team members are added as viewers, not creators
+                                Creator = actionBy,
+                                Updater = actionBy,
+                                CreatedAt = DateTime.UtcNow,
+                                UpdatedAt = DateTime.UtcNow
+                            };
+                            
+                            await _context.ProjectUsers.AddAsync(projectUser);
+                        }
                     }
                 }
             }
 
+            _context.ConstructPlanItems.Update(planItem);
             await _context.SaveChangesAsync();
-
-            // Invalidate all related caches
-            await InvalidateConstructionPlanCaches(model.PlanId, constructionPlan.ProjectId);
+            
+            // Invalidate cache
+            await InvalidateConstructionPlanCaches(planItem.PlanId, planItem.ConstructionPlan.ProjectId);
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.PROJECT_USER_CACHE_KEY);
             
             return true;
         }

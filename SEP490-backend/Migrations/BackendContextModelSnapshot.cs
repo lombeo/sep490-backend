@@ -980,7 +980,7 @@ namespace Sep490_Backend.Migrations
 
                     b.HasIndex("ProjectId");
 
-                    b.ToTable("InspectionReports");
+                    b.ToTable("InspectionReports", (string)null);
                 });
 
             modelBuilder.Entity("Sep490_Backend.Infra.Entities.Material", b =>
