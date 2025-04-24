@@ -14,6 +14,7 @@ using Sep490_Backend.Services.HelperService;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
+using Microsoft.Extensions.Logging;
 
 namespace Sep490_Backend.Services.ResourceReqService
 {
@@ -54,17 +55,20 @@ namespace Sep490_Backend.Services.ResourceReqService
         private readonly ICacheService _cacheService;
         private readonly IHelperService _helperService;
         private readonly IDataService _dataService;
+        private readonly ILogger<ResourceReqService> _logger;
 
         public ResourceReqService(
             BackendContext context,
             ICacheService cacheService,
             IHelperService helperService,
-            IDataService dataService)
+            IDataService dataService,
+            ILogger<ResourceReqService> logger)
         {
             _context = context;
             _cacheService = cacheService;
             _helperService = helperService;
             _dataService = dataService;
+            _logger = logger;
         }
 
         /// <summary>
@@ -2084,6 +2088,9 @@ namespace Sep490_Backend.Services.ResourceReqService
                 else if (isExecutiveBoard && request.Status == RequestStatus.ManagerApproved)
                 {
                     request.Status = RequestStatus.BodApproved;
+                    
+                    // Process resource allocation if this is final approval (BOD approved)
+                    await ProcessResourceAllocation(request, actionBy);
                 }
 
                 // Store approval comments in the description or as an additional field
@@ -2105,11 +2112,282 @@ namespace Sep490_Backend.Services.ResourceReqService
 
                 return request;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                throw;
+                throw new DbUpdateException($"Failed to approve resource allocation request: {ex.Message}", ex);
             }
+        }
+
+        /// <summary>
+        /// Processes resource allocation based on request type after final approval
+        /// </summary>
+        /// <param name="request">The approved resource allocation request</param>
+        /// <param name="actionBy">ID of the user performing the action</param>
+        private async Task ProcessResourceAllocation(ResourceAllocationReqs request, int actionBy)
+        {
+            if (request.ResourceAllocationDetails == null || !request.ResourceAllocationDetails.Any())
+            {
+                return;
+            }
+
+            switch (request.RequestType)
+            {
+                case 1: // PROJECT_TO_PROJECT
+                    await ProcessProjectToProjectAllocation(request, actionBy);
+                    break;
+                
+                case 2: // PROJECT_TO_TASK
+                    await ProcessProjectToTaskAllocation(request, actionBy);
+                    break;
+                
+                case 3: // TASK_TO_TASK
+                    await ProcessTaskToTaskAllocation(request, actionBy);
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Processes Project-to-Project resource allocation
+        /// </summary>
+        /// <param name="request">The approved resource allocation request</param>
+        /// <param name="actionBy">ID of the user performing the action</param>
+        private async Task ProcessProjectToProjectAllocation(ResourceAllocationReqs request, int actionBy)
+        {
+            foreach (var detail in request.ResourceAllocationDetails)
+            {
+                // Get source project inventory item if it exists
+                var sourceInventory = await _context.ResourceInventory
+                    .FirstOrDefaultAsync(r => 
+                        r.ProjectId == request.FromProjectId && 
+                        r.ResourceType == detail.ResourceType && 
+                        r.ResourceId == detail.ResourceId && 
+                        !r.Deleted);
+
+                if (sourceInventory == null)
+                {
+                    // Source inventory item doesn't exist, log an error or throw exception
+                    _logger.LogError($"Source inventory item not found for resource {detail.ResourceId} of type {detail.ResourceType} in project {request.FromProjectId}");
+                    continue;
+                }
+
+                // Check if there's enough quantity in source inventory
+                if (sourceInventory.Quantity < detail.Quantity)
+                {
+                    _logger.LogError($"Not enough quantity in source inventory for resource {detail.ResourceId} of type {detail.ResourceType}. Available: {sourceInventory.Quantity}, Requested: {detail.Quantity}");
+                    continue;
+                }
+
+                // Reduce quantity in source inventory
+                sourceInventory.Quantity -= detail.Quantity;
+                sourceInventory.UpdatedAt = DateTime.UtcNow;
+                sourceInventory.Updater = actionBy;
+                _context.ResourceInventory.Update(sourceInventory);
+
+                // Get destination project inventory item if it exists
+                var destInventory = await _context.ResourceInventory
+                    .FirstOrDefaultAsync(r => 
+                        r.ProjectId == request.ToProjectId && 
+                        r.ResourceType == detail.ResourceType && 
+                        r.ResourceId == detail.ResourceId && 
+                        !r.Deleted);
+
+                if (destInventory != null)
+                {
+                    // Update existing destination inventory item
+                    destInventory.Quantity += detail.Quantity;
+                    destInventory.UpdatedAt = DateTime.UtcNow;
+                    destInventory.Updater = actionBy;
+                    _context.ResourceInventory.Update(destInventory);
+                }
+                else
+                {
+                    // Create new destination inventory item
+                    var newInventory = new ResourceInventory
+                    {
+                        Name = detail.Name ?? sourceInventory.Name,
+                        ResourceId = detail.ResourceId,
+                        ProjectId = request.ToProjectId,
+                        ResourceType = detail.ResourceType,
+                        Quantity = detail.Quantity,
+                        Unit = detail.Unit ?? sourceInventory.Unit,
+                        Status = true,
+                        Creator = actionBy,
+                        Updater = actionBy,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+                    
+                    await _context.ResourceInventory.AddAsync(newInventory);
+                }
+            }
+
+            // Save changes
+            await _context.SaveChangesAsync();
+            
+            // Invalidate inventory cache for both projects
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
+        }
+
+        /// <summary>
+        /// Processes Project-to-Task resource allocation
+        /// </summary>
+        /// <param name="request">The approved resource allocation request</param>
+        /// <param name="actionBy">ID of the user performing the action</param>
+        private async Task ProcessProjectToTaskAllocation(ResourceAllocationReqs request, int actionBy)
+        {
+            if (!request.ToTaskId.HasValue)
+            {
+                _logger.LogError("Task ID is missing for Project-to-Task allocation");
+                return;
+            }
+
+            // Check if task exists
+            var progressItem = await _context.ConstructionProgressItems
+                .FirstOrDefaultAsync(pi => pi.Id == request.ToTaskId.Value && !pi.Deleted);
+                
+            if (progressItem == null)
+            {
+                _logger.LogError($"Task with ID {request.ToTaskId.Value} not found");
+                return;
+            }
+
+            foreach (var detail in request.ResourceAllocationDetails)
+            {
+                // Check if task already has this resource
+                var taskDetail = await _context.ConstructionProgressItemDetails
+                    .FirstOrDefaultAsync(d => 
+                        d.ProgressItemId == request.ToTaskId.Value && 
+                        d.ResourceType == detail.ResourceType && 
+                        d.ResourceId == detail.ResourceId && 
+                        !d.Deleted);
+                
+                if (taskDetail != null)
+                {
+                    // Update existing task resource
+                    taskDetail.Quantity += detail.Quantity;
+                    taskDetail.UpdatedAt = DateTime.UtcNow;
+                    taskDetail.Updater = actionBy;
+                    _context.ConstructionProgressItemDetails.Update(taskDetail);
+                }
+                else
+                {
+                    // Create new task resource
+                    var newTaskDetail = new ConstructionProgressItemDetail
+                    {
+                        ProgressItemId = request.ToTaskId.Value,
+                        WorkCode = progressItem.WorkCode,
+                        ResourceType = detail.ResourceType,
+                        Quantity = detail.Quantity,
+                        Unit = detail.Unit,
+                        ResourceId = detail.ResourceId,
+                        Creator = actionBy,
+                        Updater = actionBy,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+                    
+                    await _context.ConstructionProgressItemDetails.AddAsync(newTaskDetail);
+                }
+            }
+
+            // Save changes
+            await _context.SaveChangesAsync();
+            
+            // Invalidate construction progress cache
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.CONSTRUCTION_PROGRESS_ALL_PATTERN);
+        }
+
+        /// <summary>
+        /// Processes Task-to-Task resource allocation
+        /// </summary>
+        /// <param name="request">The approved resource allocation request</param>
+        /// <param name="actionBy">ID of the user performing the action</param>
+        private async Task ProcessTaskToTaskAllocation(ResourceAllocationReqs request, int actionBy)
+        {
+            if (!request.FromTaskId.HasValue || !request.ToTaskId.HasValue)
+            {
+                _logger.LogError("Source or destination task ID is missing for Task-to-Task allocation");
+                return;
+            }
+
+            // Check if tasks exist
+            var sourceTask = await _context.ConstructionProgressItems
+                .FirstOrDefaultAsync(pi => pi.Id == request.FromTaskId.Value && !pi.Deleted);
+                
+            var destTask = await _context.ConstructionProgressItems
+                .FirstOrDefaultAsync(pi => pi.Id == request.ToTaskId.Value && !pi.Deleted);
+                
+            if (sourceTask == null || destTask == null)
+            {
+                _logger.LogError($"Source task ({request.FromTaskId}) or destination task ({request.ToTaskId}) not found");
+                return;
+            }
+
+            foreach (var detail in request.ResourceAllocationDetails)
+            {
+                // Check if source task has this resource
+                var sourceDetail = await _context.ConstructionProgressItemDetails
+                    .FirstOrDefaultAsync(d => 
+                        d.ProgressItemId == request.FromTaskId.Value && 
+                        d.ResourceType == detail.ResourceType && 
+                        d.ResourceId == detail.ResourceId && 
+                        !d.Deleted);
+                
+                if (sourceDetail == null || sourceDetail.Quantity < detail.Quantity)
+                {
+                    _logger.LogError($"Source task doesn't have enough of resource {detail.ResourceId} of type {detail.ResourceType}");
+                    continue;
+                }
+
+                // Reduce quantity in source task
+                sourceDetail.Quantity -= detail.Quantity;
+                sourceDetail.UpdatedAt = DateTime.UtcNow;
+                sourceDetail.Updater = actionBy;
+                _context.ConstructionProgressItemDetails.Update(sourceDetail);
+
+                // Check if destination task already has this resource
+                var destDetail = await _context.ConstructionProgressItemDetails
+                    .FirstOrDefaultAsync(d => 
+                        d.ProgressItemId == request.ToTaskId.Value && 
+                        d.ResourceType == detail.ResourceType && 
+                        d.ResourceId == detail.ResourceId && 
+                        !d.Deleted);
+                
+                if (destDetail != null)
+                {
+                    // Update existing destination task resource
+                    destDetail.Quantity += detail.Quantity;
+                    destDetail.UpdatedAt = DateTime.UtcNow;
+                    destDetail.Updater = actionBy;
+                    _context.ConstructionProgressItemDetails.Update(destDetail);
+                }
+                else
+                {
+                    // Create new destination task resource
+                    var newDestDetail = new ConstructionProgressItemDetail
+                    {
+                        ProgressItemId = request.ToTaskId.Value,
+                        WorkCode = destTask.WorkCode,
+                        ResourceType = detail.ResourceType,
+                        Quantity = detail.Quantity,
+                        Unit = detail.Unit ?? sourceDetail.Unit,
+                        ResourceId = detail.ResourceId,
+                        Creator = actionBy,
+                        Updater = actionBy,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+                    
+                    await _context.ConstructionProgressItemDetails.AddAsync(newDestDetail);
+                }
+            }
+
+            // Save changes
+            await _context.SaveChangesAsync();
+            
+            // Invalidate construction progress cache
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.CONSTRUCTION_PROGRESS_ALL_PATTERN);
         }
 
         /// <summary>
