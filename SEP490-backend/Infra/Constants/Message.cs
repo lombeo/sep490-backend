@@ -147,6 +147,8 @@
             public const string ADD_INVENTORY_SUCCESS = "S-RR-007"; // Add inventory item successfully!
             public const string UPDATE_INVENTORY_SUCCESS = "S-RR-008"; // Update inventory item successfully!
             public const string DELETE_INVENTORY_SUCCESS = "S-RR-009"; // Delete inventory item successfully!
+            public const string CACHE_INVALIDATED = "S-RR-010"; // Resource request cache invalidated successfully!
+            public const string CACHE_CLEARED = "S-RR-011"; // Resource request cache cleared successfully!
             
             // Error messages
             public const string REQUEST_NOT_FOUND = "E-RR-001"; // Resource request not found!
@@ -168,6 +170,8 @@
             public const string INVENTORY_NOT_FOUND = "E-RR-017"; // Resource inventory not found!
             public const string NAME_REQUIRED = "E-RR-018"; // Resource name is required!
             public const string NEGATIVE_QUANTITY = "E-RR-019"; // Quantity cannot be negative!
+            public const string CACHE_CLEAR_ERROR = "E-RR-020"; // Failed to clear resource request cache!
+            public const string INVALID_REQUEST_TYPE = "E-RR-023"; // Invalid request type!
         }
 
         public static class MaterialMessage
@@ -222,11 +226,18 @@
             public const string DELETE_SUCCESS = "S-VEH-003"; // Delete vehicle successfully!
             public const string SEARCH_SUCCESS = "S-VEH-004"; // Search vehicles successfully!
             public const string GET_DETAIL_SUCCESS = "S-VEH-005"; // Get vehicle details successfully!
+            public const string CACHE_INVALIDATED = "S-VEH-006"; // Vehicle cache invalidated successfully!
+            public const string DRIVER_ASSIGNED = "S-VEH-007"; // Driver assigned to vehicle successfully!
+            public const string STATUS_UPDATED = "S-VEH-008"; // Vehicle status updated successfully!
             
             // Error messages
             public const string NOT_FOUND = "E-VEH-001"; // Vehicle not found!
             public const string LICENSE_PLATE_EXISTS = "E-VEH-002"; // License plate already exists!
             public const string VEHICLE_IN_USE = "E-VEH-003"; // Cannot delete vehicle because it is in use in construction plans!
+            public const string DRIVER_NOT_FOUND = "E-VEH-004"; // Driver not found!
+            public const string INVALID_STATUS = "E-VEH-005"; // Invalid vehicle status!
+            public const string ALREADY_ASSIGNED = "E-VEH-006"; // Vehicle is already assigned to a driver!
+            public const string INVALID_DRIVER = "E-VEH-007"; // Selected user does not have appropriate role to be a driver!
         }
 
         public static class ActionLogMessage

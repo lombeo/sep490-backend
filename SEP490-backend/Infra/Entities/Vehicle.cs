@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Sep490_Backend.Infra.Enums;
 
 namespace Sep490_Backend.Infra.Entities
 {
@@ -14,7 +15,7 @@ namespace Sep490_Backend.Infra.Entities
         public string ChassisNumber { get; set; }
         public string EngineNumber { get; set; }
         public string Image { get; set; }
-        public int Status { get; set; }
+        public VehicleStatus Status { get; set; }
         public int Driver { get; set; }
         public string Color { get; set; }
         public string FuelType { get; set; }
@@ -69,6 +70,10 @@ namespace Sep490_Backend.Infra.Entities
                 entity.Property(e => e.Image)
                       .IsRequired()
                       .HasColumnType("text");
+
+                entity.Property(e => e.Status)
+                      .IsRequired()
+                      .HasDefaultValue(VehicleStatus.Unavailable);
 
                 entity.Property(e => e.Color)
                       .IsRequired()

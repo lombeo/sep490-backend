@@ -25,7 +25,7 @@ namespace Sep490_Backend.Services.ResourceReqService
         Task<bool> DeleteResourceMobilizationReq(int reqId, int actionBy);
         
         // Updated method signatures to use BaseQuery instead of PagedResponseDTO
-        Task<List<ResourceMobilizationReqs>> ViewResourceMobilizationRequests(int projectId, RequestStatus? status, RequestType? requestType, string? searchTerm, BaseQuery query);
+        Task<List<ResourceMobilizationReqs>> ViewResourceMobilizationRequests(int projectId, RequestStatus? status, MobilizationRequestType? requestType, string? searchTerm, BaseQuery query);
         Task<ResourceMobilizationReqs> GetResourceMobilizationRequestById(int id);
         Task<ResourceMobilizationReqs> SendResourceMobilizationRequest(int reqId, int actionBy);
         Task<ResourceMobilizationReqs> ApproveResourceMobilizationRequest(int reqId, string comments, int actionBy);
@@ -41,7 +41,7 @@ namespace Sep490_Backend.Services.ResourceReqService
         Task<ResourceInventory> UpdateInventoryResource(UpdateResourceInventoryDTO model, int actionBy);
         Task<bool> DeleteInventoryResource(int resourceId, int actionBy);
         
-        Task<List<ResourceAllocationReqs>> ViewResourceAllocationRequests(int? fromProjectId, int? toProjectId, RequestStatus? status, string? searchTerm, BaseQuery query);
+        Task<List<ResourceAllocationReqs>> ViewResourceAllocationRequests(int? fromProjectId, int? toProjectId, RequestStatus? status, int? requestType, string? searchTerm, BaseQuery query);
         Task<ResourceAllocationReqs> GetResourceAllocationRequestById(int id);
         Task<ResourceAllocationReqs> SendResourceAllocationRequest(int reqId, int actionBy);
         Task<ResourceAllocationReqs> ApproveResourceAllocationRequest(int reqId, string comments, int actionBy);
@@ -108,10 +108,36 @@ namespace Sep490_Backend.Services.ResourceReqService
                 errors.Add(new ResponseError { Field = "ToProjectId", Message = Message.ResourceRequestMessage.DESTINATION_PROJECT_NOT_FOUND });
             }
 
-            // Cannot allocate resources from a project to itself
-            if (model.FromProjectId == model.ToProjectId)
+            // Cannot allocate resources from a project to itself unless using tasks
+            if (model.FromProjectId == model.ToProjectId && model.RequestType == 1) // PROJECT_TO_PROJECT
             {
                 errors.Add(new ResponseError { Field = "ToProjectId", Message = Message.ResourceRequestMessage.INVALID_PROJECT_SELECTION });
+            }
+
+            // Validate request type and task IDs
+            if (model.RequestType < 1 || model.RequestType > 3)
+            {
+                errors.Add(new ResponseError { Field = "RequestType", Message = "Invalid request type. Must be 1 (Project to Project), 2 (Project to Task), or 3 (Task to Task)." });
+            }
+
+            // Validate task IDs based on request type
+            if (model.RequestType == 2) // PROJECT_TO_TASK
+            {
+                if (!model.ToTaskId.HasValue)
+                {
+                    errors.Add(new ResponseError { Field = "ToTaskId", Message = "Destination task ID is required for Project to Task allocation." });
+                }
+            }
+            else if (model.RequestType == 3) // TASK_TO_TASK
+            {
+                if (!model.FromTaskId.HasValue)
+                {
+                    errors.Add(new ResponseError { Field = "FromTaskId", Message = "Source task ID is required for Task to Task allocation." });
+                }
+                if (!model.ToTaskId.HasValue)
+                {
+                    errors.Add(new ResponseError { Field = "ToTaskId", Message = "Destination task ID is required for Task to Task allocation." });
+                }
             }
 
             // Validate resource details
@@ -180,8 +206,11 @@ namespace Sep490_Backend.Services.ResourceReqService
                     }
 
                     // Update properties
+                    reqToUpdate.RequestType = model.RequestType;
                     reqToUpdate.FromProjectId = model.FromProjectId;
                     reqToUpdate.ToProjectId = model.ToProjectId;
+                    reqToUpdate.FromTaskId = model.FromTaskId;
+                    reqToUpdate.ToTaskId = model.ToTaskId;
                     reqToUpdate.RequestName = model.RequestName;
                     reqToUpdate.ResourceAllocationDetails = model.ResourceAllocationDetails;
                     reqToUpdate.Description = model.Description;
@@ -213,8 +242,11 @@ namespace Sep490_Backend.Services.ResourceReqService
                     var newReq = new ResourceAllocationReqs
                     {
                         RequestCode = requestCode,
+                        RequestType = model.RequestType,
                         FromProjectId = model.FromProjectId,
                         ToProjectId = model.ToProjectId,
+                        FromTaskId = model.FromTaskId,
+                        ToTaskId = model.ToTaskId,
                         RequestName = model.RequestName,
                         ResourceAllocationDetails = model.ResourceAllocationDetails,
                         Description = model.Description,
@@ -327,7 +359,7 @@ namespace Sep490_Backend.Services.ResourceReqService
             }
 
             // Validate request type
-            if (model.RequestType != RequestType.SupplyMore && model.RequestType != RequestType.AddNew)
+            if (model.RequestType != MobilizationRequestType.SupplyMore && model.RequestType != MobilizationRequestType.AddNew)
             {
                 errors.Add(new ResponseError { Field = "RequestType", Message = "Invalid request type" });
             }
@@ -589,7 +621,7 @@ namespace Sep490_Backend.Services.ResourceReqService
         /// <param name="query">BaseQuery object containing pagination parameters</param>
         /// <returns>List of resource mobilization requests</returns>
         public async Task<List<ResourceMobilizationReqs>> ViewResourceMobilizationRequests(
-            int projectId, RequestStatus? status, RequestType? requestType, string? searchTerm, BaseQuery query)
+            int projectId, RequestStatus? status, MobilizationRequestType? requestType, string? searchTerm, BaseQuery query)
         {
             // Check authorization - this method is accessible by both Resource Manager, Technical Department, and Executive Board
             if (!_helperService.IsInRole(query.ActionBy, RoleConstValue.RESOURCE_MANAGER) && 
@@ -828,7 +860,7 @@ namespace Sep490_Backend.Services.ResourceReqService
         }
 
         /// <summary>
-        /// Approves a resource mobilization request
+        /// Approves a resource mobilization request, processing resource allocation accordingly
         /// </summary>
         /// <param name="reqId">ID of the request to approve</param>
         /// <param name="comments">Approval comments</param>
@@ -848,6 +880,7 @@ namespace Sep490_Backend.Services.ResourceReqService
 
             // Find the resource mobilization request
             var request = await _context.ResourceMobilizationReqs
+                .Include(r => r.Project)
                 .FirstOrDefaultAsync(r => r.Id == reqId && !r.Deleted);
 
             if (request == null)
@@ -855,73 +888,86 @@ namespace Sep490_Backend.Services.ResourceReqService
                 throw new KeyNotFoundException(Message.ResourceRequestMessage.REQUEST_NOT_FOUND);
             }
 
-            // Check if the user has the correct role for the current state of the request
-            if (isTechnicalDepartment && request.Status != RequestStatus.WaitManagerApproval)
-            {
-                throw new InvalidOperationException(Message.ResourceRequestMessage.NOT_WAITING_FOR_APPROVAL);
-            }
-
-            // Fix: Only check this condition when the user is Executive Board but not also Technical Department
-            // This handles cases where a user might have multiple roles
-            if (isExecutiveBoard && !isTechnicalDepartment && request.Status != RequestStatus.ManagerApproved)
-            {
-                throw new InvalidOperationException(Message.ResourceRequestMessage.NOT_WAITING_FOR_APPROVAL);
-            }
-
             // Begin transaction
             using var transaction = await _context.Database.BeginTransactionAsync();
-
+            
             try
             {
-                // Update request status based on who is approving
-                if (isTechnicalDepartment && request.Status == RequestStatus.WaitManagerApproval)
+                // Update request status based on approver role
+                if (isTechnicalDepartment)
                 {
-                    request.Status = RequestStatus.ManagerApproved;
-                }
-                else if (isExecutiveBoard && request.Status == RequestStatus.ManagerApproved)
-                {
-                    request.Status = RequestStatus.BodApproved;
-                    
-                    // Process resource allocation when BOD approves
-                    if (request.Status == RequestStatus.BodApproved)
+                    // Technical Manager can only approve requests in WaitManagerApproval status
+                    if (request.Status != RequestStatus.WaitManagerApproval)
                     {
-                        // Process resources based on RequestType
-                        if (request.RequestType == RequestType.AddNew)
-                        {
-                            // Add new resources to appropriate tables for each resource type
-                            await AddNewResources(request, actionBy);
-                        }
-                        else if (request.RequestType == RequestType.SupplyMore)
-                        {
-                            // Add to or create inventory records
-                            await UpdateInventoryResources(request, actionBy);
-                        }
+                        throw new InvalidOperationException(Message.ResourceRequestMessage.NOT_WAITING_FOR_APPROVAL);
                     }
-                }
 
-                // Store approval comments in the description or as an additional field
-                if (!string.IsNullOrEmpty(comments))
+                    // Update to ManagerApproved status
+                    request.Status = RequestStatus.ManagerApproved;
+                    request.UpdatedAt = DateTime.UtcNow;
+                    request.Updater = actionBy;
+                    
+                    // Store approval comments if any
+                    if (!string.IsNullOrEmpty(comments))
+                    {
+                        request.Description = request.Description + "\n\nTechnical Manager Approval Comments: " + comments;
+                    }
+                    
+                    _context.ResourceMobilizationReqs.Update(request);
+                    await _context.SaveChangesAsync();
+                }
+                else if (isExecutiveBoard)
                 {
-                    request.Description = request.Description + "\n\nApproval Comments: " + comments;
+                    // Executive Board can only approve requests that have been approved by Technical Manager first
+                    if (request.Status != RequestStatus.ManagerApproved)
+                    {
+                        throw new InvalidOperationException(Message.ResourceRequestMessage.NOT_WAITING_FOR_APPROVAL);
+                    }
+
+                    // Update to BodApproved status
+                    request.Status = RequestStatus.BodApproved;
+                    request.UpdatedAt = DateTime.UtcNow;
+                    request.Updater = actionBy;
+                    
+                    // Store approval comments if any
+                    if (!string.IsNullOrEmpty(comments))
+                    {
+                        request.Description = request.Description + "\n\nExecutive Board Approval Comments: " + comments;
+                    }
+                    
+                    // Process resources based on request type - Only after Executive Board approval
+                    switch (request.RequestType)
+                    {
+                        case MobilizationRequestType.SupplyMore:
+                            // Supply resources from company pool to project
+                            await UpdateInventoryResources(request, actionBy);
+                            break;
+                            
+                        case MobilizationRequestType.AddNew:
+                            // Add new resources to company pool
+                            await AddNewResources(request, actionBy);
+                            break;
+                            
+                        default:
+                            throw new InvalidOperationException(Message.ResourceRequestMessage.INVALID_REQUEST_TYPE);
+                    }
+                    
+                    _context.ResourceMobilizationReqs.Update(request);
+                    await _context.SaveChangesAsync();
                 }
-
-                request.UpdatedAt = DateTime.UtcNow;
-                request.Updater = actionBy;
-
-                _context.ResourceMobilizationReqs.Update(request);
-                await _context.SaveChangesAsync();
                 
+                // Commit transaction
                 await transaction.CommitAsync();
                 
                 // Invalidate cache
                 await InvalidateResourceMobilizationReqCache(request.Id, request.ProjectId);
-
+                
                 return request;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                throw;
+                throw new DbUpdateException($"Failed to approve resource mobilization request: {ex.Message}", ex);
             }
         }
 
@@ -952,30 +998,44 @@ namespace Sep490_Backend.Services.ResourceReqService
                 throw new KeyNotFoundException(Message.ResourceRequestMessage.REQUEST_NOT_FOUND);
             }
 
-            // Check if the request is in a state that can be rejected
-            if (isTechnicalDepartment && request.Status != RequestStatus.WaitManagerApproval)
-            {
-                throw new InvalidOperationException(Message.ResourceRequestMessage.NOT_WAITING_FOR_APPROVAL);
-            }
-
-            // Fix: Only check this condition when the user is Executive Board but not also Technical Department
-            if (isExecutiveBoard && !isTechnicalDepartment && request.Status != RequestStatus.ManagerApproved)
-            {
-                throw new InvalidOperationException(Message.ResourceRequestMessage.NOT_WAITING_FOR_APPROVAL);
-            }
-
             // Begin transaction
             using var transaction = await _context.Database.BeginTransactionAsync();
 
             try
             {
-                // Update request status
-                request.Status = RequestStatus.Reject;
-                
-                // Store rejection reason in the description or as an additional field
-                if (!string.IsNullOrEmpty(reason))
+                // Technical Manager can only reject requests waiting for their approval
+                if (isTechnicalDepartment)
                 {
-                    request.Description = request.Description + "\n\nRejection Reason: " + reason;
+                    if (request.Status != RequestStatus.WaitManagerApproval)
+                    {
+                        throw new InvalidOperationException(Message.ResourceRequestMessage.NOT_WAITING_FOR_APPROVAL);
+                    }
+
+                    // Update request status
+                    request.Status = RequestStatus.Reject;
+                    
+                    // Store rejection reason in the description
+                    if (!string.IsNullOrEmpty(reason))
+                    {
+                        request.Description = request.Description + "\n\nTechnical Manager Rejection Reason: " + reason;
+                    }
+                }
+                // Executive Board can only reject requests waiting for their approval
+                else if (isExecutiveBoard)
+                {
+                    if (request.Status != RequestStatus.ManagerApproved)
+                    {
+                        throw new InvalidOperationException(Message.ResourceRequestMessage.NOT_WAITING_FOR_APPROVAL);
+                    }
+
+                    // Update request status
+                    request.Status = RequestStatus.Reject;
+                    
+                    // Store rejection reason in the description
+                    if (!string.IsNullOrEmpty(reason))
+                    {
+                        request.Description = request.Description + "\n\nExecutive Board Rejection Reason: " + reason;
+                    }
                 }
 
                 request.UpdatedAt = DateTime.UtcNow;
@@ -1017,20 +1077,36 @@ namespace Sep490_Backend.Services.ResourceReqService
                 switch (detail.ResourceType)
                 {
                     case ResourceType.MATERIAL:
-                        var material = await _context.Materials
-                            .FirstOrDefaultAsync(m => m.Id == detail.ResourceId && !m.Deleted);
+                        // For materials, add to the main company resource catalog
+                        var material = await _context.Materials.FirstOrDefaultAsync(m => m.Id == detail.ResourceId && !m.Deleted);
+                        if (material != null && request.RequestType == MobilizationRequestType.AddNew)
+                        {
+                            // Increase inventory in the Material table (company resource)
+                            material.Inventory = (material.Inventory ?? 0) + detail.Quantity;
+                            material.UpdatedAt = DateTime.UtcNow;
+                            material.Updater = actionBy;
+                            _context.Materials.Update(material);
+                        }
                         resourceName = material?.MaterialName ?? $"Material {detail.ResourceId}";
                         break;
                         
                     case ResourceType.MACHINE:
-                        var vehicle = await _context.Vehicles
-                            .FirstOrDefaultAsync(v => v.Id == detail.ResourceId && !v.Deleted);
+                        // For vehicles, add a new vehicle to the main company resource catalog
+                        var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.Id == detail.ResourceId && !v.Deleted);
+                        if (vehicle != null && request.RequestType == MobilizationRequestType.SupplyMore)
+                        {
+                            // Only supply vehicles with Available status
+                            if (vehicle.Status != VehicleStatus.Available)
+                            {
+                                continue; // Skip this vehicle as it's not available
+                            }
+                        }
                         resourceName = vehicle?.LicensePlate ?? $"Vehicle {detail.ResourceId}";
                         break;
                         
                     case ResourceType.HUMAN:
-                        var team = await _context.ConstructionTeams
-                            .FirstOrDefaultAsync(t => t.Id == detail.ResourceId && !t.Deleted);
+                        // For construction teams, handle appropriately
+                        var team = await _context.ConstructionTeams.FirstOrDefaultAsync(t => t.Id == detail.ResourceId && !t.Deleted);
                         resourceName = team?.TeamName ?? $"Team {detail.ResourceId}";
                         break;
                         
@@ -1039,19 +1115,23 @@ namespace Sep490_Backend.Services.ResourceReqService
                         break;
                 }
                 
-                // Create a key for grouping
-                var key = (detail.ResourceId, request.ProjectId, detail.ResourceType);
-                
-                // If the key already exists in the dictionary, update the quantity
-                if (resourceGroups.ContainsKey(key))
+                // If it's SupplyMore request type, add resources to the project's inventory
+                if (request.RequestType == MobilizationRequestType.SupplyMore)
                 {
-                    var existing = resourceGroups[key];
-                    resourceGroups[key] = (existing.Name, existing.Quantity + detail.Quantity, existing.Unit);
-                }
-                else
-                {
-                    // Otherwise, add a new entry
-                    resourceGroups[key] = (resourceName, detail.Quantity, detail.Unit ?? "Unit");
+                    // Create a key for grouping
+                    var key = (detail.ResourceId, request.ProjectId, detail.ResourceType);
+                    
+                    // If the key already exists in the dictionary, update the quantity
+                    if (resourceGroups.ContainsKey(key))
+                    {
+                        var existing = resourceGroups[key];
+                        resourceGroups[key] = (existing.Name, existing.Quantity + detail.Quantity, existing.Unit);
+                    }
+                    else
+                    {
+                        // Otherwise, add a new entry
+                        resourceGroups[key] = (resourceName, detail.Quantity, detail.Unit ?? "Unit");
+                    }
                 }
             }
             
@@ -1060,48 +1140,51 @@ namespace Sep490_Backend.Services.ResourceReqService
             
             try
             {
-                // Process each resource group
-                foreach (var group in resourceGroups)
+                // Process each resource group for SupplyMore request type
+                if (request.RequestType == MobilizationRequestType.SupplyMore)
                 {
-                    var key = group.Key;
-                    var value = group.Value;
-                    
-                    // First check if it already exists in inventory
-                    var existingResource = await _context.ResourceInventory
-                        .FirstOrDefaultAsync(r => 
-                            r.ResourceType == key.ResourceType && 
-                            r.ResourceId == key.ResourceId &&
-                            r.ProjectId == key.ProjectId &&
-                            !r.Deleted);
-                        
-                    if (existingResource != null)
+                    foreach (var group in resourceGroups)
                     {
-                        // Update existing resource
-                        existingResource.Quantity += value.Quantity;
-                        existingResource.UpdatedAt = DateTime.UtcNow;
-                        existingResource.Updater = actionBy;
+                        var key = group.Key;
+                        var value = group.Value;
                         
-                        _context.ResourceInventory.Update(existingResource);
-                    }
-                    else
-                    {
-                        // Create new inventory resource
-                        var newResource = new ResourceInventory
+                        // First check if it already exists in inventory
+                        var existingResource = await _context.ResourceInventory
+                            .FirstOrDefaultAsync(r => 
+                                r.ResourceType == key.ResourceType && 
+                                r.ResourceId == key.ResourceId &&
+                                r.ProjectId == key.ProjectId &&
+                                !r.Deleted);
+                            
+                        if (existingResource != null)
                         {
-                            Name = value.Name,
-                            ResourceId = key.ResourceId,
-                            ProjectId = key.ProjectId,
-                            ResourceType = key.ResourceType,
-                            Quantity = value.Quantity,
-                            Unit = value.Unit,
-                            Status = true,
-                            Creator = actionBy,
-                            Updater = actionBy,
-                            CreatedAt = DateTime.UtcNow,
-                            UpdatedAt = DateTime.UtcNow
-                        };
-                        
-                        await _context.ResourceInventory.AddAsync(newResource);
+                            // Update existing resource
+                            existingResource.Quantity += value.Quantity;
+                            existingResource.UpdatedAt = DateTime.UtcNow;
+                            existingResource.Updater = actionBy;
+                            
+                            _context.ResourceInventory.Update(existingResource);
+                        }
+                        else
+                        {
+                            // Create new inventory resource
+                            var newResource = new ResourceInventory
+                            {
+                                Name = value.Name,
+                                ResourceId = key.ResourceId,
+                                ProjectId = key.ProjectId,
+                                ResourceType = key.ResourceType,
+                                Quantity = value.Quantity,
+                                Unit = value.Unit,
+                                Status = true,
+                                Creator = actionBy,
+                                Updater = actionBy,
+                                CreatedAt = DateTime.UtcNow,
+                                UpdatedAt = DateTime.UtcNow
+                            };
+                            
+                            await _context.ResourceInventory.AddAsync(newResource);
+                        }
                     }
                 }
                 
@@ -1126,52 +1209,205 @@ namespace Sep490_Backend.Services.ResourceReqService
         /// <param name="actionBy">ID of the user performing the action</param>
         private async Task UpdateInventoryResources(ResourceMobilizationReqs request, int actionBy)
         {
-            foreach (var detail in request.ResourceMobilizationDetails)
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            
+            try
             {
-                // Look for existing resource in inventory
-                var existingResource = await _context.ResourceInventory
-                    .FirstOrDefaultAsync(r => 
-                        r.ResourceType == detail.ResourceType && 
-                        r.ResourceId == detail.ResourceId && 
-                        r.ProjectId == request.ProjectId &&
-                        !r.Deleted);
-                
-                if (existingResource != null)
+                if (request.RequestType == MobilizationRequestType.SupplyMore)
                 {
-                    // Update existing resource quantity
-                    existingResource.Quantity += detail.Quantity;
-                    existingResource.UpdatedAt = DateTime.UtcNow;
-                    existingResource.Updater = actionBy;
-                    
-                    _context.ResourceInventory.Update(existingResource);
-                }
-                else
-                {
-                    // Create new inventory record
-                    var newResource = new ResourceInventory
+                    foreach (var detail in request.ResourceMobilizationDetails)
                     {
-                        Name = detail.Name ?? $"Resource {detail.ResourceId}",
-                        ResourceId = detail.ResourceId,
-                        ProjectId = request.ProjectId,
-                        ResourceType = detail.ResourceType,
-                        Quantity = detail.Quantity,
-                        Unit = detail.Unit ?? "Unit",
-                        Status = true,
-                        Creator = actionBy,
-                        Updater = actionBy,
-                        CreatedAt = DateTime.UtcNow,
-                        UpdatedAt = DateTime.UtcNow
-                    };
-                    
-                    await _context.ResourceInventory.AddAsync(newResource);
+                        // Handle resource based on type
+                        switch (detail.ResourceType)
+                        {
+                            case ResourceType.MATERIAL:
+                                // Move material from company resource to project resource
+                                var material = await _context.Materials
+                                    .FirstOrDefaultAsync(m => m.Id == detail.ResourceId && !m.Deleted);
+                                
+                                if (material != null)
+                                {
+                                    // Ensure there's enough inventory in the company resource
+                                    if ((material.Inventory ?? 0) >= detail.Quantity)
+                                    {
+                                        // Reduce company inventory
+                                        material.Inventory = (material.Inventory ?? 0) - detail.Quantity;
+                                        material.UpdatedAt = DateTime.UtcNow;
+                                        material.Updater = actionBy;
+                                        _context.Materials.Update(material);
+                                        
+                                        // Add to project inventory
+                                        await AddResourceToProjectInventory(
+                                            detail.ResourceId,
+                                            request.ProjectId,
+                                            detail.ResourceType,
+                                            detail.Quantity,
+                                            material.MaterialName,
+                                            material.Unit ?? "Unit",
+                                            actionBy
+                                        );
+                                    }
+                                }
+                                break;
+                                
+                            case ResourceType.MACHINE:
+                                // Move vehicle from company resource to project resource
+                                var vehicle = await _context.Vehicles
+                                    .FirstOrDefaultAsync(v => v.Id == detail.ResourceId && !v.Deleted);
+                                
+                                if (vehicle != null && vehicle.Status == VehicleStatus.Available)
+                                {
+                                    // Mark vehicle as unavailable since it's now assigned to a project
+                                    vehicle.Status = VehicleStatus.Unavailable;
+                                    vehicle.UpdatedAt = DateTime.UtcNow;
+                                    vehicle.Updater = actionBy;
+                                    _context.Vehicles.Update(vehicle);
+                                    
+                                    // Add to project inventory
+                                    await AddResourceToProjectInventory(
+                                        detail.ResourceId,
+                                        request.ProjectId,
+                                        detail.ResourceType,
+                                        detail.Quantity,
+                                        vehicle.VehicleName,
+                                        "Unit",
+                                        actionBy
+                                    );
+                                }
+                                break;
+                                
+                            case ResourceType.HUMAN:
+                                // Handle construction team assignment
+                                var team = await _context.ConstructionTeams
+                                    .FirstOrDefaultAsync(t => t.Id == detail.ResourceId && !t.Deleted);
+                                
+                                if (team != null)
+                                {
+                                    // Add to project inventory
+                                    await AddResourceToProjectInventory(
+                                        detail.ResourceId,
+                                        request.ProjectId,
+                                        detail.ResourceType,
+                                        detail.Quantity,
+                                        team.TeamName,
+                                        "Team",
+                                        actionBy
+                                    );
+                                }
+                                break;
+                        }
+                    }
                 }
+                else if (request.RequestType == MobilizationRequestType.AddNew)
+                {
+                    // This is handled in AddNewResources method for materials
+                    // For vehicles, we need to add them as new vehicles to the system
+                    foreach (var detail in request.ResourceMobilizationDetails)
+                    {
+                        if (detail.ResourceType == ResourceType.MACHINE)
+                        {
+                            // Assuming necessary details are provided in the description or elsewhere
+                            // This would typically be handled through a separate vehicle registration flow
+                            // but we include a basic implementation here
+                            if (!string.IsNullOrEmpty(detail.Name) && !string.IsNullOrEmpty(detail.Description))
+                            {
+                                var vehicleParts = detail.Description.Split("|");
+                                if (vehicleParts.Length >= 3)
+                                {
+                                    var newVehicle = new Vehicle
+                                    {
+                                        VehicleName = detail.Name,
+                                        LicensePlate = vehicleParts[0],
+                                        Brand = vehicleParts[1],
+                                        VehicleType = vehicleParts[2],
+                                        YearOfManufacture = DateTime.UtcNow.Year,
+                                        CountryOfManufacture = "Unknown",
+                                        ChassisNumber = "N/A",
+                                        EngineNumber = "N/A",
+                                        Image = "default.jpg",
+                                        Status = VehicleStatus.Available,
+                                        Driver = 0, // No driver assigned yet
+                                        Color = "Unknown",
+                                        FuelType = "Unknown",
+                                        Description = detail.Description,
+                                        FuelTankVolume = 0,
+                                        FuelUnit = "L",
+                                        Attachment = "{}",
+                                        Creator = actionBy,
+                                        Updater = actionBy,
+                                        CreatedAt = DateTime.UtcNow,
+                                        UpdatedAt = DateTime.UtcNow
+                                    };
+                                    
+                                    await _context.Vehicles.AddAsync(newVehicle);
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+                
+                // Invalidate relevant caches
+                await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
             }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                throw new DbUpdateException($"Failed to update inventory resources: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// Helper method to add a resource to the project inventory
+        /// </summary>
+        private async Task AddResourceToProjectInventory(
+            int? resourceId, 
+            int projectId, 
+            ResourceType resourceType, 
+            int quantity, 
+            string name, 
+            string unit, 
+            int actionBy)
+        {
+            // Check if resource already exists in project inventory
+            var existingResource = await _context.ResourceInventory
+                .FirstOrDefaultAsync(r =>
+                    r.ResourceType == resourceType &&
+                    r.ResourceId == resourceId &&
+                    r.ProjectId == projectId &&
+                    !r.Deleted);
             
-            // Save all changes
-            await _context.SaveChangesAsync();
-            
-            // Invalidate inventory cache
-            await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
+            if (existingResource != null)
+            {
+                // Update existing inventory
+                existingResource.Quantity += quantity;
+                existingResource.UpdatedAt = DateTime.UtcNow;
+                existingResource.Updater = actionBy;
+                
+                _context.ResourceInventory.Update(existingResource);
+            }
+            else
+            {
+                // Create new inventory entry
+                var newResource = new ResourceInventory
+                {
+                    Name = name,
+                    ResourceId = resourceId,
+                    ProjectId = projectId,
+                    ResourceType = resourceType,
+                    Quantity = quantity,
+                    Unit = unit,
+                    Status = true,
+                    Creator = actionBy,
+                    Updater = actionBy,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                
+                await _context.ResourceInventory.AddAsync(newResource);
+            }
         }
 
         #endregion
@@ -1590,11 +1826,12 @@ namespace Sep490_Backend.Services.ResourceReqService
         /// <param name="fromProjectId">Optional filter by source project ID</param>
         /// <param name="toProjectId">Optional filter by destination project ID</param>
         /// <param name="status">Optional filter by request status</param>
+        /// <param name="requestType">Optional filter by request type (1: Project to Project, 2: Project to Task, 3: Task to Task)</param>
         /// <param name="searchTerm">Optional search by request code or request name</param>
         /// <param name="query">BaseQuery object containing pagination parameters</param>
         /// <returns>List of resource allocation requests</returns>
         public async Task<List<ResourceAllocationReqs>> ViewResourceAllocationRequests(
-            int? fromProjectId, int? toProjectId, RequestStatus? status, string? searchTerm, BaseQuery query)
+            int? fromProjectId, int? toProjectId, RequestStatus? status, int? requestType, string? searchTerm, BaseQuery query)
         {
             // Check authorization - this method is accessible by both Resource Manager, Technical Department, and Executive Board
             if (!_helperService.IsInRole(query.ActionBy, RoleConstValue.RESOURCE_MANAGER) && 
@@ -1622,6 +1859,11 @@ namespace Sep490_Backend.Services.ResourceReqService
             if (status.HasValue)
             {
                 cacheKey = $"{cacheKey}:STATUS:{status.Value}";
+            }
+
+            if (requestType.HasValue)
+            {
+                cacheKey = $"{cacheKey}:TYPE:{requestType.Value}";
             }
 
             if (!string.IsNullOrEmpty(searchTerm))
@@ -1659,6 +1901,11 @@ namespace Sep490_Backend.Services.ResourceReqService
             if (status.HasValue)
             {
                 dbQuery = dbQuery.Where(r => r.Status == status.Value);
+            }
+
+            if (requestType.HasValue)
+            {
+                dbQuery = dbQuery.Where(r => r.RequestType == requestType.Value);
             }
 
             if (!string.IsNullOrEmpty(searchTerm))

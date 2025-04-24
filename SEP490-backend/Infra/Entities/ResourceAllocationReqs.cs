@@ -9,8 +9,11 @@ namespace Sep490_Backend.Infra.Entities
     {
         public int Id { get; set; }
         public string RequestCode { get; set; } //unique
+        public int RequestType { get; set; } // Added to match frontend: PROJECT_TO_PROJECT(1), PROJECT_TO_TASK(2), TASK_TO_TASK(3)
         public int FromProjectId { get; set; } //project
         public int ToProjectId { get; set; } //project
+        public int? FromTaskId { get; set; } // Added to support task allocation
+        public int? ToTaskId { get; set; } // Added to support task allocation
         public string? RequestName { get; set; }
         public List<RequestDetails> ResourceAllocationDetails { get; set; } //jsonb
         public string? Description { get; set; }
@@ -39,11 +42,21 @@ namespace Sep490_Backend.Infra.Entities
                     .IsRequired()
                     .HasMaxLength(50);
 
+                entity.Property(e => e.RequestType)
+                    .IsRequired()
+                    .HasDefaultValue(1); // Default to PROJECT_TO_PROJECT
+
                 entity.Property(e => e.FromProjectId)
                     .IsRequired();
 
                 entity.Property(e => e.ToProjectId)
                     .IsRequired();
+
+                entity.Property(e => e.FromTaskId)
+                    .IsRequired(false);
+
+                entity.Property(e => e.ToTaskId)
+                    .IsRequired(false);
 
                 entity.Property(e => e.RequestName)
                     .HasMaxLength(200);
@@ -74,6 +87,9 @@ namespace Sep490_Backend.Infra.Entities
                 entity.HasIndex(e => e.FromProjectId);
                 entity.HasIndex(e => e.ToProjectId);
                 entity.HasIndex(e => e.Status);
+                entity.HasIndex(e => e.RequestType);
+                entity.HasIndex(e => e.FromTaskId);
+                entity.HasIndex(e => e.ToTaskId);
 
                 // Relationships
                 entity.HasOne(e => e.FromProject)

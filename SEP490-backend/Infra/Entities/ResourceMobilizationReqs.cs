@@ -11,7 +11,7 @@ namespace Sep490_Backend.Infra.Entities
         {
             RequestCode = string.Empty;
             ResourceMobilizationDetails = new List<RequestDetails>();
-            RequestType = RequestType.SupplyMore;
+            RequestType = MobilizationRequestType.SupplyMore;
         }
         
         public int Id { get; set; }
@@ -24,7 +24,7 @@ namespace Sep490_Backend.Infra.Entities
         public RequestStatus Status { get; set; }
         public JsonDocument? Attachments { get; set; }
         public DateTime RequestDate { get; set; }
-        public RequestType RequestType { get; set; }
+        public MobilizationRequestType RequestType { get; set; }
 
         // Navigation properties
         public virtual Project? Project { get; set; }
@@ -65,7 +65,7 @@ namespace Sep490_Backend.Infra.Entities
 
                 entity.Property(e => e.RequestType)
                     .IsRequired()
-                    .HasDefaultValue(RequestType.SupplyMore);
+                    .HasDefaultValue(MobilizationRequestType.SupplyMore);
 
                 entity.Property(e => e.Attachments)
                     .HasColumnType("jsonb");

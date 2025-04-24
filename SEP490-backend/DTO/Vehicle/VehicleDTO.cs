@@ -1,4 +1,5 @@
 using Sep490_Backend.Infra.Entities;
+using Sep490_Backend.Infra.Enums;
 using System.ComponentModel.DataAnnotations;
 
 namespace Sep490_Backend.DTO.Vehicle
@@ -6,7 +7,7 @@ namespace Sep490_Backend.DTO.Vehicle
     public class VehicleSearchDTO : BaseQuery
     {
         public string? KeyWord { get; set; }
-        public int? Status { get; set; }
+        public VehicleStatus? Status { get; set; }
         public int? Driver { get; set; }
     }
 
@@ -38,7 +39,7 @@ namespace Sep490_Backend.DTO.Vehicle
         [Required(ErrorMessage = "Image is required for vehicle documentation")]
         public string Image { get; set; } = string.Empty;
         
-        public int Status { get; set; }
+        public VehicleStatus Status { get; set; } = VehicleStatus.Unavailable;
         public int Driver { get; set; }
         
         [Required(ErrorMessage = "Color is required for vehicle identification")]
@@ -76,7 +77,7 @@ namespace Sep490_Backend.DTO.Vehicle
         public string ChassisNumber { get; set; } = string.Empty;
         public string EngineNumber { get; set; } = string.Empty;
         public string Image { get; set; } = string.Empty;
-        public int Status { get; set; }
+        public VehicleStatus Status { get; set; }
         public int DriverId { get; set; }
         public string Color { get; set; } = string.Empty;
         public string FuelType { get; set; } = string.Empty;

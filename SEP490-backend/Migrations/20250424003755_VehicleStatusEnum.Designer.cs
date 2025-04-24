@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Sep490_Backend.DTO.ResourceReqs;
@@ -14,9 +15,11 @@ using Sep490_Backend.Infra;
 namespace Sep490_Backend.Migrations
 {
     [DbContext(typeof(BackendContext))]
-    partial class BackendContextModelSnapshot : ModelSnapshot
+    [Migration("20250424003755_VehicleStatusEnum")]
+    partial class VehicleStatusEnum
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1244,9 +1247,6 @@ namespace Sep490_Backend.Migrations
                     b.Property<int>("FromProjectId")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("FromTaskId")
-                        .HasColumnType("integer");
-
                     b.Property<int>("PriorityLevel")
                         .HasColumnType("integer");
 
@@ -1262,11 +1262,6 @@ namespace Sep490_Backend.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
-                    b.Property<int>("RequestType")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(1);
-
                     b.Property<List<RequestDetails>>("ResourceAllocationDetails")
                         .IsRequired()
                         .HasColumnType("jsonb");
@@ -1275,9 +1270,6 @@ namespace Sep490_Backend.Migrations
                         .HasColumnType("integer");
 
                     b.Property<int>("ToProjectId")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("ToTaskId")
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
@@ -1298,19 +1290,13 @@ namespace Sep490_Backend.Migrations
 
                     b.HasIndex("FromProjectId");
 
-                    b.HasIndex("FromTaskId");
-
                     b.HasIndex("RequestCode")
                         .IsUnique()
                         .HasFilter("\"Deleted\" = false");
 
-                    b.HasIndex("RequestType");
-
                     b.HasIndex("Status");
 
                     b.HasIndex("ToProjectId");
-
-                    b.HasIndex("ToTaskId");
 
                     b.HasIndex("Updater");
 

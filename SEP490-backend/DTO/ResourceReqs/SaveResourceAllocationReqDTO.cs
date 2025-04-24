@@ -9,8 +9,11 @@ namespace Sep490_Backend.DTO.ResourceReqs
     {
         public int? Id { get; set; }
         public string? RequestCode { get; set; }
+        public int RequestType { get; set; } = 1; // Default to PROJECT_TO_PROJECT
         public int FromProjectId { get; set; }
         public int ToProjectId { get; set; }
+        public int? FromTaskId { get; set; }
+        public int? ToTaskId { get; set; }
         public string? RequestName { get; set; }
         
         [Required(ErrorMessage = "Resource allocation details are required")]

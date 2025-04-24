@@ -31,6 +31,21 @@ namespace Sep490_Backend.Controllers
         /// Creates or updates a resource mobilization request
         /// </summary>
         /// <param name="model">Data for the resource mobilization request</param>
+        /// <remarks>
+        /// The mobilization request supports two different RequestType values:
+        /// 
+        /// 1. SupplyMore (RequestType=1): 
+        ///    - Adds resources from the company's global resource pools to a specific project
+        ///    - Materials are taken from the main Material inventory and added to the project's inventory
+        ///    - Vehicles with 'Available' status can be allocated to the project (status will change to 'Unavailable')
+        ///    - Construction teams can be assigned to the project
+        /// 
+        /// 2. AddNew (RequestType=2):
+        ///    - Creates new resources in the company's global resource pools
+        ///    - Materials will be added to the main Material inventory
+        ///    - Vehicles will be added as new entries in the Vehicle table with 'Available' status
+        ///    - Construction teams will be processed according to company policy
+        /// </remarks>
         /// <returns>The saved resource mobilization request</returns>
         [HttpPost("mobilization/save")]
         public async Task<ResponseDTO<ResourceMobilizationReqs>> SaveResourceMobilizationReq([FromBody] SaveResourceMobilizationReqDTO model)
@@ -69,7 +84,7 @@ namespace Sep490_Backend.Controllers
         public async Task<ResponseDTO<List<ResourceMobilizationReqs>>> GetResourceMobilizationRequests(
             [FromQuery] int projectId = 0,
             [FromQuery] RequestStatus? status = null,
-            [FromQuery] RequestType? requestType = null,
+            [FromQuery] MobilizationRequestType? requestType = null,
             [FromQuery] string? searchTerm = null,
             [FromQuery] int pageIndex = 1,
             [FromQuery] int pageSize = 10)
@@ -385,6 +400,7 @@ namespace Sep490_Backend.Controllers
         /// <param name="fromProjectId">Optional filter by source project ID</param>
         /// <param name="toProjectId">Optional filter by destination project ID</param>
         /// <param name="status">Optional filter by request status</param>
+        /// <param name="requestType">Optional filter by request type (1: Project to Project, 2: Project to Task, 3: Task to Task)</param>
         /// <param name="searchTerm">Optional search by request code or request name</param>
         /// <param name="pageIndex">Page number for pagination (default: 1)</param>
         /// <param name="pageSize">Page size for pagination (default: 10)</param>
@@ -394,6 +410,7 @@ namespace Sep490_Backend.Controllers
             [FromQuery] int? fromProjectId = null,
             [FromQuery] int? toProjectId = null,
             [FromQuery] RequestStatus? status = null,
+            [FromQuery] int? requestType = null,
             [FromQuery] string? searchTerm = null,
             [FromQuery] int pageIndex = 1,
             [FromQuery] int pageSize = 10)
@@ -406,7 +423,7 @@ namespace Sep490_Backend.Controllers
             };
             
             var result = await HandleException(
-                _resourceReqService.ViewResourceAllocationRequests(fromProjectId, toProjectId, status, searchTerm, query),
+                _resourceReqService.ViewResourceAllocationRequests(fromProjectId, toProjectId, status, requestType, searchTerm, query),
                 Message.CommonMessage.ACTION_SUCCESS
             );
             

@@ -3,6 +3,7 @@ using Sep490_Backend.DTO.Vehicle;
 using Sep490_Backend.Infra;
 using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Infra.Entities;
+using Sep490_Backend.Infra.Enums;
 using Sep490_Backend.Services.CacheService;
 using System.Text;
 

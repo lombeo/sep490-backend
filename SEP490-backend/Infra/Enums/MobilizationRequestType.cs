@@ -1,6 +1,6 @@
 namespace Sep490_Backend.Infra.Enums
 {
-    public enum RequestType
+    public enum MobilizationRequestType
     {
         NONE = 0,
         SupplyMore = 1,

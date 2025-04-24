@@ -172,3 +172,96 @@ await _context.SoftDeleteAsync(entity, actionBy);
 ## Note
 
 Cache invalidation is still required after soft delete operations, as the global query filters only affect database queries, not in-memory cached data.
+
+# Resource Allocation Enhancements
+
+## Overview
+
+The Resource Allocation system has been enhanced to support different types of resource allocation scenarios for construction site leveling projects:
+
+1. **Project-to-Project Allocation**: Transfer resources between construction projects
+2. **Project-to-Task Allocation**: Allocate resources from a project to a specific task
+3. **Task-to-Task Allocation**: Transfer resources between specific tasks
+
+## Entity Changes
+
+The `ResourceAllocationReqs` entity has been extended with:
+
+- `RequestType` (int): Indicates the type of allocation:
+  - 1: Project-to-Project
+  - 2: Project-to-Task
+  - 3: Task-to-Task
+- `FromTaskId` (int?): Optional source task ID for task-based allocations
+- `ToTaskId` (int?): Optional destination task ID for task-based allocations
+
+## API Changes
+
+The resource allocation API endpoints have been updated to support the new allocation types:
+
+### List Resource Allocation Requests
+
+**Updated Endpoint:**
+```
+GET /sep490/resourcereq/allocation/list
+```
+
+**New Parameters:**
+- `requestType` (int?): Filter by allocation type (1, 2, or 3)
+
+### Create/Update Resource Allocation Request
+
+**Endpoint:**
+```
+POST /sep490/resourcereq/allocation/save
+```
+
+**New Request Body Fields:**
+- `requestType` (int): Type of allocation (Default: 1)
+- `fromTaskId` (int?): Source task ID (Required for Task-to-Task)
+- `toTaskId` (int?): Destination task ID (Required for Project-to-Task and Task-to-Task)
+
+## Validation Logic
+
+The system performs validation based on the request type:
+
+1. **Project-to-Project**:
+   - Cannot allocate from a project to itself
+   - Task IDs are ignored
+
+2. **Project-to-Task**:
+   - Requires a valid destination task ID (`toTaskId`)
+   - Source task ID is ignored
+
+3. **Task-to-Task**:
+   - Requires valid source and destination task IDs
+   - Projects can be the same or different
+
+## Database Migration
+
+A migration (`AddResourceAllocationReqsFields`) has been added to implement these changes:
+
+- Adds the `RequestType`, `FromTaskId`, and `ToTaskId` columns
+- Creates indexes for the new columns for better performance
+- Sets default value of `RequestType` to 1 (Project-to-Project) for backward compatibility
+
+## Frontend Integration
+
+The frontend already contains constants for the different allocation types:
+- `PROJECT_TO_PROJECT = 1`
+- `PROJECT_TO_TASK = 2`
+- `TASK_TO_TASK = 3`
+
+These are used in the UI to show the appropriate allocation type options and form fields.
+
+## Implementation Notes
+
+1. **Backward Compatibility**: Existing allocations are treated as Project-to-Project
+2. **Performance**: Indexes have been added for efficient filtering by the new fields
+3. **Caching**: Cache keys now include the request type parameter
+
+To apply these changes, run:
+```
+dotnet ef database update
+```
+
+or manually apply the migration SQL.
