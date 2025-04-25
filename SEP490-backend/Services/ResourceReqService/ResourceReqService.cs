@@ -363,7 +363,7 @@ namespace Sep490_Backend.Services.ResourceReqService
             }
 
             // Validate request type
-            if (model.RequestType != MobilizationRequestType.SupplyMore && model.RequestType != MobilizationRequestType.AddNew)
+            if (model.RequestType != MobilizationRequestType.SupplyMore && model.RequestType != MobilizationRequestType.AddNew && model.RequestType != MobilizationRequestType.SupplyToMainInventory)
             {
                 errors.Add(new ResponseError { Field = "RequestType", Message = "Invalid request type" });
             }
