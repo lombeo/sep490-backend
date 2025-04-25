@@ -952,6 +952,11 @@ namespace Sep490_Backend.Services.ResourceReqService
                             await AddNewResources(request, actionBy);
                             break;
                             
+                        case MobilizationRequestType.SupplyToMainInventory:
+                            // Supply resources to main inventory (Material table)
+                            await UpdateMainInventory(request, actionBy);
+                            break;
+                            
                         default:
                             throw new InvalidOperationException(Message.ResourceRequestMessage.INVALID_REQUEST_TYPE);
                     }
@@ -972,6 +977,63 @@ namespace Sep490_Backend.Services.ResourceReqService
             {
                 await transaction.RollbackAsync();
                 throw new DbUpdateException($"Failed to approve resource mobilization request: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// Updates main inventory (Material.Inventory) based on resource mobilization request details
+        /// Only applies to Material resource type
+        /// </summary>
+        /// <param name="request">The approved resource mobilization request</param>
+        /// <param name="actionBy">ID of the user performing the action</param>
+        private async Task UpdateMainInventory(ResourceMobilizationReqs request, int actionBy)
+        {
+            try
+            {
+                // Begin transaction for atomic operations
+                using var transaction = await _context.Database.BeginTransactionAsync();
+                
+                foreach (var detail in request.ResourceMobilizationDetails)
+                {
+                    // Only process Material type resources
+                    if (detail.ResourceType != ResourceType.MATERIAL)
+                    {
+                        _logger.LogWarning($"SupplyToMainInventory only supports Material type. Skipping resource type: {detail.ResourceType}");
+                        continue;
+                    }
+                    
+                    // Find the material in the database
+                    var material = await _context.Materials
+                        .FirstOrDefaultAsync(m => m.Id == detail.ResourceId && !m.Deleted);
+                    
+                    if (material != null)
+                    {
+                        // Increase inventory in the Material table
+                        material.Inventory = (material.Inventory ?? 0) + detail.Quantity;
+                        material.UpdatedAt = DateTime.UtcNow;
+                        material.Updater = actionBy;
+                        _context.Materials.Update(material);
+                        
+                        _logger.LogInformation($"Updated Material {material.Id} inventory from {material.Inventory - detail.Quantity} to {material.Inventory}");
+                    }
+                    else
+                    {
+                        _logger.LogWarning($"Material with ID {detail.ResourceId} not found or deleted");
+                    }
+                }
+                
+                // Save all changes
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+                
+                // Invalidate material cache if necessary
+                // (Assuming there might be a cache for materials similar to inventory)
+                await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Failed to update main inventory: {ex.Message}");
+                throw new DbUpdateException($"Failed to update main inventory: {ex.Message}", ex);
             }
         }
 

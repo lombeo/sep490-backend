@@ -4,6 +4,7 @@ namespace Sep490_Backend.Infra.Enums
     {
         NONE = 0,
         SupplyMore = 1,
-        AddNew = 2
+        AddNew = 2,
+        SupplyToMainInventory = 3
     }
 } 
