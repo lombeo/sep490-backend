@@ -1249,6 +1249,10 @@ namespace Sep490_Backend.Services.ResourceReqService
                                             actionBy
                                         );
                                     }
+                                    else
+                                    {
+                                        throw new ArgumentException(Message.ResourceRequestMessage.INVALID_QUANTITY);
+                                    }
                                 }
                                 break;
                                 
@@ -1275,6 +1279,13 @@ namespace Sep490_Backend.Services.ResourceReqService
                                         "Vehicle",
                                         actionBy
                                     );
+                                }else if(vehicle != null && vehicle.Status == VehicleStatus.Unavailable)
+                                {
+                                    throw new ArgumentException(Message.ResourceRequestMessage.VEHICLE_UNAVAILABLE);
+                                }
+                                else if (vehicle != null && vehicle.Status == VehicleStatus.UnderMaintenance)
+                                {
+                                    throw new ArgumentException(Message.ResourceRequestMessage.VEHICLE_UNDERMAINTANCE);
                                 }
                                 break;
                                 

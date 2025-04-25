@@ -6,6 +6,7 @@ using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Infra.Enums;
 using Sep490_Backend.Services.CacheService;
 using System.Text;
+using Sep490_Backend.Services.HelperService;
 
 namespace Sep490_Backend.Services.VehicleService
 {
@@ -13,12 +14,14 @@ namespace Sep490_Backend.Services.VehicleService
     {
         private readonly BackendContext _context;
         private readonly ICacheService _cacheService;
+        private readonly IHelperService _helperService;
         private readonly TimeSpan DEFAULT_CACHE_DURATION = TimeSpan.FromMinutes(15);
 
-        public VehicleService(BackendContext context, ICacheService cacheService)
+        public VehicleService(BackendContext context, ICacheService cacheService, IHelperService helperService)
         {
             _context = context;
             _cacheService = cacheService;
+            _helperService = helperService;
         }
 
         private string GetVehicleSearchCacheKey(VehicleSearchDTO searchDto)
@@ -119,6 +122,12 @@ namespace Sep490_Backend.Services.VehicleService
 
         public async Task<Vehicle> CreateVehicle(VehicleCreateDTO vehicleDto, int userId)
         {
+            // Authorization check - only Administrator can create vehicles
+            if (!_helperService.IsInRole(userId, RoleConstValue.ADMIN))
+            {
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+            }
+            
             var existingVehicle = await _context.Vehicles
                 .FirstOrDefaultAsync(v => v.LicensePlate == vehicleDto.LicensePlate && !v.Deleted);
 
@@ -166,6 +175,12 @@ namespace Sep490_Backend.Services.VehicleService
 
         public async Task<Vehicle> UpdateVehicle(VehicleUpdateDTO vehicleDto, int userId)
         {
+            // Authorization check - only Administrator can update vehicles
+            if (!_helperService.IsInRole(userId, RoleConstValue.ADMIN))
+            {
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+            }
+
             var vehicle = await _context.Vehicles
                 .FirstOrDefaultAsync(v => v.Id == vehicleDto.Id && !v.Deleted);
 
@@ -220,6 +235,12 @@ namespace Sep490_Backend.Services.VehicleService
 
         public async Task<bool> DeleteVehicle(int id, int userId)
         {
+            // Authorization check - only Administrator can delete vehicles
+            if (!_helperService.IsInRole(userId, RoleConstValue.ADMIN))
+            {
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+            }
+            
             var vehicle = await _context.Vehicles
                 .FirstOrDefaultAsync(v => v.Id == id && !v.Deleted);
 

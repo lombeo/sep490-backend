@@ -53,7 +53,7 @@ namespace Sep490_Backend.Services.ConstructionTeamService
         {
             var errors = new List<ResponseError>();
 
-            // Authorization check - only Construction Manager can manage teams
+            // Authorization check - only Administrator can manage teams
             if (!_helperService.IsInRole(actionBy, RoleConstValue.ADMIN))
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
@@ -355,12 +355,12 @@ namespace Sep490_Backend.Services.ConstructionTeamService
                         }
                         await _context.SaveChangesAsync();
                     }
-                    }
+                }
                     
-                    await transaction.CommitAsync();
-                    
-                    // Invalidate cache if needed
-                    await InvalidateTeamCache();
+                await transaction.CommitAsync();
+                
+                // Invalidate cache if needed
+                await InvalidateTeamCache();
 
                 return teamEntity;
             }
@@ -379,8 +379,8 @@ namespace Sep490_Backend.Services.ConstructionTeamService
         /// <returns>True if deletion was successful, otherwise false</returns>
         public async Task<bool> Delete(int teamId, int actionBy)
         {
-            // Authorization check - only Construction Manager can delete teams
-            if (!_helperService.IsInRole(actionBy, RoleConstValue.CONSTRUCTION_MANAGER))
+            // Authorization check - only Administrator can delete teams
+            if (!_helperService.IsInRole(actionBy, RoleConstValue.ADMIN))
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
@@ -436,8 +436,8 @@ namespace Sep490_Backend.Services.ConstructionTeamService
         /// <returns>True if removal was successful, otherwise false</returns>
         public async Task<bool> RemoveMemberFromTeam(int memberId, int actionBy)
         {
-            // Authorization check - only Construction Manager can remove team members
-            if (!_helperService.IsInRole(actionBy, RoleConstValue.CONSTRUCTION_MANAGER))
+            // Authorization check - only Administrator can remove team members
+            if (!_helperService.IsInRole(actionBy, RoleConstValue.ADMIN))
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }

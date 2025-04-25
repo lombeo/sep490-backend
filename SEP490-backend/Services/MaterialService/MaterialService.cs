@@ -54,8 +54,8 @@ namespace Sep490_Backend.Services.MaterialService
         {
             var errors = new List<ResponseError>();
 
-            // Authorization check - only Resource Manager can manage materials
-            if (!_helperService.IsInRole(actionBy, RoleConstValue.RESOURCE_MANAGER))
+            // Authorization check - only Administrator can manage materials
+            if (!_helperService.IsInRole(actionBy, RoleConstValue.ADMIN))
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
@@ -178,8 +178,8 @@ namespace Sep490_Backend.Services.MaterialService
         /// <returns>True if deletion was successful, otherwise false</returns>
         public async Task<bool> DeleteMaterial(int materialId, int actionBy)
         {
-            // Authorization check - only Resource Manager can delete materials
-            if (!_helperService.IsInRole(actionBy, RoleConstValue.RESOURCE_MANAGER))
+            // Authorization check - only Administrator can delete materials
+            if (!_helperService.IsInRole(actionBy, RoleConstValue.ADMIN))
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }

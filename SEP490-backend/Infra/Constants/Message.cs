@@ -171,7 +171,10 @@
             public const string NAME_REQUIRED = "E-RR-018"; // Resource name is required!
             public const string NEGATIVE_QUANTITY = "E-RR-019"; // Quantity cannot be negative!
             public const string CACHE_CLEAR_ERROR = "E-RR-020"; // Failed to clear resource request cache!
-            public const string INVALID_REQUEST_TYPE = "E-RR-023"; // Invalid request type!
+            public const string INVALID_REQUEST_TYPE = "E-RR-021"; // Invalid request type!
+            public const string NOT_ENOUGH_MATERIAL = "E-RR-022"; // Not enough material in inventory!
+            public const string VEHICLE_UNAVAILABLE = "E-RR-023"; // Vehicle is not available.
+            public const string VEHICLE_UNDERMAINTANCE = "E-RR-023"; // Vehicle is under mentaince.
         }
 
         public static class MaterialMessage
