@@ -24,6 +24,13 @@ jobs:
       # Checkout code
       - uses: actions/checkout@v4
 
+      # Clean up previous artifacts
+      - name: Clean up previous artifacts
+        uses: geekyeggo/delete-artifact@v2
+        with:
+          name: webapp
+          failOnError: false
+
       # Cache NuGet packages để tăng tốc độ restore
       - name: Cache NuGet packages
         uses: actions/cache@v3
@@ -61,6 +68,8 @@ jobs:
         with:
           name: webapp
           path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+          retention-days: 1
+          compression-level: 9
 
   deploy:
     runs-on: ubuntu-latest
