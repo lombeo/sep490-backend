@@ -162,7 +162,13 @@ namespace Sep490_Backend.Services.CacheService
                 var result = await _database.GetStringAsync(key);
                 if (!string.IsNullOrEmpty(result))
                 {
-                    return JsonConvert.DeserializeObject<T>(result);
+                    // Configure JsonSerializerSettings to handle circular references
+                    var jsonSettings = new JsonSerializerSettings
+                    {
+                        ReferenceLoopHandling = ReferenceLoopHandling.Ignore
+                    };
+                    
+                    return JsonConvert.DeserializeObject<T>(result, jsonSettings);
                 }
 
                 return default(T);
@@ -203,7 +209,14 @@ namespace Sep490_Backend.Services.CacheService
             try
             {
                 string keyWithPrefix = _prefixCacheKey + key;
-                string serialized = JsonConvert.SerializeObject(value);
+                
+                // Configure JsonSerializerSettings to handle circular references
+                var jsonSettings = new JsonSerializerSettings
+                {
+                    ReferenceLoopHandling = ReferenceLoopHandling.Ignore
+                };
+                
+                string serialized = JsonConvert.SerializeObject(value, jsonSettings);
 
                 if (isMemoryCached)
                 {

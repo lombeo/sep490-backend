@@ -903,7 +903,7 @@ namespace Sep490_Backend.Services.ResourceReqService
                     // Technical Manager can only approve requests in WaitManagerApproval status
                     if (request.Status != RequestStatus.WaitManagerApproval)
                     {
-                        throw new InvalidOperationException(Message.ResourceRequestMessage.NOT_WAITING_FOR_APPROVAL);
+                        throw new ArgumentException(Message.ResourceRequestMessage.NOT_WAITING_FOR_APPROVAL);
                     }
 
                     // Update to ManagerApproved status
@@ -925,7 +925,7 @@ namespace Sep490_Backend.Services.ResourceReqService
                     // Executive Board can only approve requests that have been approved by Technical Manager first
                     if (request.Status != RequestStatus.ManagerApproved)
                     {
-                        throw new InvalidOperationException(Message.ResourceRequestMessage.NOT_WAITING_FOR_APPROVAL);
+                        throw new ArgumentException(Message.ResourceRequestMessage.NOT_WAITING_FOR_APPROVAL);
                     }
 
                     // Update to BodApproved status
@@ -1213,8 +1213,6 @@ namespace Sep490_Backend.Services.ResourceReqService
         /// <param name="actionBy">ID of the user performing the action</param>
         private async Task UpdateInventoryResources(ResourceMobilizationReqs request, int actionBy)
         {
-            using var transaction = await _context.Database.BeginTransactionAsync();
-            
             try
             {
                 if (request.RequestType == MobilizationRequestType.SupplyMore)
@@ -1351,14 +1349,12 @@ namespace Sep490_Backend.Services.ResourceReqService
                 }
                 
                 await _context.SaveChangesAsync();
-                await transaction.CommitAsync();
                 
                 // Invalidate relevant caches
                 await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
             }
             catch (Exception ex)
             {
-                await transaction.RollbackAsync();
                 throw new DbUpdateException($"Failed to update inventory resources: {ex.Message}", ex);
             }
         }
