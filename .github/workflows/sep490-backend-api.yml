@@ -18,18 +18,11 @@ env:
   WORKING_DIRECTORY: ./SEP490-backend
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       # Checkout code
       - uses: actions/checkout@v4
-
-      # Clean up previous artifacts
-      - name: Clean up previous artifacts
-        uses: geekyeggo/delete-artifact@v2
-        with:
-          name: webapp
-          failOnError: false
 
       # Cache NuGet packages để tăng tốc độ restore
       - name: Cache NuGet packages
@@ -61,26 +54,6 @@ jobs:
       # Publish application
       - name: Publish application
         run: dotnet publish ${{ env.WORKING_DIRECTORY }} --configuration ${{ env.CONFIGURATION }} --no-build --output ${{ env.AZURE_WEBAPP_PACKAGE_PATH }} --verbosity minimal
-
-      # Upload build artifact
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: webapp
-          path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
-          retention-days: 1
-          compression-level: 9
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      # Download build artifact
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: webapp
-          path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
 
       # Create environment file for deploy
       - name: Create environment file
