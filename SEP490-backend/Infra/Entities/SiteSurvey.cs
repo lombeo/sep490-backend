@@ -32,8 +32,10 @@ namespace Sep490_Backend.Infra.Entities
         public JsonDocument? Attachments { get; set; }
         public DateTime SurveyDate { get; set; }
 
-        // Navigation property
+        // Navigation properties
         public virtual Project? Project { get; set; }
+        public virtual User? Conductor { get; set; }
+        public virtual User? Approver { get; set; }
     }
 
     public static class SiteSurveyConfiguration
@@ -91,11 +93,24 @@ namespace Sep490_Backend.Infra.Entities
                       .HasMaxLength(200)
                       .IsRequired();
 
-                // Relationship
+                // Relationship with Project
                 entity.HasOne(e => e.Project)
                       .WithMany(p => p.SiteSurveys)
                       .HasForeignKey(e => e.ProjectId)
                       .OnDelete(DeleteBehavior.Cascade);
+
+                // Relationships with User
+                entity.HasOne(e => e.Conductor)
+                      .WithMany(u => u.ConductedSurveys)
+                      .HasForeignKey(e => e.Creator)
+                      .OnDelete(DeleteBehavior.Restrict)
+                      .HasConstraintName("FK_SiteSurvey_Conductor");
+
+                entity.HasOne(e => e.Approver)
+                      .WithMany(u => u.ApprovedSurveys)
+                      .HasForeignKey(e => e.Updater)
+                      .OnDelete(DeleteBehavior.Restrict)
+                      .HasConstraintName("FK_SiteSurvey_Approver");
             });
         }
     }

@@ -990,9 +990,8 @@ namespace Sep490_Backend.Services.ResourceReqService
         {
             try
             {
-                // Begin transaction for atomic operations
-                using var transaction = await _context.Database.BeginTransactionAsync();
-                
+                // Remove transaction initialization since this method is called within a transaction
+
                 foreach (var detail in request.ResourceMobilizationDetails)
                 {
                     // Only process Material type resources
@@ -1024,7 +1023,8 @@ namespace Sep490_Backend.Services.ResourceReqService
                 
                 // Save all changes
                 await _context.SaveChangesAsync();
-                await transaction.CommitAsync();
+                
+                // No transaction commit needed here as it's managed by the caller
                 
                 // Invalidate material cache if necessary
                 // (Assuming there might be a cache for materials similar to inventory)

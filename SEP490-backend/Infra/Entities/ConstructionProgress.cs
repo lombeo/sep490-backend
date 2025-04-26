@@ -47,6 +47,7 @@ namespace Sep490_Backend.Infra.Entities
         public string WorkCode { get; set; }
         public ResourceType ResourceType { get; set; }
         public int Quantity { get; set; }
+        public int UsedQuantity { get; set; }
         public string? Unit { get; set; }
         public decimal UnitPrice { get; set; }
         public decimal Total { get; set; }

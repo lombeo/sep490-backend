@@ -11,7 +11,7 @@ namespace Sep490_Backend.Infra.Entities
         public bool IsRevoked { get; set; }
         
         // Navigation property
-        public virtual User User { get; set; }
+        public virtual User? User { get; set; }
     }
     public static class RefreshTokenConfiguration
     {
@@ -48,11 +48,16 @@ namespace Sep490_Backend.Infra.Entities
                 entity.HasIndex(e => e.UserId)
                     .HasDatabaseName("ix_refresh_tokens_user_id");
 
-                // Relationship
+                // Relationship - Making it optional to address global query filter warnings
                 entity.HasOne(e => e.User)
                       .WithMany(u => u.RefreshTokens)
                       .HasForeignKey(e => e.UserId)
-                      .OnDelete(DeleteBehavior.Cascade);
+                      .OnDelete(DeleteBehavior.Cascade)
+                      .IsRequired(false);
+
+                // Add a query filter to match the one on User entity
+                modelBuilder.Entity<RefreshToken>()
+                    .HasQueryFilter(rt => rt.User == null || !rt.User.Deleted);
             });
         }
     }

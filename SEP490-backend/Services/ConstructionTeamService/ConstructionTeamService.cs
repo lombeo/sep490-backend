@@ -29,7 +29,6 @@ namespace Sep490_Backend.Services.ConstructionTeamService
         private readonly BackendContext _context;
         private readonly IHelperService _helperService;
         private readonly ICacheService _cacheService;
-        private readonly IDataService _dataService;
 
         public ConstructionTeamService(
             BackendContext context,
@@ -40,7 +39,6 @@ namespace Sep490_Backend.Services.ConstructionTeamService
             _context = context;
             _helperService = helperService;
             _cacheService = cacheService;
-            _dataService = dataService;
         }
 
         /// <summary>

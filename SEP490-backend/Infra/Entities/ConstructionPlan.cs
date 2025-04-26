@@ -1,4 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Sep490_Backend.Infra.Enums;
 using Sep490_Backend.Infra.Helps;
 using System.Text.Json.Serialization;
@@ -45,7 +47,14 @@ namespace Sep490_Backend.Infra.Entities
 
                 entity.Property(e => e.Reviewer)
                     .HasColumnType("jsonb")
-                    .HasConversion<string>(new ReviewerDictionaryValueConverter());
+                    .HasConversion<string>(
+                        new ReviewerDictionaryValueConverter(), 
+                        new ValueComparer<Dictionary<int, bool?>>(
+                            (c1, c2) => c1.Count == c2.Count && !c1.Except(c2).Any(),
+                            c => c.Aggregate(0, (a, v) => HashCode.Combine(a, v.GetHashCode())),
+                            c => c.ToDictionary(entry => entry.Key, entry => entry.Value)
+                        )
+                    );
 
                 entity.Property(e => e.ProjectId)
                     .IsRequired();

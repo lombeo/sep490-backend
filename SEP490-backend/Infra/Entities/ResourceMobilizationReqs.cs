@@ -93,15 +93,18 @@ namespace Sep490_Backend.Infra.Entities
                     .HasForeignKey(e => e.ProjectId)
                     .OnDelete(DeleteBehavior.Restrict);
 
+                // User relationships
                 entity.HasOne(e => e.Requester)
-                    .WithMany()
+                    .WithMany(u => u.RequestedMobilizations)
                     .HasForeignKey(e => e.Creator)
-                    .OnDelete(DeleteBehavior.Restrict);
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .HasConstraintName("FK_ResourceMobilizationReqs_Requester");
 
                 entity.HasOne(e => e.Approver)
-                    .WithMany()
+                    .WithMany(u => u.ApprovedMobilizations)
                     .HasForeignKey(e => e.Updater)
-                    .OnDelete(DeleteBehavior.Restrict);
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .HasConstraintName("FK_ResourceMobilizationReqs_Approver");
             });
         }
     }

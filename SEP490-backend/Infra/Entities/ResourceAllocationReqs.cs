@@ -104,15 +104,18 @@ namespace Sep490_Backend.Infra.Entities
                     .OnDelete(DeleteBehavior.Restrict)
                     .HasConstraintName("FK_ResourceAllocationReqs_ToProject");
 
+                // User relationships
                 entity.HasOne(e => e.Requester)
-                    .WithMany()
+                    .WithMany(u => u.RequestedAllocations)
                     .HasForeignKey(e => e.Creator)
-                    .OnDelete(DeleteBehavior.Restrict);
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .HasConstraintName("FK_ResourceAllocationReqs_Requester");
 
                 entity.HasOne(e => e.Approver)
-                    .WithMany()
+                    .WithMany(u => u.ApprovedAllocations)
                     .HasForeignKey(e => e.Updater)
-                    .OnDelete(DeleteBehavior.Restrict);
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .HasConstraintName("FK_ResourceAllocationReqs_Approver");
             });
         }
     }
