@@ -911,7 +911,7 @@ namespace Sep490_Backend.Services.ConstructionLogService
                 // Process resources
                 if (log.Resources != null)
                 {
-                    var resources = JsonSerializer.Deserialize<List<ConstructionLogResourceDTO>>(log.Resources.RootElement.ToString());
+                    var resources = JsonSerializer.Deserialize<List<ConstructionLogResourceDTO>>(log.Resources.RootElement.ToString(), DefaultSerializerOptions);
                     var matchingResources = resources?.Where(r => r.TaskIndex == taskIndex);
                     
                     if (matchingResources != null && matchingResources.Any())
