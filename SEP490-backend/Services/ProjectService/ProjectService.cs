@@ -394,7 +394,7 @@ namespace Sep490_Backend.Services.ProjectService
 
         public async Task<ProjectDTO> Save(SaveProjectDTO model, int actionBy)
         {
-            if (!_helperService.IsInRole(actionBy, RoleConstValue.BUSINESS_EMPLOYEE))
+            if (!_helperService.IsInRole(actionBy, new List<string>{ RoleConstValue.BUSINESS_EMPLOYEE, RoleConstValue.EXECUTIVE_BOARD }))
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
