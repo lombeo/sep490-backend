@@ -35,6 +35,7 @@ namespace Sep490_Backend.DTO.ConstructionProgress
         public DateTime PlanEndDate { get; set; }
         public DateTime? ActualStartDate { get; set; }
         public DateTime? ActualEndDate { get; set; }
+        public decimal UsedQuantity { get; set; }
         public Dictionary<string, string> ItemRelations { get; set; } = new Dictionary<string, string>();
         public string? Predecessor { get; set; }
         public List<ProgressItemDetailDTO> Details { get; set; } = new List<ProgressItemDetailDTO>();
@@ -47,6 +48,7 @@ namespace Sep490_Backend.DTO.ConstructionProgress
         public string WorkCode { get; set; } = string.Empty;
         public int ResourceType { get; set; }
         public int Quantity { get; set; }
+        public int UsedQuantity { get; set; }
         public string? Unit { get; set; }
         public decimal UnitPrice { get; set; }
         public decimal Total { get; set; }

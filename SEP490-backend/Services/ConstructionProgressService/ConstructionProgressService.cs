@@ -355,6 +355,7 @@ namespace Sep490_Backend.Services.ConstructionProgressService
                     PlanEndDate = item.PlanEndDate,
                     ActualStartDate = item.ActualStartDate,
                     ActualEndDate = item.ActualEndDate,
+                    UsedQuantity = item.UsedQuantity,
                     ItemRelations = item.ItemRelations
                 };
 
@@ -368,6 +369,7 @@ namespace Sep490_Backend.Services.ConstructionProgressService
                         WorkCode = detail.WorkCode,
                         ResourceType = (int)detail.ResourceType,
                         Quantity = detail.Quantity,
+                        UsedQuantity = detail.UsedQuantity,
                         Unit = detail.Unit ?? string.Empty,
                         UnitPrice = detail.UnitPrice,
                         Total = detail.Total,
