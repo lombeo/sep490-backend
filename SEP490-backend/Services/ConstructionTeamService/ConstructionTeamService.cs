@@ -506,6 +506,13 @@ namespace Sep490_Backend.Services.ConstructionTeamService
             
             // Any pattern-based caches
             await _cacheService.DeleteByPatternAsync("CONSTRUCTION_TEAM:*");
+            
+            // Force cache refresh for DataService
+            var cacheKey = "CONSTRUCTION_TEAM_LIST";
+            await _cacheService.DeleteAsync(cacheKey);
+            
+            // Clear any pattern-based user caches that might hold team member information
+            await _cacheService.DeleteByPatternAsync("USER:*");
         }
 
         /// <summary>

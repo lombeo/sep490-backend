@@ -100,17 +100,26 @@ namespace Sep490_Backend.Services.CacheService
                         foreach (var endpoint in endpoints)
                         {
                             var server = _redisConnection.GetServer(endpoint);
-                            var keys = server.Keys(pattern: pattern + "*").ToArray();
+                            // Add wildcard at end of pattern if not already present
+                            string searchPattern = pattern.EndsWith("*") ? pattern : pattern + "*";
+                            var keys = server.Keys(pattern: searchPattern).ToArray();
                             
                             foreach (var key in keys)
                             {
                                 string keyString = key.ToString();
                                 keysToDelete.Add(keyString);
                                 
-                                // Also remove from memory cache if it exists there
-                                // Strip the prefix for memory cache key
-                                string memoryCacheKey = usingPrefix ? keyString.Substring(_prefixCacheKey.Length) : keyString;
-                                _memoryCache.Remove(memoryCacheKey);
+                                // Also remove from memory cache
+                                if (usingPrefix && keyString.StartsWith(_prefixCacheKey))
+                                {
+                                    // Strip the prefix for memory cache key if using prefix mode
+                                    string memoryCacheKey = keyString.Substring(_prefixCacheKey.Length);
+                                    _memoryCache.Remove(memoryCacheKey);
+                                }
+                                else
+                                {
+                                    _memoryCache.Remove(keyString);
+                                }
                             }
                         }
                         
