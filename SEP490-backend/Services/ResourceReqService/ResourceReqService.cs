@@ -583,6 +583,9 @@ namespace Sep490_Backend.Services.ResourceReqService
             
             // Clear all paginated caches using pattern matching
             await _cacheService.DeleteByPatternAsync(RedisCacheKey.ALLOCATION_REQS_LIST_CACHE_KEY);
+            
+            // Clear construction progress related caches
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.CONSTRUCTION_PROGRESS_ALL_PATTERN);
         }
 
         /// <summary>
@@ -2414,6 +2417,7 @@ namespace Sep490_Backend.Services.ResourceReqService
             // Invalidate inventory cache for both projects
             await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
             await _cacheService.DeleteByPatternAsync(RedisCacheKey.PROJECT_USER_CACHE_KEY);
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.CONSTRUCTION_PROGRESS_ALL_PATTERN);
         }
 
         /// <summary>
@@ -2571,6 +2575,7 @@ namespace Sep490_Backend.Services.ResourceReqService
             // Invalidate caches
             await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
             await _cacheService.DeleteByPatternAsync(RedisCacheKey.PROJECT_USER_CACHE_KEY);
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.CONSTRUCTION_PROGRESS_ALL_PATTERN);
         }
 
         /// <summary>
