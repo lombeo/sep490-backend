@@ -336,6 +336,9 @@ namespace Sep490_Backend.Services.DataService
         {
             var data = StaticVariable.UserMemory.ToList();
 
+            // Filter out users with Administrator role
+            data = data.Where(t => t.Role != RoleConstValue.ADMIN).ToList();
+
             data = data.OrderByDescending(t => t.UpdatedAt).ToList();
 
             if (!string.IsNullOrWhiteSpace(model.KeyWord))
