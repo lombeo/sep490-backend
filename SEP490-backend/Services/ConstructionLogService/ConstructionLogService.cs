@@ -9,6 +9,7 @@ using Sep490_Backend.Services.GoogleDriveService;
 using System.Text.Json;
 using Sep490_Backend.DTO;
 using Sep490_Backend.Infra.Services;
+using Sep490_Backend.Infra.Enums;
 
 namespace Sep490_Backend.Services.ConstructionLogService
 {
@@ -433,10 +434,10 @@ namespace Sep490_Backend.Services.ConstructionLogService
 
         private async Task<ConstructionLogDTO> UpdateConstructionLogStatus(int id, ConstructionLogStatus status, int actionBy)
         {
-            // Only executive board members can approve/reject
-            if (!_helperService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD))
+            // Only Technical Manager can approve/reject (changed from Executive Board)
+            if (!_helperService.IsInRole(actionBy, RoleConstValue.TECHNICAL_MANAGER))
             {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+                throw new UnauthorizedAccessException(Message.ConstructionLogMessage.ONLY_TECHNICAL_MANAGER);
             }
             
             var constructionLog = await _context.ConstructionLogs.FirstOrDefaultAsync(cl => cl.Id == id && !cl.Deleted);
@@ -466,10 +467,104 @@ namespace Sep490_Backend.Services.ConstructionLogService
             _context.Update(constructionLog);
             await _context.SaveChangesAsync();
             
+            // If the construction log is approved, update the ConstructionProgress records
+            if (status == ConstructionLogStatus.Approved)
+            {
+                await UpdateConstructionProgressFromLog(constructionLog);
+            }
+            
             // Invalidate related caches
             await InvalidateConstructionLogCaches(constructionLog.Id, constructionLog.ProjectId);
             
             return await MapToConstructionLogDTO(constructionLog);
+        }
+
+        /// <summary>
+        /// Updates the ConstructionProgress records based on an approved ConstructionLog
+        /// </summary>
+        /// <param name="constructionLog">The approved construction log</param>
+        private async Task UpdateConstructionProgressFromLog(ConstructionLog constructionLog)
+        {
+            try
+            {
+                // Get the construction progress for the project
+                var constructionProgress = await _context.ConstructionProgresses
+                    .Include(cp => cp.ProgressItems)
+                        .ThenInclude(pi => pi.Details)
+                    .FirstOrDefaultAsync(cp => cp.ProjectId == constructionLog.ProjectId && !cp.Deleted);
+
+                if (constructionProgress == null)
+                {
+                    // No progress record found for this project
+                    return;
+                }
+
+                // Process WorkAmount entries
+                if (constructionLog.WorkAmount != null)
+                {
+                    var workAmounts = JsonSerializer.Deserialize<List<WorkAmountDTO>>(
+                        constructionLog.WorkAmount.RootElement.ToString(),
+                        DefaultSerializerOptions);
+
+                    if (workAmounts != null && workAmounts.Any())
+                    {
+                        foreach (var workAmount in workAmounts)
+                        {
+                            // Find the matching progress item by task index
+                            var progressItem = constructionProgress.ProgressItems
+                                .FirstOrDefault(pi => pi.Index == workAmount.TaskIndex && !pi.Deleted);
+
+                            if (progressItem != null)
+                            {
+                                // Update the UsedQuantity for the progress item
+                                progressItem.UsedQuantity += workAmount.WorkAmount;
+                                _context.ConstructionProgressItems.Update(progressItem);
+                            }
+                        }
+                    }
+                }
+
+                // Process Resources entries
+                if (constructionLog.Resources != null)
+                {
+                    var resources = JsonSerializer.Deserialize<List<ConstructionLogResourceDTO>>(
+                        constructionLog.Resources.RootElement.ToString(),
+                        DefaultSerializerOptions);
+
+                    if (resources != null && resources.Any())
+                    {
+                        foreach (var resource in resources)
+                        {
+                            // Find the matching progress item by task index
+                            var progressItem = constructionProgress.ProgressItems
+                                .FirstOrDefault(pi => pi.Index == resource.TaskIndex && !pi.Deleted);
+
+                            if (progressItem != null)
+                            {
+                                // Find the matching progress item detail by resource ID and type
+                                var progressItemDetail = progressItem.Details
+                                    .FirstOrDefault(d => d.ResourceId == resource.ResourceId && 
+                                                        d.ResourceType == (ResourceType)resource.ResourceType &&
+                                                        !d.Deleted);
+
+                                if (progressItemDetail != null)
+                                {
+                                    // Update the UsedQuantity for the progress item detail
+                                    progressItemDetail.UsedQuantity += (int)resource.Quantity;
+                                    _context.ConstructionProgressItemDetails.Update(progressItemDetail);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                // Log the error but don't throw it to avoid disrupting the approval process
+                Console.WriteLine($"Error updating construction progress: {ex.Message}");
+            }
         }
 
         public async Task<int> Delete(int id, int actionBy)

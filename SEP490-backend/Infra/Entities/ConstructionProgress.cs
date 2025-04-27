@@ -33,6 +33,7 @@ namespace Sep490_Backend.Infra.Entities
         public DateTime PlanEndDate { get; set; }
         public DateTime? ActualStartDate { get; set; }
         public DateTime? ActualEndDate { get; set; }
+        public decimal UsedQuantity { get; set; }
         public Dictionary<string, string> ItemRelations { get; set; } = new Dictionary<string, string>();
 
         // Navigation properties
