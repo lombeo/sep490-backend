@@ -1,6 +1,9 @@
+using Sep490_Backend.DTO;
 using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Infra.Enums;
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Http;
+using System.Text.Json;
 
 namespace Sep490_Backend.DTO.Vehicle
 {
@@ -37,7 +40,10 @@ namespace Sep490_Backend.DTO.Vehicle
         public string EngineNumber { get; set; } = string.Empty;
         
         [Required(ErrorMessage = "Image is required for vehicle documentation")]
-        public string Image { get; set; } = string.Empty;
+        public IFormFile? ImageFile { get; set; }
+        
+        // For use when updating without changing the image
+        public List<string>? ExistingImages { get; set; }
         
         public VehicleStatus Status { get; set; } = VehicleStatus.Unavailable;
         public int Driver { get; set; }
@@ -56,8 +62,11 @@ namespace Sep490_Backend.DTO.Vehicle
         [Required(ErrorMessage = "Fuel unit is required for consumption tracking")]
         public string FuelUnit { get; set; } = string.Empty;
         
-        [Required(ErrorMessage = "Attachment information is required for vehicle documentation")]
-        public string Attachment { get; set; } = string.Empty;
+        public IFormFile? AttachmentFile { get; set; }
+        public List<IFormFile>? AttachmentFiles { get; set; }
+        
+        // For use when updating without changing attachments
+        public List<string>? ExistingAttachments { get; set; }
     }
 
     public class VehicleUpdateDTO : VehicleCreateDTO
@@ -76,7 +85,7 @@ namespace Sep490_Backend.DTO.Vehicle
         public string VehicleName { get; set; } = string.Empty;
         public string ChassisNumber { get; set; } = string.Empty;
         public string EngineNumber { get; set; } = string.Empty;
-        public string Image { get; set; } = string.Empty;
+        public List<AttachmentInfo> Images { get; set; } = new List<AttachmentInfo>();
         public VehicleStatus Status { get; set; }
         public int DriverId { get; set; }
         public string Color { get; set; } = string.Empty;
@@ -84,7 +93,7 @@ namespace Sep490_Backend.DTO.Vehicle
         public string Description { get; set; } = string.Empty;
         public int FuelTankVolume { get; set; }
         public string FuelUnit { get; set; } = string.Empty;
-        public string Attachment { get; set; } = string.Empty;
+        public List<AttachmentInfo> Attachments { get; set; } = new List<AttachmentInfo>();
         public DateTime? CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
         public User? Driver { get; set; }

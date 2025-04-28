@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Sep490_Backend.Infra.Enums;
+using System.Text.Json;
 
 namespace Sep490_Backend.Infra.Entities
 {
@@ -14,7 +15,7 @@ namespace Sep490_Backend.Infra.Entities
         public string VehicleName { get; set; }
         public string ChassisNumber { get; set; }
         public string EngineNumber { get; set; }
-        public string Image { get; set; }
+        public JsonDocument Image { get; set; }
         public VehicleStatus Status { get; set; }
         public int Driver { get; set; }
         public string Color { get; set; }
@@ -22,7 +23,7 @@ namespace Sep490_Backend.Infra.Entities
         public string Description { get; set; }
         public int FuelTankVolume { get; set; }
         public string FuelUnit { get; set; }
-        public string Attachment { get; set; }
+        public JsonDocument Attachment { get; set; }
         
         // Navigation property
         public virtual User User { get; set; }
@@ -69,7 +70,7 @@ namespace Sep490_Backend.Infra.Entities
 
                 entity.Property(e => e.Image)
                       .IsRequired()
-                      .HasColumnType("text");
+                      .HasColumnType("jsonb");
 
                 entity.Property(e => e.Status)
                       .IsRequired()
@@ -93,7 +94,7 @@ namespace Sep490_Backend.Infra.Entities
 
                 entity.Property(e => e.Attachment)
                       .IsRequired()
-                      .HasColumnType("text");
+                      .HasColumnType("jsonb");
 
 
                 entity.Property(e => e.CreatedAt)

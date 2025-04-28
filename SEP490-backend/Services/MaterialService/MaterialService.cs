@@ -220,6 +220,9 @@ namespace Sep490_Backend.Services.MaterialService
             // Delete specific material caches using pattern matching
             await _cacheService.DeleteByPatternAsync($"{RedisCacheKey.MATERIAL_CACHE_KEY}_ID_");
             
+            // Delete material search caches with patterns (used by DataService.ListMaterial)
+            await _cacheService.DeleteByPatternAsync($"{RedisCacheKey.MATERIAL_CACHE_KEY}_KEYWORD_");
+            
             // Delete any inventory related caches that might have material info
             await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
             await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_BY_TYPE_CACHE_KEY);
