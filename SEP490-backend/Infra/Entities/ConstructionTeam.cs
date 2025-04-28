@@ -41,13 +41,13 @@ namespace Sep490_Backend.Infra.Entities
                     .HasColumnType("timestamp without time zone");
 
                 entity.HasIndex(e => e.TeamName);
-                entity.HasIndex(e => e.TeamManager).HasFilter("\"Deleted\" = false").IsUnique();
+                entity.HasIndex(e => e.TeamManager).HasFilter("\"Deleted\" = false");
 
                 // Relationships
-                // One-to-one with Manager (one user can only manage one team)
+                // One-to-many with Manager (one user can manage multiple teams)
                 entity.HasOne(e => e.Manager)
-                    .WithOne()  // WithOne() instead of WithMany() to enforce one-to-one relationship
-                    .HasForeignKey<ConstructionTeam>(e => e.TeamManager)
+                    .WithMany(u => u.ManagedTeams)
+                    .HasForeignKey(e => e.TeamManager)
                     .OnDelete(DeleteBehavior.Restrict);
 
                 // Many-to-many with Member Users (one user in only one team)

@@ -23,6 +23,7 @@ namespace Sep490_Backend.Infra.Entities
             ApprovedMobilizations = new List<ResourceMobilizationReqs>();
             RequestedAllocations = new List<ResourceAllocationReqs>();
             ApprovedAllocations = new List<ResourceAllocationReqs>();
+            ManagedTeams = new List<ConstructionTeam>();
         }
 
         public int Id { get; set; }
@@ -52,6 +53,7 @@ namespace Sep490_Backend.Infra.Entities
         public virtual ICollection<ResourceMobilizationReqs> ApprovedMobilizations { get; set; }
         public virtual ICollection<ResourceAllocationReqs> RequestedAllocations { get; set; }
         public virtual ICollection<ResourceAllocationReqs> ApprovedAllocations { get; set; }
+        public virtual ICollection<ConstructionTeam> ManagedTeams { get; set; }  // Navigation property for teams managed by this user
     }
 
     public static class UserAuthenConfiguration

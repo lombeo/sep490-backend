@@ -109,19 +109,6 @@ namespace Sep490_Backend.Services.ConstructionTeamService
                         Field = nameof(model.TeamManager).ToCamelCase()
                     });
                 }
-                
-                // Check if manager is already assigned to another team (except current team)
-                var existingTeam = await _context.ConstructionTeams
-                    .FirstOrDefaultAsync(t => t.TeamManager == model.TeamManager && (model.Id == null || t.Id != model.Id) && !t.Deleted);
-                
-                if (existingTeam != null)
-                {
-                    errors.Add(new ResponseError
-                    {
-                        Message = Message.ConstructionTeamMessage.MANAGER_ALREADY_ASSIGNED,
-                        Field = nameof(model.TeamManager).ToCamelCase()
-                    });
-                }
             }
 
             // Check for duplicate team name
