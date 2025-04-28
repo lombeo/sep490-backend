@@ -21,7 +21,6 @@ namespace Sep490_Backend.Services.ConstructionTeamService
     {
         Task<ConstructionTeam> Save(ConstructionTeamSaveDTO model, int actionBy);
         Task<bool> Delete(int teamId, int actionBy);
-        Task<bool> RemoveMemberFromTeam(int memberId, int actionBy);
     }
 
     public class ConstructionTeamService : IConstructionTeamService
@@ -124,8 +123,11 @@ namespace Sep490_Backend.Services.ConstructionTeamService
                 });
             }
 
+            // Ensure TeamMemberIds is not null
+            model.TeamMemberIds ??= new List<int>();
+
             // Validate team members if provided
-            if (model.TeamMemberIds != null && model.TeamMemberIds.Any())
+            if (model.TeamMemberIds.Any())
             {
                 // Check if the manager is also included in team members
                 if (model.TeamMemberIds.Contains(model.TeamManager))
@@ -345,7 +347,7 @@ namespace Sep490_Backend.Services.ConstructionTeamService
                 await transaction.CommitAsync();
                 
                 // Invalidate cache if needed
-                await InvalidateTeamCache();
+                await InvalidateTeamCaches(model.Id.HasValue ? model.Id.Value : teamEntity.Id);
 
                 return teamEntity;
             }
@@ -409,67 +411,6 @@ namespace Sep490_Backend.Services.ConstructionTeamService
 
             // Invalidate all related caches
             await InvalidateTeamCaches(teamId);
-
-            return true;
-        }
-        
-        /// <summary>
-        /// Removes a member from their construction team
-        /// </summary>
-        /// <param name="memberId">ID of the user to remove from team</param>
-        /// <param name="actionBy">ID of the user performing the action</param>
-        /// <returns>True if removal was successful, otherwise false</returns>
-        public async Task<bool> RemoveMemberFromTeam(int memberId, int actionBy)
-        {
-            // Authorization check - only Administrator can remove team members
-            if (!_helperService.IsInRole(actionBy, RoleConstValue.ADMIN))
-            {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
-            }
-            
-            // Find the user to remove
-            var member = await _context.Users
-                .FirstOrDefaultAsync(u => u.Id == memberId && !u.Deleted);
-                
-            if (member == null)
-            {
-                throw new KeyNotFoundException(Message.ConstructionTeamMessage.MEMBER_NOT_FOUND);
-            }
-            
-            // Check if user is in a team
-            if (!member.TeamId.HasValue)
-            {
-                throw new InvalidOperationException(Message.ConstructionTeamMessage.MEMBER_NOT_IN_TEAM);
-            }
-            
-            // Find the team to verify team manager
-            var team = await _context.ConstructionTeams
-                .FirstOrDefaultAsync(t => t.Id == member.TeamId.Value && !t.Deleted);
-                
-            if (team == null)
-            {
-                throw new KeyNotFoundException(Message.ConstructionTeamMessage.NOT_FOUND);
-            }
-            
-            // Check if user is the team manager - managers should be changed through Update API
-            if (team.TeamManager == memberId)
-            {
-                throw new InvalidOperationException(Message.ConstructionTeamMessage.CANNOT_REMOVE_MANAGER);
-            }
-            
-            // Check if actionBy is the creator of the team
-            if (team.Creator != actionBy)
-            {
-                throw new UnauthorizedAccessException(Message.ConstructionTeamMessage.ONLY_CREATOR_CAN_UPDATE);
-            }
-            
-            // Remove user from team
-            member.TeamId = null;
-            _context.Users.Update(member);
-            await _context.SaveChangesAsync();
-            
-            // Invalidate caches
-            await InvalidateTeamCaches(team.Id);
 
             return true;
         }

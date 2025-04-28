@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Sep490_Backend.Infra.Services
+namespace Sep490_Backend.Infra.Helps
 {
     public class DateTimeJsonConverter : JsonConverter<DateTime>
     {
@@ -27,38 +27,38 @@ namespace Sep490_Backend.Infra.Services
             if (reader.TokenType == JsonTokenType.String)
             {
                 string dateString = reader.GetString();
-                
+
                 // Handle empty or null string values
                 if (string.IsNullOrWhiteSpace(dateString))
                 {
                     return DateTime.MinValue;
                 }
-                
+
                 // Try to parse using the specified formats
-                if (DateTime.TryParseExact(dateString, DateTimeFormats, CultureInfo.InvariantCulture, 
+                if (DateTime.TryParseExact(dateString, DateTimeFormats, CultureInfo.InvariantCulture,
                     DateTimeStyles.AssumeLocal, out DateTime date))
                 {
                     return date;
                 }
-                
+
                 // If that fails, try standard parsing
-                if (DateTime.TryParse(dateString, CultureInfo.InvariantCulture, 
+                if (DateTime.TryParse(dateString, CultureInfo.InvariantCulture,
                     DateTimeStyles.AssumeLocal, out date))
                 {
                     return date;
                 }
-                
+
                 // Return minimum value instead of throwing an exception
                 return DateTime.MinValue;
             }
-            
+
             // For numeric timestamps (Unix epoch)
             if (reader.TokenType == JsonTokenType.Number)
             {
                 long timestamp = reader.GetInt64();
                 return DateTimeOffset.FromUnixTimeSeconds(timestamp).DateTime;
             }
-            
+
             // Handle null values
             if (reader.TokenType == JsonTokenType.Null)
             {
@@ -97,31 +97,31 @@ namespace Sep490_Backend.Infra.Services
             if (reader.TokenType == JsonTokenType.String)
             {
                 string dateString = reader.GetString();
-                
+
                 // Handle empty or null string values
                 if (string.IsNullOrWhiteSpace(dateString))
                 {
                     return null;
                 }
-                
+
                 // Try to parse using the specified formats
-                if (DateTime.TryParseExact(dateString, DateTimeFormats, CultureInfo.InvariantCulture, 
+                if (DateTime.TryParseExact(dateString, DateTimeFormats, CultureInfo.InvariantCulture,
                     DateTimeStyles.AssumeLocal, out DateTime date))
                 {
                     return date;
                 }
-                
+
                 // If that fails, try standard parsing
-                if (DateTime.TryParse(dateString, CultureInfo.InvariantCulture, 
+                if (DateTime.TryParse(dateString, CultureInfo.InvariantCulture,
                     DateTimeStyles.AssumeLocal, out date))
                 {
                     return date;
                 }
-                
+
                 // Return null on parsing error instead of throwing
                 return null;
             }
-            
+
             // Handle null JSON value
             if (reader.TokenType == JsonTokenType.Null)
             {
@@ -143,4 +143,4 @@ namespace Sep490_Backend.Infra.Services
             }
         }
     }
-} 
+}
