@@ -295,9 +295,11 @@
             public const string PROGRESS_EXISTS = "Construction progress already exists for this plan";
             public const string GET_DETAIL_SUCCESS = "Get construction progress detail successfully";
             public const string SEARCH_SUCCESS = "Search construction progress successfully";
-            public const string CREATE_SUCCESS = "Create construction progress successfully";
+            public const string CREATE_SUCCESS = "Create construction progress item successfully";
             public const string UPDATE_SUCCESS = "Update construction progress successfully";
             public const string DELETE_SUCCESS = "Delete construction progress successfully";
+            public const string ONLY_TECHNICAL_MANAGER = "Only Technical Managers are allowed to modify progress items";
+            public const string ITEM_NOT_FOUND = "Construction progress item not found";
         }
 
         public static class InspectionReportMessage

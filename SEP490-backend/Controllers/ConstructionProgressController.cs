@@ -80,31 +80,40 @@ namespace Sep490_Backend.Controllers
         /// <summary>
         /// Create a new construction progress item
         /// </summary>
-        /// <param name="model">The construction progress item to create</param>
-        /// <returns>The created progress item</returns>
+        /// <param name="model">The progress item details</param>
+        /// <returns>Created progress item</returns>
         /// <remarks>
-        /// Only Technical Managers who are part of the project can create progress items.
+        /// This endpoint is restricted to Technical Managers assigned to the project.
+        /// The WorkCode is automatically generated based on the item's index.
         /// </remarks>
-        [HttpPost("items/create")]
-        public async Task<ResponseDTO<ProgressItemDTO>> CreateProgressItem([FromBody] CreateProgressItemDTO model)
+        [HttpPost("item/create")]
+        public async Task<ResponseDTO<ProgressItemDTO>> CreateProgressItem([FromBody] SaveProgressItemDTO model)
         {
-            _logger.LogInformation("Creating new progress item for progress ID: {progressId}", model.ProgressId);
-            return await HandleException(_constructionProgressService.CreateProgressItem(model, UserId), Message.ConstructionProgressMessage.CREATE_SUCCESS);
+            _logger.LogInformation("Creating new progress item in progress ID: {progressId} with name: {workName}", 
+                model.ProgressId, model.WorkName);
+            
+            return await HandleException(
+                _constructionProgressService.CreateProgressItem(model, UserId), 
+                Message.ConstructionProgressMessage.CREATE_SUCCESS);
         }
 
         /// <summary>
         /// Update an existing construction progress item
         /// </summary>
-        /// <param name="model">The updated construction progress item</param>
-        /// <returns>The updated progress item</returns>
+        /// <param name="model">The progress item update details</param>
+        /// <returns>Updated progress item</returns>
         /// <remarks>
-        /// Only Technical Managers who are part of the project can update progress items.
+        /// This endpoint is restricted to Technical Managers assigned to the project.
         /// </remarks>
-        [HttpPut("items/update")]
+        [HttpPut("item/update")]
         public async Task<ResponseDTO<ProgressItemDTO>> UpdateProgressItem([FromBody] UpdateProgressItemDTO model)
         {
-            _logger.LogInformation("Updating progress item with ID: {id}", model.Id);
-            return await HandleException(_constructionProgressService.UpdateProgressItem(model, UserId), Message.ConstructionProgressMessage.UPDATE_SUCCESS);
+            _logger.LogInformation("Updating progress item ID: {id} in progress ID: {progressId}", 
+                model.Id, model.ProgressId);
+            
+            return await HandleException(
+                _constructionProgressService.UpdateProgressItem(model, UserId), 
+                Message.ConstructionProgressMessage.UPDATE_SUCCESS);
         }
     }
 } 
