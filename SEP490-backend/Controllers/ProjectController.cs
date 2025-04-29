@@ -6,6 +6,7 @@ using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.ProjectService;
+using Microsoft.Extensions.Logging;
 
 namespace Sep490_Backend.Controllers
 {
@@ -16,11 +17,13 @@ namespace Sep490_Backend.Controllers
     {
         private readonly IProjectService _projectService;
         private readonly IDataService _dataService;
+        private readonly ILogger<ProjectController> _logger;
 
-        public ProjectController(IProjectService projectService, IDataService dataService)
+        public ProjectController(IProjectService projectService, IDataService dataService, ILogger<ProjectController> logger)
         {
             _projectService = projectService;
             _dataService = dataService;
+            _logger = logger;
         }
 
         [HttpGet("list")]
@@ -59,6 +62,18 @@ namespace Sep490_Backend.Controllers
         {
             var result = await HandleException(_projectService.Detail(id, UserId), Message.ProjectMessage.GET_DETAIL_SUCCESS);
             return result;
+        }
+
+        /// <summary>
+        /// Update a project's status (Executive Board only)
+        /// </summary>
+        /// <param name="model">Update status model</param>
+        /// <returns>Success indicator</returns>
+        [HttpPut("update-status")]
+        public async Task<ResponseDTO<bool>> UpdateStatus([FromBody] UpdateProjectStatusDTO model)
+        {
+            _logger.LogInformation($"Updating project {model.ProjectId} status to {model.TargetStatus}");
+            return await HandleException(_projectService.UpdateStatus(model, UserId), Message.ProjectMessage.UPDATE_STATUS_SUCCESS);
         }
     }
 }

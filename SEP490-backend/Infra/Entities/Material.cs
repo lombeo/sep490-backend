@@ -19,6 +19,7 @@ namespace Sep490_Backend.Infra.Entities
         public DateTime? ExpireDate { get; set; }  // Ngày hết hạn
         public DateTime? ProductionDate { get; set; }  // Ngày sản xuất
         public string? Description { get; set; }  // Mô tả
+        public bool CanRollBack { get; set; } = false;  // Flag indicating if this material can be rolled back
 
         // Navigation property
         public virtual ICollection<ConstructPlanItemDetail>? ConstructPlanItemDetails { get; set; }
@@ -63,6 +64,10 @@ public static class MaterialConfiguration
 
             entity.Property(m => m.Inventory)
                    .HasDefaultValue(0);
+
+            entity.Property(m => m.CanRollBack)
+                   .IsRequired()
+                   .HasDefaultValue(false);
 
             entity.Property(m => m.Attachment)
                    .HasColumnType("text");

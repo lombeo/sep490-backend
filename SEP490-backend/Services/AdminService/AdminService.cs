@@ -8,11 +8,9 @@ using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Infra.Helps;
 using Sep490_Backend.Services.AuthenService;
 using Sep490_Backend.Services.CacheService;
-using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.EmailService;
 using Sep490_Backend.Services.HelperService;
 using System.Text.RegularExpressions;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace Sep490_Backend.Services.AdminService
 {
@@ -29,16 +27,14 @@ namespace Sep490_Backend.Services.AdminService
         private readonly IAuthenService _authenService;
         private readonly IEmailService _emailService;
         private readonly IHelperService _helperService;
-        private readonly IDataService _dataService;
         private readonly ICacheService _cacheService;
 
-        public AdminService(IHelperService helperService, BackendContext context, IAuthenService authenService, IEmailService emailService, IDataService dataService, ICacheService cacheService)
+        public AdminService(IHelperService helperService, BackendContext context, IAuthenService authenService, IEmailService emailService, ICacheService cacheService)
         {
             _context = context;
             _authenService = authenService;
             _helperService = helperService;
             _emailService = emailService;
-            _dataService = dataService;
             _cacheService = cacheService;
         }
 
@@ -82,19 +78,19 @@ namespace Sep490_Backend.Services.AdminService
             // User memory is already updated by TriggerUpdateUserMemory
             
             // Invalidate construction team caches if user was part of a team
-            await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_TEAM_CACHE_KEY);
+            _ = _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_TEAM_CACHE_KEY);
             
             // If user was part of projects, invalidate project-related caches
             if (relatedProjectIds != null && relatedProjectIds.Any())
             {
-                await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_CACHE_KEY);
-                await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_USER_CACHE_KEY);
+                _ = _cacheService.DeleteAsync(RedisCacheKey.PROJECT_CACHE_KEY);
+                _ = _cacheService.DeleteAsync(RedisCacheKey.PROJECT_USER_CACHE_KEY);
                 
                 // Invalidate specific project caches
                 foreach (var projectId in relatedProjectIds)
                 {
                     var projectCacheKey = $"PROJECT:{projectId}";
-                    await _cacheService.DeleteAsync(projectCacheKey);
+                    _ = _cacheService.DeleteAsync(projectCacheKey);
                 }
             }
         }

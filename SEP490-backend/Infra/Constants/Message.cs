@@ -96,6 +96,7 @@
             public const string SAVE_SUCCESS = "S-PRJ-003"; //Save project successfully!
             public const string GET_LIST_STATUS_SUCCESS = "S-PRJ-004"; //Get list status successfully!
             public const string GET_DETAIL_SUCCESS = "S-PRJ-005"; //Get detail project successfully!
+            public const string UPDATE_STATUS_SUCCESS = "S-PRJ-006"; //Update project status successfully!
 
             //Error
             public const string INVALID_DATE = "E-PRJ-001"; //The end date cannot be before the start date.

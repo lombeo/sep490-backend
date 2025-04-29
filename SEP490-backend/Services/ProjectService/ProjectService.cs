@@ -4,14 +4,17 @@ using Sep490_Backend.DTO.Project;
 using Sep490_Backend.Infra;
 using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Infra.Entities;
+using Sep490_Backend.Infra.Enums;
 using Sep490_Backend.Services.CacheService;
 using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.HelperService;
 using Sep490_Backend.Services.GoogleDriveService;
+using Sep490_Backend.Services.MaterialService;
 using Sep490_Backend.Infra.Helps;
 using Sep490_Backend.Controllers;
 using System.Text.Json;
 using Sep490_Backend.DTO;
+using Microsoft.Extensions.Logging;
 
 namespace Sep490_Backend.Services.ProjectService
 {
@@ -21,6 +24,7 @@ namespace Sep490_Backend.Services.ProjectService
         Task<int> Delete(int id, int actionBy);
         Task<ListProjectStatusDTO> ListProjectStatus(int actionBy);
         Task<ProjectDTO> Detail(int id, int actionBy);
+        Task<bool> UpdateStatus(UpdateProjectStatusDTO model, int actionBy);
     }
 
     public class ProjectService : IProjectService
@@ -30,19 +34,25 @@ namespace Sep490_Backend.Services.ProjectService
         private readonly IHelperService _helperService;
         private readonly IDataService _dataService;
         private readonly IGoogleDriveService _googleDriveService;
+        private readonly IMaterialService _materialService;
+        private readonly ILogger<ProjectService> _logger;
 
         public ProjectService(
             BackendContext context, 
             IDataService dataService, 
             ICacheService cacheService, 
             IHelperService helperService,
-            IGoogleDriveService googleDriveService)
+            IGoogleDriveService googleDriveService,
+            IMaterialService materialService,
+            ILogger<ProjectService> logger)
         {
             _context = context;
             _cacheService = cacheService;
             _helperService = helperService;
             _dataService = dataService;
             _googleDriveService = googleDriveService;
+            _materialService = materialService;
+            _logger = logger;
         } 
 
         public async Task<int> Delete(int id, int actionBy)
@@ -504,8 +514,9 @@ namespace Sep490_Backend.Services.ProjectService
                 }
             }
 
-            var project = new Project()
+            var newProject = new Project
             {
+                ProjectCode = model.ProjectCode,
                 ProjectName = model.ProjectName,
                 CustomerId = model.CustomerId,
                 ConstructType = model.ConstructType,
@@ -516,11 +527,12 @@ namespace Sep490_Backend.Services.ProjectService
                 StartDate = model.StartDate,
                 EndDate = model.EndDate,
                 Budget = model.Budget,
-                Status = model.Status,
-                Attachments = attachmentInfos.Any() ? JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(attachmentInfos)) : null,
+                Status = ProjectStatusEnum.ReceiveRequest, // Set default status for new projects
                 Description = model.Description,
-                UpdatedAt = DateTime.UtcNow,
-                Updater = actionBy
+                Creator = actionBy,
+                Updater = actionBy,
+                CreatedAt = DateTime.Now,
+                UpdatedAt = DateTime.Now
             };
 
             if (model.Id != 0)
@@ -553,14 +565,12 @@ namespace Sep490_Backend.Services.ProjectService
                 entity.StartDate = model.StartDate;
                 entity.EndDate = model.EndDate;
                 entity.Budget = model.Budget;
-                entity.Status = model.Status;
-                entity.Attachments = attachmentInfos.Any() ? JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(attachmentInfos)) : null;
                 entity.Description = model.Description;
-                entity.UpdatedAt = DateTime.UtcNow;
                 entity.Updater = actionBy;
+                entity.UpdatedAt = DateTime.Now;
 
                 _context.Update(entity);
-                project = entity; // Use the updated entity for the return value
+                newProject = entity; // Use the updated entity for the return value
                 
                 // Xóa mềm danh sách người xem hiện tại
                 var currentViewers = await _context.ProjectUsers
@@ -588,17 +598,13 @@ namespace Sep490_Backend.Services.ProjectService
                         throw new ValidationException(errors);
                 }
 
-                project.ProjectCode = model.ProjectCode;
-                project.CreatedAt = DateTime.UtcNow;
-                project.Creator = actionBy;
-
-                await _context.AddAsync(project);
+                await _context.AddAsync(newProject);
                 await _context.SaveChangesAsync(); // Lưu project trước để có Id
                 
                 // Thêm mới bản ghi người tạo
                 var creatorRecord = new ProjectUser
                 {
-                    ProjectId = project.Id,
+                    ProjectId = newProject.Id,
                     UserId = actionBy,
                     IsCreator = true,
                     CreatedAt = DateTime.UtcNow,
@@ -620,7 +626,7 @@ namespace Sep490_Backend.Services.ProjectService
                     
                 var viewerRecord = new ProjectUser
                 {
-                    ProjectId = project.Id,
+                    ProjectId = newProject.Id,
                     UserId = viewerId,
                     IsCreator = false,
                     CreatedAt = DateTime.UtcNow,
@@ -636,62 +642,185 @@ namespace Sep490_Backend.Services.ProjectService
             await _context.SaveChangesAsync();
             
             // Invalidate all project-related caches
-            await InvalidateProjectRelatedCaches(project.Id);
+            await InvalidateProjectRelatedCaches(newProject.Id);
             
             // Map to DTO for return value
             var projectDTO = new ProjectDTO
             {
-                Id = project.Id,
-                ProjectCode = project.ProjectCode,
-                ProjectName = project.ProjectName,
+                Id = newProject.Id,
+                ProjectCode = newProject.ProjectCode,
+                ProjectName = newProject.ProjectName,
                 // Tạo Customer mới với Projects = null để tránh vòng lặp tham chiếu
-                Customer = customer.FirstOrDefault(c => c.Id == project.CustomerId) != null ? new Customer
+                Customer = customer.FirstOrDefault(c => c.Id == newProject.CustomerId) != null ? new Customer
                 {
-                    Id = customer.FirstOrDefault(c => c.Id == project.CustomerId).Id,
-                    CustomerName = customer.FirstOrDefault(c => c.Id == project.CustomerId).CustomerName,
-                    DirectorName = customer.FirstOrDefault(c => c.Id == project.CustomerId).DirectorName,
-                    Phone = customer.FirstOrDefault(c => c.Id == project.CustomerId).Phone,
-                    Email = customer.FirstOrDefault(c => c.Id == project.CustomerId).Email,
-                    Address = customer.FirstOrDefault(c => c.Id == project.CustomerId).Address,
-                    Description = customer.FirstOrDefault(c => c.Id == project.CustomerId).Description,
-                    CustomerCode = customer.FirstOrDefault(c => c.Id == project.CustomerId).CustomerCode,
-                    TaxCode = customer.FirstOrDefault(c => c.Id == project.CustomerId).TaxCode,
-                    Fax = customer.FirstOrDefault(c => c.Id == project.CustomerId).Fax,
-                    BankAccount = customer.FirstOrDefault(c => c.Id == project.CustomerId).BankAccount,
-                    BankName = customer.FirstOrDefault(c => c.Id == project.CustomerId).BankName,
-                    CreatedAt = customer.FirstOrDefault(c => c.Id == project.CustomerId).CreatedAt,
-                    Creator = customer.FirstOrDefault(c => c.Id == project.CustomerId).Creator,
-                    UpdatedAt = customer.FirstOrDefault(c => c.Id == project.CustomerId).UpdatedAt,
-                    Updater = customer.FirstOrDefault(c => c.Id == project.CustomerId).Updater,
-                    Deleted = customer.FirstOrDefault(c => c.Id == project.CustomerId).Deleted,
+                    Id = customer.FirstOrDefault(c => c.Id == newProject.CustomerId).Id,
+                    CustomerName = customer.FirstOrDefault(c => c.Id == newProject.CustomerId).CustomerName,
+                    DirectorName = customer.FirstOrDefault(c => c.Id == newProject.CustomerId).DirectorName,
+                    Phone = customer.FirstOrDefault(c => c.Id == newProject.CustomerId).Phone,
+                    Email = customer.FirstOrDefault(c => c.Id == newProject.CustomerId).Email,
+                    Address = customer.FirstOrDefault(c => c.Id == newProject.CustomerId).Address,
+                    Description = customer.FirstOrDefault(c => c.Id == newProject.CustomerId).Description,
+                    CustomerCode = customer.FirstOrDefault(c => c.Id == newProject.CustomerId).CustomerCode,
+                    TaxCode = customer.FirstOrDefault(c => c.Id == newProject.CustomerId).TaxCode,
+                    Fax = customer.FirstOrDefault(c => c.Id == newProject.CustomerId).Fax,
+                    BankAccount = customer.FirstOrDefault(c => c.Id == newProject.CustomerId).BankAccount,
+                    BankName = customer.FirstOrDefault(c => c.Id == newProject.CustomerId).BankName,
+                    CreatedAt = customer.FirstOrDefault(c => c.Id == newProject.CustomerId).CreatedAt,
+                    Creator = customer.FirstOrDefault(c => c.Id == newProject.CustomerId).Creator,
+                    UpdatedAt = customer.FirstOrDefault(c => c.Id == newProject.CustomerId).UpdatedAt,
+                    Updater = customer.FirstOrDefault(c => c.Id == newProject.CustomerId).Updater,
+                    Deleted = customer.FirstOrDefault(c => c.Id == newProject.CustomerId).Deleted,
                     Projects = null // Prevent circular references
                 } : new Customer(),
-                ConstructType = project.ConstructType,
-                Location = project.Location,
-                Area = project.Area,
-                Purpose = project.Purpose,
-                TechnicalReqs = project.TechnicalReqs,
-                StartDate = project.StartDate,
-                EndDate = project.EndDate,
-                Budget = project.Budget,
-                Status = project.Status,
-                Attachments = project.Attachments != null ? 
-                    System.Text.Json.JsonSerializer.Deserialize<List<AttachmentInfo>>(project.Attachments.RootElement.ToString()) 
+                ConstructType = newProject.ConstructType,
+                Location = newProject.Location,
+                Area = newProject.Area,
+                Purpose = newProject.Purpose,
+                TechnicalReqs = newProject.TechnicalReqs,
+                StartDate = newProject.StartDate,
+                EndDate = newProject.EndDate,
+                Budget = newProject.Budget,
+                Status = newProject.Status,
+                Attachments = newProject.Attachments != null ? 
+                    System.Text.Json.JsonSerializer.Deserialize<List<AttachmentInfo>>(newProject.Attachments.RootElement.ToString()) 
                     : null,
-                Description = project.Description,
-                UpdatedAt = project.UpdatedAt,
-                Updater = project.Updater,
-                CreatedAt = project.CreatedAt,
-                Creator = project.Creator,
-                Deleted = project.Deleted,
+                Description = newProject.Description,
+                UpdatedAt = newProject.UpdatedAt,
+                Updater = newProject.Updater,
+                CreatedAt = newProject.CreatedAt,
+                Creator = newProject.Creator,
+                Deleted = newProject.Deleted,
                 IsCreator = true, // Người tạo luôn là true khi gọi Save
                 ViewerUserIds = await _context.ProjectUsers
-                    .Where(pu => pu.ProjectId == project.Id && !pu.IsCreator && !pu.Deleted)
+                    .Where(pu => pu.ProjectId == newProject.Id && !pu.IsCreator && !pu.Deleted)
                     .Select(pu => pu.UserId)
                     .ToListAsync()
             };
             
             return projectDTO;
+        }
+
+        /// <summary>
+        /// Updates a project's status based on Executive Board approval
+        /// </summary>
+        /// <param name="model">The update status model</param>
+        /// <param name="actionBy">ID of the user performing the action</param>
+        /// <returns>True if the update was successful</returns>
+        public async Task<bool> UpdateStatus(UpdateProjectStatusDTO model, int actionBy)
+        {
+            // Verify user is part of the Executive Board
+            if (!_helperService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD))
+            {
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+            }
+            
+            // Find the project
+            var project = await _context.Projects
+                .FirstOrDefaultAsync(p => p.Id == model.ProjectId && !p.Deleted);
+                
+            if (project == null)
+            {
+                throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
+            }
+            
+            // Start transaction
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            
+            try
+            {
+                // Check if the status change is valid
+                ValidateStatusChange(project.Status, model.TargetStatus);
+                
+                // If status is changing to Completed or Closed, roll back materials
+                if ((model.TargetStatus == ProjectStatusEnum.Completed || model.TargetStatus == ProjectStatusEnum.Closed) &&
+                    project.Status != ProjectStatusEnum.Completed && project.Status != ProjectStatusEnum.Closed)
+                {
+                    // Roll back materials to main inventory
+                    var rollbackCount = await _materialService.RollbackMaterialsFromProjectInventory(project.Id, actionBy);
+                    _logger.LogInformation($"Rolled back {rollbackCount} materials from project {project.Id} during status change to {model.TargetStatus}");
+                }
+                
+                // Update project status
+                project.Status = model.TargetStatus;
+                project.UpdatedAt = DateTime.Now;
+                project.Updater = actionBy;
+                
+                _context.Projects.Update(project);
+                await _context.SaveChangesAsync();
+                
+                // Invalidate project caches
+                await InvalidateProjectCaches(project.Id);
+                
+                await transaction.CommitAsync();
+                
+                return true;
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, $"Error updating project status: {ex.Message}");
+                throw;
+            }
+        }
+        
+        /// <summary>
+        /// Validates that the requested status change is allowed
+        /// </summary>
+        /// <param name="currentStatus">The current project status</param>
+        /// <param name="targetStatus">The requested target status</param>
+        private void ValidateStatusChange(ProjectStatusEnum currentStatus, ProjectStatusEnum targetStatus)
+        {
+            switch (targetStatus)
+            {
+                case ProjectStatusEnum.Paused:
+                    // Can only pause from InProgress
+                    if (currentStatus != ProjectStatusEnum.InProgress)
+                    {
+                        throw new InvalidOperationException($"Cannot change status to Paused from {currentStatus}. Project must be InProgress.");
+                    }
+                    break;
+                    
+                case ProjectStatusEnum.InProgress:
+                    // Can only resume from Paused
+                    if (currentStatus != ProjectStatusEnum.Paused)
+                    {
+                        throw new InvalidOperationException($"Cannot change status to InProgress from {currentStatus}. Project must be Paused.");
+                    }
+                    break;
+                    
+                case ProjectStatusEnum.Completed:
+                    // Can only complete from WaitingApproveCompleted
+                    if (currentStatus != ProjectStatusEnum.WaitingApproveCompleted)
+                    {
+                        throw new InvalidOperationException($"Cannot change status to Completed from {currentStatus}. Project must be WaitingApproveCompleted.");
+                    }
+                    break;
+                    
+                case ProjectStatusEnum.Closed:
+                    // Can close from any status
+                    break;
+                    
+                default:
+                    throw new InvalidOperationException($"Cannot manually change status to {targetStatus}. This status is managed automatically.");
+            }
+        }
+        
+        /// <summary>
+        /// Invalidates all caches related to a project
+        /// </summary>
+        /// <param name="projectId">The ID of the project</param>
+        private async Task InvalidateProjectCaches(int projectId)
+        {
+            // Invalidate specific project cache
+            string projectCacheKey = string.Format(RedisCacheKey.PROJECT_BY_ID_CACHE_KEY, projectId);
+            await _cacheService.DeleteAsync(projectCacheKey);
+            
+            // Invalidate main project caches
+            await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_CACHE_KEY);
+            await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_LIST_CACHE_KEY);
+            
+            // Invalidate project status count cache
+            await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_STATUS_CACHE_KEY);
         }
     }
 }

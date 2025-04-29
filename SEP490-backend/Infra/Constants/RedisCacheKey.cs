@@ -72,5 +72,8 @@
         public const string INSPECTION_REPORT_BY_PROJECT_CACHE_KEY = "INSPECTION_REPORT:PROJECT:{0}"; // Cache key for inspection reports by project
         public const string INSPECTION_REPORT_LIST_CACHE_KEY = "INSPECTION_REPORT:LIST"; // Cache key for inspection report list
         public const string INSPECTION_REPORT_ALL_PATTERN = "INSPECTION_REPORT:*"; // Pattern for all inspection report cache keys
+
+        // Add the missing cache key
+        public const string PROJECT_STATUS_CACHE_KEY = "PROJECT_STATUS_CACHE_KEY";
     }
 }

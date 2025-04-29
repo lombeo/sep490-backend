@@ -8,6 +8,7 @@ using Sep490_Backend.Infra.Enums;
 using Sep490_Backend.Services.CacheService;
 using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.HelperService;
+using Microsoft.Extensions.Logging;
 
 namespace Sep490_Backend.Services.ConstructionProgressService
 {
@@ -26,17 +27,20 @@ namespace Sep490_Backend.Services.ConstructionProgressService
         private readonly IHelperService _helperService;
         private readonly IDataService _dataService;
         private readonly TimeSpan _cacheExpirationTime = TimeSpan.FromMinutes(30);
+        private readonly ILogger<ConstructionProgressService> _logger;
 
         public ConstructionProgressService(
             BackendContext context,
             ICacheService cacheService,
             IHelperService helperService,
-            IDataService dataService)
+            IDataService dataService,
+            ILogger<ConstructionProgressService> logger)
         {
             _context = context;
             _cacheService = cacheService;
             _helperService = helperService;
             _dataService = dataService;
+            _logger = logger;
         }
 
         public async Task<List<ConstructionProgressDTO>> Search(ConstructionProgressQuery query)
@@ -206,83 +210,286 @@ namespace Sep490_Backend.Services.ConstructionProgressService
 
         public async Task<bool> Update(UpdateProgressItemsDTO model, int actionBy)
         {
-            // Check if progress exists
-            var progress = await _context.ConstructionProgresses
-                .FirstOrDefaultAsync(cp => cp.Id == model.ProgressId && !cp.Deleted);
-
-            if (progress == null)
+            // Begin transaction
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            
+            try
             {
-                throw new KeyNotFoundException(Message.ConstructionProgressMessage.NOT_FOUND);
-            }
+                // Check if progress exists
+                var progress = await _context.ConstructionProgresses
+                    .Include(cp => cp.Project)
+                    .FirstOrDefaultAsync(cp => cp.Id == model.ProgressId && !cp.Deleted);
 
-            // Check authorization - user must be part of the project
-            var isUserInProject = await _context.ProjectUsers
-                .AnyAsync(pu => pu.ProjectId == progress.ProjectId && pu.UserId == actionBy && !pu.Deleted);
-
-            if (!isUserInProject && !_helperService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD))
-            {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED_PROJECT);
-            }
-
-            // Get all progress items at once to avoid multiple queries
-            var progressItemIds = model.Items.Select(i => i.Id).ToList();
-            var progressItems = await _context.ConstructionProgressItems
-                .Where(pi => progressItemIds.Contains(pi.Id) && pi.ProgressId == model.ProgressId && !pi.Deleted)
-                .ToListAsync();
-
-            if (progressItems.Count == 0)
-            {
-                throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
-            }
-
-            // Update progress items
-            foreach (var updateItem in model.Items)
-            {
-                var progressItem = progressItems.FirstOrDefault(pi => pi.Id == updateItem.Id);
-                if (progressItem == null)
+                if (progress == null)
                 {
+                    throw new KeyNotFoundException(Message.ConstructionProgressMessage.NOT_FOUND);
+                }
+
+                // Check authorization - user must be part of the project
+                var isUserInProject = await _context.ProjectUsers
+                    .AnyAsync(pu => pu.ProjectId == progress.ProjectId && pu.UserId == actionBy && !pu.Deleted);
+
+                if (!isUserInProject && !_helperService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD))
+                {
+                    throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED_PROJECT);
+                }
+
+                // Get all progress items at once to avoid multiple queries
+                var progressItemIds = model.Items.Select(i => i.Id).ToList();
+                var progressItems = await _context.ConstructionProgressItems
+                    .Where(pi => progressItemIds.Contains(pi.Id) && pi.ProgressId == model.ProgressId && !pi.Deleted)
+                    .ToListAsync();
+
+                if (progressItems.Count == 0)
+                {
+                    throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
+                }
+
+                // Track items that have been newly completed (Progress = 100%)
+                var newlyCompletedItems = new List<ConstructionProgressItem>();
+
+                // Update progress items
+                foreach (var updateItem in model.Items)
+                {
+                    var progressItem = progressItems.FirstOrDefault(pi => pi.Id == updateItem.Id);
+                    if (progressItem == null)
+                    {
+                        continue;
+                    }
+
+                    // Validate progress value
+                    if (updateItem.Progress < 0 || updateItem.Progress > 100)
+                    {
+                        throw new ArgumentException(Message.ConstructionProgressMessage.INVALID_PROGRESS);
+                    }
+
+                    // Validate status
+                    if (!Enum.IsDefined(typeof(ProgressStatusEnum), updateItem.Status))
+                    {
+                        throw new ArgumentException(Message.ConstructionProgressMessage.INVALID_STATUS);
+                    }
+
+                    // Check if item is becoming completed
+                    bool becameCompleted = progressItem.Progress < 100 && updateItem.Progress == 100;
+
+                    // Update progress item
+                    progressItem.Progress = updateItem.Progress;
+                    progressItem.Status = (ProgressStatusEnum)updateItem.Status;
+                    progressItem.ActualStartDate = updateItem.ActualStartDate;
+                    progressItem.ActualEndDate = updateItem.ActualEndDate;
+                    progressItem.Updater = actionBy;
+
+                    // If progress is 100%, set status to Done
+                    if (progressItem.Progress == 100)
+                    {
+                        progressItem.Status = ProgressStatusEnum.Done;
+                        
+                        // If the item just became completed, add it to our tracked list
+                        if (becameCompleted)
+                        {
+                            newlyCompletedItems.Add(progressItem);
+                        }
+                    }
+
+                    _context.ConstructionProgressItems.Update(progressItem);
+                }
+
+                // Process newly completed items for material rollback
+                if (newlyCompletedItems.Any())
+                {
+                    foreach (var completedItem in newlyCompletedItems)
+                    {
+                        await RollbackMaterialsFromCompletedItem(completedItem.Id, progress.ProjectId, actionBy);
+                    }
+                }
+
+                // Update project status based on all progress items
+                await UpdateProjectStatusBasedOnProgress(progress.ProjectId, actionBy);
+
+                // Update progress entity
+                progress.Updater = actionBy;
+                _context.ConstructionProgresses.Update(progress);
+
+                // Save changes
+                await _context.SaveChangesAsync();
+                
+                // Commit transaction
+                await transaction.CommitAsync();
+
+                // Clear cache
+                await InvalidateProgressCache(progress.Id, progress.ProjectId, progress.PlanId);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Error updating construction progress: {message}", ex.Message);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Rolls back materials from a completed construction progress item to project inventory
+        /// </summary>
+        /// <param name="progressItemId">ID of the completed progress item</param>
+        /// <param name="projectId">ID of the project</param>
+        /// <param name="actionBy">ID of the user performing the action</param>
+        private async Task RollbackMaterialsFromCompletedItem(int progressItemId, int projectId, int actionBy)
+        {
+            _logger.LogInformation($"Rolling back materials from completed progress item {progressItemId} to project inventory");
+            
+            // Get progress item details with material resources
+            var progressItemDetails = await _context.ConstructionProgressItemDetails
+                .Where(pid => pid.ProgressItemId == progressItemId && 
+                              pid.ResourceType == ResourceType.MATERIAL && 
+                              pid.ResourceId.HasValue &&
+                              !pid.Deleted)
+                .ToListAsync();
+                
+            if (!progressItemDetails.Any())
+            {
+                _logger.LogInformation($"No material details found for progress item {progressItemId}");
+                return;
+            }
+            
+            foreach (var detail in progressItemDetails)
+            {
+                // Get the material to check if it can be rolled back
+                var material = await _context.Materials
+                    .FirstOrDefaultAsync(m => m.Id == detail.ResourceId.Value && !m.Deleted);
+                
+                if (material == null)
+                {
+                    _logger.LogWarning($"Material with ID {detail.ResourceId.Value} not found or deleted, skipping rollback");
                     continue;
                 }
-
-                // Validate progress value
-                if (updateItem.Progress < 0 || updateItem.Progress > 100)
+                
+                // Only process materials that can be rolled back
+                if (!material.CanRollBack)
                 {
-                    throw new ArgumentException(Message.ConstructionProgressMessage.INVALID_PROGRESS);
+                    _logger.LogInformation($"Material {material.Id} ({material.MaterialName}) has CanRollBack=false, skipping");
+                    continue;
                 }
-
-                // Validate status
-                if (!Enum.IsDefined(typeof(ProgressStatusEnum), updateItem.Status))
+                
+                // Calculate quantity to roll back (remaining quantity that wasn't used)
+                int unusedQuantity = detail.Quantity - detail.UsedQuantity;
+                
+                if (unusedQuantity <= 0)
                 {
-                    throw new ArgumentException(Message.ConstructionProgressMessage.INVALID_STATUS);
+                    _logger.LogInformation($"No unused quantity to roll back for material {material.Id} in progress item detail {detail.Id}");
+                    continue;
                 }
-
-                // Update progress item
-                progressItem.Progress = updateItem.Progress;
-                progressItem.Status = (ProgressStatusEnum)updateItem.Status;
-                progressItem.ActualStartDate = updateItem.ActualStartDate;
-                progressItem.ActualEndDate = updateItem.ActualEndDate;
-                progressItem.Updater = actionBy;
-
-                // If progress is 100%, set status to Done
-                if (progressItem.Progress == 100)
+                
+                // Check if this material already exists in the project's inventory
+                var existingInventory = await _context.ResourceInventory
+                    .FirstOrDefaultAsync(ri => ri.ProjectId == projectId && 
+                                              ri.ResourceId == detail.ResourceId.Value && 
+                                              ri.ResourceType == ResourceType.MATERIAL && 
+                                              !ri.Deleted);
+                
+                if (existingInventory != null)
                 {
-                    progressItem.Status = ProgressStatusEnum.Done;
+                    // Update existing inventory record
+                    existingInventory.Quantity += unusedQuantity;
+                    existingInventory.UpdatedAt = DateTime.Now;
+                    existingInventory.Updater = actionBy;
+                    
+                    _context.ResourceInventory.Update(existingInventory);
+                    
+                    _logger.LogInformation($"Added {unusedQuantity} of material {material.Id} ({material.MaterialName}) " +
+                                         $"to existing project inventory (new total: {existingInventory.Quantity})");
                 }
-
-                _context.ConstructionProgressItems.Update(progressItem);
+                else
+                {
+                    // Create new inventory record
+                    var newInventory = new ResourceInventory
+                    {
+                        Name = material.MaterialName,
+                        ResourceId = material.Id,
+                        ProjectId = projectId,
+                        ResourceType = ResourceType.MATERIAL,
+                        Quantity = unusedQuantity,
+                        Unit = material.Unit ?? "unit",
+                        Status = true,
+                        Creator = actionBy,
+                        Updater = actionBy,
+                        CreatedAt = DateTime.Now,
+                        UpdatedAt = DateTime.Now
+                    };
+                    
+                    await _context.ResourceInventory.AddAsync(newInventory);
+                    
+                    _logger.LogInformation($"Created new project inventory record with {unusedQuantity} of material {material.Id} ({material.MaterialName})");
+                }
+                
+                // Update the detail to mark the rolled back quantity
+                detail.UsedQuantity = detail.Quantity; // Mark all as used, since we're rolling back the unused portion
+                detail.UpdatedAt = DateTime.Now;
+                detail.Updater = actionBy;
+                
+                _context.ConstructionProgressItemDetails.Update(detail);
             }
+            
+            // Save is handled by the calling method in its transaction
+        }
 
-            // Update progress entity
-            progress.Updater = actionBy;
-            _context.ConstructionProgresses.Update(progress);
-
-            // Save changes
-            await _context.SaveChangesAsync();
-
-            // Clear cache
-            await InvalidateProgressCache(progress.Id, progress.ProjectId, progress.PlanId);
-
-            return true;
+        /// <summary>
+        /// Updates the project status based on the completion of all progress items
+        /// </summary>
+        /// <param name="projectId">ID of the project</param>
+        /// <param name="actionBy">ID of the user performing the action</param>
+        private async Task UpdateProjectStatusBasedOnProgress(int projectId, int actionBy)
+        {
+            // Get the project
+            var project = await _context.Projects
+                .FirstOrDefaultAsync(p => p.Id == projectId && !p.Deleted);
+                
+            if (project == null)
+            {
+                _logger.LogWarning($"Project with ID {projectId} not found or deleted");
+                return;
+            }
+            
+            // Get all progress items for this project across all construction progresses
+            var allProgressItems = await _context.ConstructionProgresses
+                .Where(cp => cp.ProjectId == projectId && !cp.Deleted)
+                .SelectMany(cp => cp.ProgressItems.Where(pi => !pi.Deleted))
+                .ToListAsync();
+                
+            if (!allProgressItems.Any())
+            {
+                _logger.LogInformation($"No progress items found for project {projectId}");
+                return;
+            }
+            
+            // Determine if all progress items are completed (progress = 100%)
+            bool allCompleted = allProgressItems.All(pi => pi.Progress == 100);
+            bool anyIncomplete = allProgressItems.Any(pi => pi.Progress < 100);
+            
+            // If the project is in WaitingApproveCompleted status but we have incomplete items,
+            // change back to InProgress
+            if (project.Status == ProjectStatusEnum.WaitingApproveCompleted && anyIncomplete)
+            {
+                _logger.LogInformation($"Project {projectId} has incomplete items, changing status from WaitingApproveCompleted to InProgress");
+                project.Status = ProjectStatusEnum.InProgress;
+                project.UpdatedAt = DateTime.Now;
+                project.Updater = actionBy;
+                _context.Projects.Update(project);
+            }
+            // If all items are complete and project is not already waiting for completion approval,
+            // change to WaitingApproveCompleted
+            else if (allCompleted && project.Status != ProjectStatusEnum.WaitingApproveCompleted && 
+                    project.Status != ProjectStatusEnum.Completed && project.Status != ProjectStatusEnum.Closed)
+            {
+                _logger.LogInformation($"All progress items for project {projectId} are complete, changing status to WaitingApproveCompleted");
+                project.Status = ProjectStatusEnum.WaitingApproveCompleted;
+                project.UpdatedAt = DateTime.Now;
+                project.Updater = actionBy;
+                _context.Projects.Update(project);
+            }
+            
+            // Save is handled by the calling method in its transaction
         }
 
         private async Task<bool> IsAuthorizedToViewProgress(int progressId, int userId)

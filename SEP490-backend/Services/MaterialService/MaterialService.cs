@@ -3,6 +3,7 @@ using Sep490_Backend.Infra;
 using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Infra.Helps;
+using Sep490_Backend.Infra.Enums;
 using Sep490_Backend.Services.HelperService;
 using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.CacheService;
@@ -19,6 +20,7 @@ namespace Sep490_Backend.Services.MaterialService
         Task<Material> SaveMaterial(MaterialSaveDTO model, int actionBy);
         Task<bool> DeleteMaterial(int materialId, int actionBy);
         Task<MaterialDetailDTO> GetMaterialById(int materialId, int actionBy);
+        Task<int> RollbackMaterialsFromProjectInventory(int projectId, int actionBy);
     }
 
     public class MaterialService : IMaterialService
@@ -121,6 +123,7 @@ namespace Sep490_Backend.Services.MaterialService
                 materialToUpdate.ExpireDate = model.ExpireDate;
                 materialToUpdate.ProductionDate = model.ProductionDate;
                 materialToUpdate.Description = model.Description ?? "";
+                materialToUpdate.CanRollBack = model.CanRollBack;
                 
                 // Update audit fields
                 materialToUpdate.UpdatedAt = DateTime.Now;
@@ -152,6 +155,7 @@ namespace Sep490_Backend.Services.MaterialService
                     ExpireDate = model.ExpireDate,
                     ProductionDate = model.ProductionDate,
                     Description = model.Description ?? "",
+                    CanRollBack = model.CanRollBack,
                     
                     // Set audit fields
                     Creator = actionBy,
@@ -284,6 +288,95 @@ namespace Sep490_Backend.Services.MaterialService
             await _cacheService.SetAsync(cacheKey, materialDetailDTO, DEFAULT_CACHE_DURATION);
             
             return materialDetailDTO;
+        }
+
+        /// <summary>
+        /// Rolls back materials from a project's inventory to the main material inventory
+        /// </summary>
+        /// <param name="projectId">ID of the project</param>
+        /// <param name="actionBy">ID of the user performing the action</param>
+        /// <returns>The number of materials rolled back</returns>
+        public async Task<int> RollbackMaterialsFromProjectInventory(int projectId, int actionBy)
+        {
+            _logger.LogInformation($"Rolling back materials from project {projectId} to main inventory");
+            
+            // Start transaction
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            
+            try
+            {
+                // Get all materials in the project inventory that have CanRollBack=true
+                var resourceInventories = await _context.ResourceInventory
+                    .Where(ri => ri.ProjectId == projectId && 
+                                ri.ResourceType == ResourceType.MATERIAL && 
+                                ri.ResourceId.HasValue && 
+                                !ri.Deleted)
+                    .ToListAsync();
+                
+                if (!resourceInventories.Any())
+                {
+                    _logger.LogInformation($"No materials found in project {projectId} to roll back");
+                    await transaction.CommitAsync();
+                    return 0;
+                }
+                
+                int rolledBackCount = 0;
+                
+                foreach (var inventory in resourceInventories)
+                {
+                    // Get the associated material
+                    var material = await _context.Materials
+                        .FirstOrDefaultAsync(m => m.Id == inventory.ResourceId.Value && !m.Deleted);
+                    
+                    if (material == null)
+                    {
+                        _logger.LogWarning($"Material with ID {inventory.ResourceId.Value} not found or deleted, skipping rollback");
+                        continue;
+                    }
+                    
+                    // Only rollback materials with CanRollBack=true
+                    if (material.CanRollBack)
+                    {
+                        // Update material inventory
+                        material.Inventory = (material.Inventory ?? 0) + inventory.Quantity;
+                        material.UpdatedAt = DateTime.Now;
+                        material.Updater = actionBy;
+                        
+                        _context.Materials.Update(material);
+                        
+                        // Soft delete the resource inventory entry
+                        inventory.Deleted = true;
+                        inventory.UpdatedAt = DateTime.Now;
+                        inventory.Updater = actionBy;
+                        
+                        _context.ResourceInventory.Update(inventory);
+                        
+                        rolledBackCount++;
+                        
+                        _logger.LogInformation($"Rolled back material {material.Id} ({material.MaterialName}), inventory increased from {material.Inventory - inventory.Quantity} to {material.Inventory}");
+                    }
+                }
+                
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+                
+                // Invalidate caches
+                if (rolledBackCount > 0)
+                {
+                    await InvalidateMaterialCache();
+                    await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
+                    await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_BY_TYPE_CACHE_KEY);
+                }
+                
+                _logger.LogInformation($"Successfully rolled back {rolledBackCount} materials from project {projectId}");
+                return rolledBackCount;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error rolling back materials from project {projectId}: {ex.Message}");
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
     }
 }

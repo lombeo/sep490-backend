@@ -27,7 +27,6 @@ namespace Sep490_Backend.DTO.Project
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
         public decimal Budget { get; set; }
-        public ProjectStatusEnum Status { get; set; }
         public List<IFormFile>? Attachments { get; set; }
         public string? Description { get; set; }
         public List<int> ViewerUserIds { get; set; } = new List<int>();

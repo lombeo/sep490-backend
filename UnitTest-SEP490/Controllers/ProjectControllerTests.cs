@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Sep490_Backend.Controllers;
 using Sep490_Backend.DTO.Common;
@@ -16,13 +17,15 @@ namespace UnitTest_SEP490.Controllers
     {
         private readonly Mock<IProjectService> _mockProjectService;
         private readonly Mock<IDataService> _mockDataService;
+        private readonly Mock<ILogger<ProjectController>> _mockLogger;
         private readonly ProjectController _controller;
 
         public ProjectControllerTests()
         {
             _mockProjectService = new Mock<IProjectService>();
             _mockDataService = new Mock<IDataService>();
-            _controller = new ProjectController(_mockProjectService.Object, _mockDataService.Object);
+            _mockLogger = new Mock<ILogger<ProjectController>>();
+            _controller = new ProjectController(_mockProjectService.Object, _mockDataService.Object, _mockLogger.Object);
 
             // Setup default user claims for testing
             var claims = new List<Claim>
@@ -146,8 +149,7 @@ namespace UnitTest_SEP490.Controllers
                 ConstructType = "Building",
                 StartDate = DateTime.Now,
                 EndDate = DateTime.Now.AddMonths(6),
-                Budget = 100000,
-                Status = Sep490_Backend.Infra.Enums.ProjectStatusEnum.Planning
+                Budget = 100000
             };
 
             var savedProject = new ProjectDTO

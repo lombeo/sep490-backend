@@ -23,5 +23,6 @@ namespace Sep490_Backend.DTO.Material
         public DateTime? ExpireDate { get; set; }
         public DateTime? ProductionDate { get; set; }
         public string? Description { get; set; }
+        public bool CanRollBack { get; set; }
     }
 } 
