@@ -285,21 +285,14 @@ namespace UnitTest_SEP490.Controllers
         public async Task Save_ReturnsSuccessResponse_WhenCreatingReport()
         {
             // Arrange
-            var formFile = new Mock<IFormFile>();
-            formFile.Setup(f => f.FileName).Returns("test.pdf");
-            formFile.Setup(f => f.Length).Returns(1024);
-
             var model = new SaveInspectionReportDTO
             {
                 Id = 0, // New report
-                ProjectId = 1,
+                ConstructionProgressItemId = 1,
                 InspectorId = 1,
                 InspectStartDate = DateTime.UtcNow.AddDays(-1),
                 InspectEndDate = DateTime.UtcNow,
-                ProgressId = 1,
-                PlanId = 1,
                 Location = "Test Location",
-                AttachmentFiles = new List<IFormFile> { formFile.Object },
                 InspectionDecision = InspectionDecision.Pass,
                 Status = InspectionReportStatus.Draft,
                 QualityNote = "Quality note",
@@ -309,7 +302,8 @@ namespace UnitTest_SEP490.Controllers
             var createdReport = new InspectionReportDTO
             {
                 Id = 1,
-                ProjectId = 1,
+                ConstructionProgressItemId = 1,
+                ProgressItemName = "Test Work Item",
                 ProjectName = "Test Project",
                 InspectCode = "IR001",
                 InspectorId = 1,
@@ -346,12 +340,10 @@ namespace UnitTest_SEP490.Controllers
             var model = new SaveInspectionReportDTO
             {
                 Id = 1, // Existing report
-                ProjectId = 1,
+                ConstructionProgressItemId = 1,
                 InspectorId = 1,
                 InspectStartDate = DateTime.UtcNow.AddDays(-1),
                 InspectEndDate = DateTime.UtcNow,
-                ProgressId = 1,
-                PlanId = 1,
                 Location = "Updated Location",
                 InspectionDecision = InspectionDecision.PassWithRemarks,
                 Status = InspectionReportStatus.Submitted,
@@ -362,7 +354,7 @@ namespace UnitTest_SEP490.Controllers
             var updatedReport = new InspectionReportDTO
             {
                 Id = 1,
-                ProjectId = 1,
+                ConstructionProgressItemId = 1,
                 ProjectName = "Test Project",
                 InspectCode = "IR001",
                 InspectorId = 1,
@@ -394,18 +386,18 @@ namespace UnitTest_SEP490.Controllers
         }
 
         [Fact]
-        public async Task Save_ReturnsFailureResponse_WhenProjectNotFound()
+        public async Task Save_ReturnsFailureResponse_WhenProgressItemNotFound()
         {
             // Arrange
             var model = new SaveInspectionReportDTO
             {
-                ProjectId = 999,
+                ConstructionProgressItemId = 999,
                 InspectorId = 1
             };
 
             _mockInspectionReportService
                 .Setup(s => s.Save(It.IsAny<SaveInspectionReportDTO>(), It.IsAny<int>()))
-                .ThrowsAsync(new KeyNotFoundException(Message.InspectionReportMessage.PROJECT_NOT_FOUND));
+                .ThrowsAsync(new KeyNotFoundException(Message.InspectionReportMessage.NOT_FOUND));
 
             // Act
             var result = await _controller.Save(model);
@@ -414,7 +406,7 @@ namespace UnitTest_SEP490.Controllers
             result.Should().NotBeNull();
             result.Success.Should().BeFalse();
             result.Code.Should().Be(404);
-            result.Message.Should().Be(Message.InspectionReportMessage.PROJECT_NOT_FOUND);
+            result.Message.Should().Be(Message.InspectionReportMessage.NOT_FOUND);
         }
 
         [Fact]
@@ -423,7 +415,7 @@ namespace UnitTest_SEP490.Controllers
             // Arrange
             var model = new SaveInspectionReportDTO
             {
-                ProjectId = 1,
+                ConstructionProgressItemId = 1,
                 InspectorId = 1
             };
 

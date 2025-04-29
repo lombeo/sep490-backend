@@ -41,21 +41,27 @@ namespace Sep490_Backend.Services.InspectionReportService
 
             // If only updating the status (approve/reject), handle specially
             if (model.Id != 0 && model.Status.HasValue && 
-                (model.ProjectId == 0 && model.InspectStartDate == default))
+                (model.ConstructionProgressItemId == 0 && model.InspectStartDate == default))
             {
                 return await UpdateInspectionReportStatus(model.Id, model.Status.Value, actionBy);
             }
 
-            // Check if project exists
-            var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == model.ProjectId && !p.Deleted);
-            if (project == null)
+            // Check if progress item exists
+            var progressItem = await _context.ConstructionProgressItems
+                .Include(pi => pi.ConstructionProgress)
+                .ThenInclude(cp => cp.Project)
+                .FirstOrDefaultAsync(pi => pi.Id == model.ConstructionProgressItemId && !pi.Deleted);
+                
+            if (progressItem == null)
             {
-                throw new KeyNotFoundException(Message.InspectionReportMessage.PROJECT_NOT_FOUND);
+                throw new KeyNotFoundException(Message.InspectionReportMessage.NOT_FOUND);
             }
+
+            var projectId = progressItem.ConstructionProgress.ProjectId;
 
             // Check if user has access to the project
             var hasAccess = await _context.ProjectUsers
-                .AnyAsync(pu => pu.ProjectId == model.ProjectId && pu.UserId == actionBy && !pu.Deleted);
+                .AnyAsync(pu => pu.ProjectId == projectId && pu.UserId == actionBy && !pu.Deleted);
                 
             if (!hasAccess && !_helperService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD))
             {
@@ -66,10 +72,12 @@ namespace Sep490_Backend.Services.InspectionReportService
             string inspectCode;
             if (model.Id == 0) // Creating new report
             {
+                var project = progressItem.ConstructionProgress.Project;
+                
                 // Get the latest index for this project
                 int nextIndex = 1;
                 var existingReports = await _context.Set<InspectionReport>()
-                    .Where(ir => ir.ProjectId == model.ProjectId && !ir.Deleted)
+                    .Where(ir => ir.ConstructionProgressItem.ConstructionProgress.ProjectId == projectId && !ir.Deleted)
                     .ToListAsync();
                 
                 if (existingReports.Any())
@@ -173,13 +181,11 @@ namespace Sep490_Backend.Services.InspectionReportService
                 // Create new inspection report
                 inspectionReport = new InspectionReport
                 {
-                    ProjectId = model.ProjectId,
+                    ConstructionProgressItemId = model.ConstructionProgressItemId,
                     InspectCode = inspectCode,
                     InspectorId = model.InspectorId,
                     InspectStartDate = model.InspectStartDate,
                     InspectEndDate = model.InspectEndDate,
-                    ProgressId = model.ProgressId,
-                    PlanId = model.PlanId,
                     Location = model.Location,
                     Attachment = JsonSerializer.SerializeToDocument(attachmentInfos),
                     InspectionDecision = (int)(model.InspectionDecision ?? InspectionDecision.None),
@@ -202,11 +208,10 @@ namespace Sep490_Backend.Services.InspectionReportService
                     throw new KeyNotFoundException(Message.InspectionReportMessage.NOT_FOUND);
                 }
                 
+                inspectionReport.ConstructionProgressItemId = model.ConstructionProgressItemId;
                 inspectionReport.InspectorId = model.InspectorId;
                 inspectionReport.InspectStartDate = model.InspectStartDate;
                 inspectionReport.InspectEndDate = model.InspectEndDate;
-                inspectionReport.ProgressId = model.ProgressId;
-                inspectionReport.PlanId = model.PlanId;
                 inspectionReport.Location = model.Location;
                 inspectionReport.Attachment = JsonSerializer.SerializeToDocument(attachmentInfos);
                 
@@ -230,7 +235,7 @@ namespace Sep490_Backend.Services.InspectionReportService
             await _context.SaveChangesAsync();
             
             // Invalidate caches
-            await InvalidateInspectionReportCaches(inspectionReport.Id, inspectionReport.ProjectId);
+            await InvalidateInspectionReportCaches(inspectionReport.Id, projectId);
             
             // Return the updated data with additional details
             return await MapToInspectionReportDTO(inspectionReport);
@@ -239,7 +244,10 @@ namespace Sep490_Backend.Services.InspectionReportService
         private async Task<InspectionReportDTO> UpdateInspectionReportStatus(int id, InspectionReportStatus status, int actionBy)
         {
             // Check if report exists
-            var report = await _context.Set<InspectionReport>().FirstOrDefaultAsync(ir => ir.Id == id && !ir.Deleted);
+            var report = await _context.Set<InspectionReport>()
+                .Include(ir => ir.ConstructionProgressItem)
+                .ThenInclude(cpi => cpi.ConstructionProgress)
+                .FirstOrDefaultAsync(ir => ir.Id == id && !ir.Deleted);
             
             if (report == null)
             {
@@ -260,7 +268,8 @@ namespace Sep490_Backend.Services.InspectionReportService
             await _context.SaveChangesAsync();
             
             // Invalidate cache
-            await InvalidateInspectionReportCaches(report.Id, report.ProjectId);
+            int projectId = report.ConstructionProgressItem.ConstructionProgress.ProjectId;
+            await InvalidateInspectionReportCaches(report.Id, projectId);
             
             // Return updated report
             return await MapToInspectionReportDTO(report);
@@ -275,16 +284,21 @@ namespace Sep490_Backend.Services.InspectionReportService
             }
             
             // Check if report exists
-            var report = await _context.Set<InspectionReport>().FirstOrDefaultAsync(ir => ir.Id == id && !ir.Deleted);
+            var report = await _context.Set<InspectionReport>()
+                .Include(ir => ir.ConstructionProgressItem)
+                .ThenInclude(cpi => cpi.ConstructionProgress)
+                .FirstOrDefaultAsync(ir => ir.Id == id && !ir.Deleted);
             
             if (report == null)
             {
                 throw new KeyNotFoundException(Message.InspectionReportMessage.NOT_FOUND);
             }
             
+            int projectId = report.ConstructionProgressItem.ConstructionProgress.ProjectId;
+            
             // Check if user has access to the project
             var hasAccess = await _context.ProjectUsers
-                .AnyAsync(pu => pu.ProjectId == report.ProjectId && pu.UserId == actionBy && !pu.Deleted);
+                .AnyAsync(pu => pu.ProjectId == projectId && pu.UserId == actionBy && !pu.Deleted);
                 
             if (!hasAccess)
             {
@@ -299,7 +313,7 @@ namespace Sep490_Backend.Services.InspectionReportService
             await _context.SaveChangesAsync();
             
             // Invalidate cache
-            await InvalidateInspectionReportCaches(report.Id, report.ProjectId);
+            await InvalidateInspectionReportCaches(report.Id, projectId);
             
             return id;
         }
@@ -307,7 +321,7 @@ namespace Sep490_Backend.Services.InspectionReportService
         public async Task<List<InspectionReportDTO>> List(SearchInspectionReportDTO model)
         {
             // Generate a unique cache key based on search parameters
-            string cacheKey = $"{RedisCacheKey.INSPECTION_REPORT_LIST_CACHE_KEY}:{model.ProjectId ?? 0}:{model.InspectorId ?? 0}:{model.StartDate?.ToString("yyyyMMdd") ?? "0"}:{model.EndDate?.ToString("yyyyMMdd") ?? "0"}:{model.Status ?? 0}:{model.Decision ?? 0}:{model.Keyword ?? "none"}:{model.PageIndex}:{model.PageSize}";
+            string cacheKey = $"{RedisCacheKey.INSPECTION_REPORT_LIST_CACHE_KEY}:{model.ProjectId ?? 0}:{model.InspectorId ?? 0}:{model.ConstructionProgressItemId ?? 0}:{model.StartDate?.ToString("yyyyMMdd") ?? "0"}:{model.EndDate?.ToString("yyyyMMdd") ?? "0"}:{model.Status ?? 0}:{model.Decision ?? 0}:{model.Keyword ?? "none"}:{model.PageIndex}:{model.PageSize}";
             
             var cachedResult = await _cacheService.GetAsync<List<InspectionReportDTO>>(cacheKey);
             
@@ -318,22 +332,27 @@ namespace Sep490_Backend.Services.InspectionReportService
             
             // Create query
             var query = _context.Set<InspectionReport>()
-                .Include(ir => ir.Project)
                 .Include(ir => ir.Inspector)
-                .Include(ir => ir.Progress)
-                .Include(ir => ir.Plan)
+                .Include(ir => ir.ConstructionProgressItem)
+                .ThenInclude(cpi => cpi.ConstructionProgress)
+                .ThenInclude(cp => cp.Project)
                 .Where(ir => !ir.Deleted)
                 .AsQueryable();
             
             // Apply filters
             if (model.ProjectId.HasValue)
             {
-                query = query.Where(ir => ir.ProjectId == model.ProjectId.Value);
+                query = query.Where(ir => ir.ConstructionProgressItem.ConstructionProgress.ProjectId == model.ProjectId.Value);
             }
             
             if (model.InspectorId.HasValue)
             {
                 query = query.Where(ir => ir.InspectorId == model.InspectorId.Value);
+            }
+            
+            if (model.ConstructionProgressItemId.HasValue)
+            {
+                query = query.Where(ir => ir.ConstructionProgressItemId == model.ConstructionProgressItemId.Value);
             }
             
             if (model.StartDate.HasValue)
@@ -391,10 +410,10 @@ namespace Sep490_Backend.Services.InspectionReportService
         {
             // Check if report exists
             var report = await _context.Set<InspectionReport>()
-                .Include(ir => ir.Project)
                 .Include(ir => ir.Inspector)
-                .Include(ir => ir.Progress)
-                .Include(ir => ir.Plan)
+                .Include(ir => ir.ConstructionProgressItem)
+                .ThenInclude(cpi => cpi.ConstructionProgress)
+                .ThenInclude(cp => cp.Project)
                 .FirstOrDefaultAsync(ir => ir.Id == id && !ir.Deleted);
             
             if (report == null)
@@ -402,9 +421,11 @@ namespace Sep490_Backend.Services.InspectionReportService
                 throw new KeyNotFoundException(Message.InspectionReportMessage.NOT_FOUND);
             }
             
+            int projectId = report.ConstructionProgressItem.ConstructionProgress.ProjectId;
+            
             // Check if user has access to the project
             var hasAccess = await _context.ProjectUsers
-                .AnyAsync(pu => pu.ProjectId == report.ProjectId && pu.UserId == actionBy && !pu.Deleted);
+                .AnyAsync(pu => pu.ProjectId == projectId && pu.UserId == actionBy && !pu.Deleted);
                 
             if (!hasAccess && !_helperService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD))
             {
@@ -453,11 +474,11 @@ namespace Sep490_Backend.Services.InspectionReportService
             
             // Query reports for this project
             var reports = await _context.Set<InspectionReport>()
-                .Include(ir => ir.Project)
                 .Include(ir => ir.Inspector)
-                .Include(ir => ir.Progress)
-                .Include(ir => ir.Plan)
-                .Where(ir => ir.ProjectId == projectId && !ir.Deleted)
+                .Include(ir => ir.ConstructionProgressItem)
+                .ThenInclude(cpi => cpi.ConstructionProgress)
+                .ThenInclude(cp => cp.Project)
+                .Where(ir => ir.ConstructionProgressItem.ConstructionProgress.ProjectId == projectId && !ir.Deleted)
                 .OrderByDescending(ir => ir.CreatedAt)
                 .ToListAsync();
             
@@ -476,20 +497,20 @@ namespace Sep490_Backend.Services.InspectionReportService
 
         private async Task<InspectionReportDTO> MapToInspectionReportDTO(InspectionReport report)
         {
+            var project = await _context.Projects
+                .FirstOrDefaultAsync(p => p.Id == report.ConstructionProgressItem.ConstructionProgress.ProjectId && !p.Deleted);
+                
             var dto = new InspectionReportDTO
             {
                 Id = report.Id,
-                ProjectId = report.ProjectId,
-                ProjectName = report.Project?.ProjectName,
+                ConstructionProgressItemId = report.ConstructionProgressItemId,
+                ProgressItemName = report.ConstructionProgressItem?.WorkName,
+                ProjectName = project?.ProjectName,
                 InspectCode = report.InspectCode,
                 InspectorId = report.InspectorId,
                 InspectorName = report.Inspector?.FullName,
                 InspectStartDate = report.InspectStartDate,
                 InspectEndDate = report.InspectEndDate,
-                ProgressId = report.ProgressId,
-                ProgressName = "Construction Progress", // Use a generic name as there's no ProgressName property
-                PlanId = report.PlanId,
-                PlanName = report.Plan?.PlanName,
                 Location = report.Location,
                 InspectionDecision = (InspectionDecision)report.InspectionDecision,
                 Status = (InspectionReportStatus)report.Status,

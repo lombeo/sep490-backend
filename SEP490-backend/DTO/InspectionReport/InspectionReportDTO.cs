@@ -10,17 +10,14 @@ namespace Sep490_Backend.DTO.InspectionReport
     public class InspectionReportDTO
     {
         public int Id { get; set; }
-        public int ProjectId { get; set; }
+        public int ConstructionProgressItemId { get; set; }
+        public string? ProgressItemName { get; set; }
         public string? ProjectName { get; set; }
         public string? InspectCode { get; set; }
         public int InspectorId { get; set; }
         public string? InspectorName { get; set; }
         public DateTime InspectStartDate { get; set; }
         public DateTime InspectEndDate { get; set; }
-        public int ProgressId { get; set; }
-        public string? ProgressName { get; set; }
-        public int PlanId { get; set; }
-        public string? PlanName { get; set; }
         public string? Location { get; set; }
         public List<AttachmentInfo>? Attachment { get; set; }
         public InspectionDecision InspectionDecision { get; set; }
@@ -36,12 +33,10 @@ namespace Sep490_Backend.DTO.InspectionReport
     public class SaveInspectionReportDTO
     {
         public int Id { get; set; }
-        public int ProjectId { get; set; }
+        public int ConstructionProgressItemId { get; set; }
         public int InspectorId { get; set; }
         public DateTime InspectStartDate { get; set; }
         public DateTime InspectEndDate { get; set; }
-        public int ProgressId { get; set; }
-        public int PlanId { get; set; }
         public string? Location { get; set; }
         public List<IFormFile>? AttachmentFiles { get; set; }
         public InspectionDecision? InspectionDecision { get; set; }
@@ -54,6 +49,7 @@ namespace Sep490_Backend.DTO.InspectionReport
     {
         public int? ProjectId { get; set; }
         public int? InspectorId { get; set; }
+        public int? ConstructionProgressItemId { get; set; }
         public DateTime? StartDate { get; set; }
         public DateTime? EndDate { get; set; }
         public InspectionReportStatus? Status { get; set; }
