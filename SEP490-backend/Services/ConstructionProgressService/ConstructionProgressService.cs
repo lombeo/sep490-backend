@@ -18,6 +18,8 @@ namespace Sep490_Backend.Services.ConstructionProgressService
         Task<ConstructionProgressDTO> GetById(int id, int actionBy);
         Task<ConstructionProgressDTO> GetByProjectId(int projectId, int actionBy);
         Task<bool> Update(UpdateProgressItemsDTO model, int actionBy);
+        Task<ProgressItemDTO> CreateProgressItem(CreateProgressItemDTO model, int actionBy);
+        Task<ProgressItemDTO> UpdateProgressItem(UpdateProgressItemDTO model, int actionBy);
     }
 
     public class ConstructionProgressService : IConstructionProgressService
@@ -678,6 +680,431 @@ namespace Sep490_Backend.Services.ConstructionProgressService
             
             // Clear pattern-based caches
             await _cacheService.DeleteByPatternAsync(RedisCacheKey.CONSTRUCTION_PROGRESS_ALL_PATTERN);
+        }
+
+        public async Task<ProgressItemDTO> CreateProgressItem(CreateProgressItemDTO model, int actionBy)
+        {
+            // Begin transaction
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            
+            try
+            {
+                // Check if progress exists
+                var progress = await _context.ConstructionProgresses
+                    .FirstOrDefaultAsync(cp => cp.Id == model.ProgressId && !cp.Deleted);
+
+                if (progress == null)
+                {
+                    throw new KeyNotFoundException(Message.ConstructionProgressMessage.NOT_FOUND);
+                }
+
+                // Check authorization - user must be technical manager and be part of the project
+                bool isUserTechnicalManager = _helperService.IsInRole(actionBy, RoleConstValue.TECHNICAL_MANAGER);
+                bool isUserInProject = await _context.ProjectUsers
+                    .AnyAsync(pu => pu.ProjectId == progress.ProjectId && pu.UserId == actionBy && !pu.Deleted);
+
+                if (!isUserTechnicalManager || !isUserInProject)
+                {
+                    throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED_PROJECT);
+                }
+
+                // Validate dates
+                if (model.PlanEndDate < model.PlanStartDate)
+                {
+                    throw new ArgumentException(Message.ProjectMessage.INVALID_DATE);
+                }
+
+                // Check if index is unique within this progress
+                bool indexExists = await _context.ConstructionProgressItems
+                    .Where(pi => pi.ProgressId == model.ProgressId && pi.Index == model.Index && !pi.Deleted)
+                    .AnyAsync();
+
+                if (indexExists)
+                {
+                    throw new InvalidOperationException($"Item with index {model.Index} already exists in this progress");
+                }
+
+                // Create new progress item
+                var progressItem = new ConstructionProgressItem
+                {
+                    ProgressId = model.ProgressId,
+                    WorkCode = model.WorkCode,
+                    Index = model.Index,
+                    ParentIndex = model.ParentIndex,
+                    WorkName = model.WorkName,
+                    Unit = model.Unit,
+                    Quantity = model.Quantity,
+                    UnitPrice = model.UnitPrice,
+                    TotalPrice = model.TotalPrice,
+                    Progress = model.Progress,
+                    Status = model.Status,
+                    PlanStartDate = model.PlanStartDate,
+                    PlanEndDate = model.PlanEndDate,
+                    ActualStartDate = model.ActualStartDate,
+                    ActualEndDate = model.ActualEndDate,
+                    UsedQuantity = model.UsedQuantity,
+                    ItemRelations = model.ItemRelations,
+                    Creator = actionBy,
+                    Updater = actionBy,
+                    CreatedAt = DateTime.Now,
+                    UpdatedAt = DateTime.Now
+                };
+
+                await _context.ConstructionProgressItems.AddAsync(progressItem);
+                await _context.SaveChangesAsync();
+
+                // Add details if provided
+                if (model.Details != null && model.Details.Any())
+                {
+                    var detailsList = new List<ConstructionProgressItemDetail>();
+                    
+                    foreach (var detail in model.Details)
+                    {
+                        var newDetail = new ConstructionProgressItemDetail
+                        {
+                            ProgressItemId = progressItem.Id,
+                            WorkCode = detail.WorkCode,
+                            ResourceType = detail.ResourceType,
+                            Quantity = detail.Quantity,
+                            UsedQuantity = detail.UsedQuantity,
+                            Unit = detail.Unit,
+                            UnitPrice = detail.UnitPrice,
+                            Total = detail.Total,
+                            ResourceId = detail.ResourceId,
+                            Creator = actionBy,
+                            Updater = actionBy,
+                            CreatedAt = DateTime.Now,
+                            UpdatedAt = DateTime.Now
+                        };
+                        
+                        detailsList.Add(newDetail);
+                    }
+                    
+                    await _context.ConstructionProgressItemDetails.AddRangeAsync(detailsList);
+                    await _context.SaveChangesAsync();
+                }
+
+                // Commit transaction
+                await transaction.CommitAsync();
+
+                // Clear cache
+                await InvalidateProgressCache(progress.Id, progress.ProjectId, progress.PlanId);
+
+                // Return the created item as DTO
+                var itemDto = new ProgressItemDTO
+                {
+                    Id = progressItem.Id,
+                    WorkCode = progressItem.WorkCode,
+                    Index = progressItem.Index,
+                    ParentIndex = progressItem.ParentIndex,
+                    WorkName = progressItem.WorkName,
+                    Unit = progressItem.Unit,
+                    Quantity = progressItem.Quantity,
+                    UnitPrice = progressItem.UnitPrice,
+                    TotalPrice = progressItem.TotalPrice,
+                    Progress = progressItem.Progress,
+                    Status = (int)progressItem.Status,
+                    PlanStartDate = progressItem.PlanStartDate,
+                    PlanEndDate = progressItem.PlanEndDate,
+                    ActualStartDate = progressItem.ActualStartDate,
+                    ActualEndDate = progressItem.ActualEndDate,
+                    UsedQuantity = progressItem.UsedQuantity,
+                    ItemRelations = progressItem.ItemRelations
+                };
+
+                // Add details to DTO if any
+                if (model.Details != null && model.Details.Any())
+                {
+                    var details = await _context.ConstructionProgressItemDetails
+                        .Where(d => d.ProgressItemId == progressItem.Id && !d.Deleted)
+                        .ToListAsync();
+                    
+                    foreach (var detail in details)
+                    {
+                        var detailDto = new ProgressItemDetailDTO
+                        {
+                            Id = detail.Id,
+                            ProgressItemId = detail.ProgressItemId,
+                            WorkCode = detail.WorkCode,
+                            ResourceType = (int)detail.ResourceType,
+                            Quantity = detail.Quantity,
+                            UsedQuantity = detail.UsedQuantity,
+                            Unit = detail.Unit ?? string.Empty,
+                            UnitPrice = detail.UnitPrice,
+                            Total = detail.Total,
+                            ResourceId = detail.ResourceId
+                        };
+
+                        if (detail.ResourceId.HasValue)
+                        {
+                            detailDto.Resource = await GetResourceDTO(detail.ResourceType, detail.ResourceId.Value);
+                        }
+
+                        itemDto.Details.Add(detailDto);
+                    }
+                }
+
+                return itemDto;
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Error creating construction progress item: {message}", ex.Message);
+                throw;
+            }
+        }
+
+        public async Task<ProgressItemDTO> UpdateProgressItem(UpdateProgressItemDTO model, int actionBy)
+        {
+            // Begin transaction
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            
+            try
+            {
+                // Find the progress item
+                var progressItem = await _context.ConstructionProgressItems
+                    .Include(pi => pi.ConstructionProgress)
+                    .FirstOrDefaultAsync(pi => pi.Id == model.Id && !pi.Deleted);
+
+                if (progressItem == null)
+                {
+                    throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
+                }
+
+                // Check authorization - user must be technical manager and be part of the project
+                bool isUserTechnicalManager = _helperService.IsInRole(actionBy, RoleConstValue.TECHNICAL_MANAGER);
+                bool isUserInProject = await _context.ProjectUsers
+                    .AnyAsync(pu => pu.ProjectId == progressItem.ConstructionProgress.ProjectId && pu.UserId == actionBy && !pu.Deleted);
+
+                if (!isUserTechnicalManager || !isUserInProject)
+                {
+                    throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED_PROJECT);
+                }
+
+                // Validate dates if provided
+                if (model.PlanStartDate.HasValue && model.PlanEndDate.HasValue && model.PlanEndDate.Value < model.PlanStartDate.Value)
+                {
+                    throw new ArgumentException(Message.ProjectMessage.INVALID_DATE);
+                }
+
+                // Check if index is unique if changed
+                if (!string.IsNullOrEmpty(model.Index) && model.Index != progressItem.Index)
+                {
+                    bool indexExists = await _context.ConstructionProgressItems
+                        .Where(pi => pi.ProgressId == progressItem.ProgressId && pi.Index == model.Index && pi.Id != model.Id && !pi.Deleted)
+                        .AnyAsync();
+
+                    if (indexExists)
+                    {
+                        throw new InvalidOperationException($"Item with index {model.Index} already exists in this progress");
+                    }
+                }
+
+                // Update progress item properties if provided
+                if (!string.IsNullOrEmpty(model.WorkCode))
+                    progressItem.WorkCode = model.WorkCode;
+                
+                if (!string.IsNullOrEmpty(model.Index))
+                    progressItem.Index = model.Index;
+                
+                if (model.ParentIndex != null) // can be set to null
+                    progressItem.ParentIndex = model.ParentIndex;
+                
+                if (!string.IsNullOrEmpty(model.WorkName))
+                    progressItem.WorkName = model.WorkName;
+                
+                if (!string.IsNullOrEmpty(model.Unit))
+                    progressItem.Unit = model.Unit;
+                
+                if (model.Quantity.HasValue)
+                    progressItem.Quantity = model.Quantity.Value;
+                
+                if (model.UnitPrice.HasValue)
+                    progressItem.UnitPrice = model.UnitPrice.Value;
+                
+                if (model.TotalPrice.HasValue)
+                    progressItem.TotalPrice = model.TotalPrice.Value;
+                
+                if (model.Progress.HasValue)
+                {
+                    if (model.Progress.Value < 0 || model.Progress.Value > 100)
+                    {
+                        throw new ArgumentException(Message.ConstructionProgressMessage.INVALID_PROGRESS);
+                    }
+                    progressItem.Progress = model.Progress.Value;
+                }
+                
+                if (model.Status.HasValue)
+                {
+                    if (!Enum.IsDefined(typeof(ProgressStatusEnum), model.Status.Value))
+                    {
+                        throw new ArgumentException(Message.ConstructionProgressMessage.INVALID_STATUS);
+                    }
+                    progressItem.Status = model.Status.Value;
+                }
+                
+                if (model.PlanStartDate.HasValue)
+                    progressItem.PlanStartDate = model.PlanStartDate.Value;
+                
+                if (model.PlanEndDate.HasValue)
+                    progressItem.PlanEndDate = model.PlanEndDate.Value;
+                
+                progressItem.ActualStartDate = model.ActualStartDate ?? progressItem.ActualStartDate;
+                progressItem.ActualEndDate = model.ActualEndDate ?? progressItem.ActualEndDate;
+                
+                if (model.UsedQuantity.HasValue)
+                    progressItem.UsedQuantity = model.UsedQuantity.Value;
+                
+                if (model.ItemRelations != null)
+                    progressItem.ItemRelations = model.ItemRelations;
+
+                // Update audit fields
+                progressItem.Updater = actionBy;
+                progressItem.UpdatedAt = DateTime.Now;
+
+                _context.ConstructionProgressItems.Update(progressItem);
+                await _context.SaveChangesAsync();
+
+                // Update or add details if provided
+                if (model.Details != null && model.Details.Any())
+                {
+                    foreach (var detailDto in model.Details)
+                    {
+                        if (detailDto.Id.HasValue && detailDto.Id.Value > 0)
+                        {
+                            // Update existing detail
+                            var detail = await _context.ConstructionProgressItemDetails
+                                .FirstOrDefaultAsync(d => d.Id == detailDto.Id.Value && d.ProgressItemId == progressItem.Id && !d.Deleted);
+                            
+                            if (detail != null)
+                            {
+                                if (!string.IsNullOrEmpty(detailDto.WorkCode))
+                                    detail.WorkCode = detailDto.WorkCode;
+                                
+                                if (detailDto.ResourceType.HasValue)
+                                    detail.ResourceType = detailDto.ResourceType.Value;
+                                
+                                if (detailDto.Quantity.HasValue)
+                                    detail.Quantity = detailDto.Quantity.Value;
+                                
+                                if (detailDto.UsedQuantity.HasValue)
+                                    detail.UsedQuantity = detailDto.UsedQuantity.Value;
+                                
+                                if (detailDto.Unit != null)
+                                    detail.Unit = detailDto.Unit;
+                                
+                                if (detailDto.UnitPrice.HasValue)
+                                    detail.UnitPrice = detailDto.UnitPrice.Value;
+                                
+                                if (detailDto.Total.HasValue)
+                                    detail.Total = detailDto.Total.Value;
+                                
+                                if (detailDto.ResourceId.HasValue)
+                                    detail.ResourceId = detailDto.ResourceId.Value;
+                                
+                                detail.Updater = actionBy;
+                                detail.UpdatedAt = DateTime.Now;
+                                
+                                _context.ConstructionProgressItemDetails.Update(detail);
+                            }
+                        }
+                        else
+                        {
+                            // Add new detail
+                            if (string.IsNullOrEmpty(detailDto.WorkCode) || !detailDto.ResourceType.HasValue || !detailDto.Quantity.HasValue)
+                            {
+                                continue; // Skip invalid details
+                            }
+                            
+                            var newDetail = new ConstructionProgressItemDetail
+                            {
+                                ProgressItemId = progressItem.Id,
+                                WorkCode = detailDto.WorkCode,
+                                ResourceType = detailDto.ResourceType.Value,
+                                Quantity = detailDto.Quantity.Value,
+                                UsedQuantity = detailDto.UsedQuantity ?? 0,
+                                Unit = detailDto.Unit,
+                                UnitPrice = detailDto.UnitPrice ?? 0,
+                                Total = detailDto.Total ?? 0,
+                                ResourceId = detailDto.ResourceId,
+                                Creator = actionBy,
+                                Updater = actionBy,
+                                CreatedAt = DateTime.Now,
+                                UpdatedAt = DateTime.Now
+                            };
+                            
+                            await _context.ConstructionProgressItemDetails.AddAsync(newDetail);
+                        }
+                    }
+                    
+                    await _context.SaveChangesAsync();
+                }
+
+                // Commit transaction
+                await transaction.CommitAsync();
+
+                // Clear cache
+                await InvalidateProgressCache(progressItem.ConstructionProgress.Id, progressItem.ConstructionProgress.ProjectId, progressItem.ConstructionProgress.PlanId);
+
+                // Return updated item as DTO
+                var updatedProgressItem = await _context.ConstructionProgressItems
+                    .Include(pi => pi.Details)
+                    .FirstOrDefaultAsync(pi => pi.Id == model.Id && !pi.Deleted);
+
+                var itemDto = new ProgressItemDTO
+                {
+                    Id = updatedProgressItem.Id,
+                    WorkCode = updatedProgressItem.WorkCode,
+                    Index = updatedProgressItem.Index,
+                    ParentIndex = updatedProgressItem.ParentIndex,
+                    WorkName = updatedProgressItem.WorkName,
+                    Unit = updatedProgressItem.Unit,
+                    Quantity = updatedProgressItem.Quantity,
+                    UnitPrice = updatedProgressItem.UnitPrice,
+                    TotalPrice = updatedProgressItem.TotalPrice,
+                    Progress = updatedProgressItem.Progress,
+                    Status = (int)updatedProgressItem.Status,
+                    PlanStartDate = updatedProgressItem.PlanStartDate,
+                    PlanEndDate = updatedProgressItem.PlanEndDate,
+                    ActualStartDate = updatedProgressItem.ActualStartDate,
+                    ActualEndDate = updatedProgressItem.ActualEndDate,
+                    UsedQuantity = updatedProgressItem.UsedQuantity,
+                    ItemRelations = updatedProgressItem.ItemRelations
+                };
+
+                // Add details to DTO
+                foreach (var detail in updatedProgressItem.Details.Where(d => !d.Deleted))
+                {
+                    var detailDto = new ProgressItemDetailDTO
+                    {
+                        Id = detail.Id,
+                        ProgressItemId = detail.ProgressItemId,
+                        WorkCode = detail.WorkCode,
+                        ResourceType = (int)detail.ResourceType,
+                        Quantity = detail.Quantity,
+                        UsedQuantity = detail.UsedQuantity,
+                        Unit = detail.Unit ?? string.Empty,
+                        UnitPrice = detail.UnitPrice,
+                        Total = detail.Total,
+                        ResourceId = detail.ResourceId
+                    };
+
+                    if (detail.ResourceId.HasValue)
+                    {
+                        detailDto.Resource = await GetResourceDTO(detail.ResourceType, detail.ResourceId.Value);
+                    }
+
+                    itemDto.Details.Add(detailDto);
+                }
+
+                return itemDto;
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Error updating construction progress item: {message}", ex.Message);
+                throw;
+            }
         }
     }
 } 

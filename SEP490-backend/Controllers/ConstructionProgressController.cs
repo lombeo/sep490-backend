@@ -76,5 +76,35 @@ namespace Sep490_Backend.Controllers
             _logger.LogInformation("Updating progress for {count} items in progress ID: {progressId}", model.Items.Count, model.ProgressId);
             return await HandleException(_constructionProgressService.Update(model, UserId), Message.ConstructionProgressMessage.UPDATE_SUCCESS);
         }
+
+        /// <summary>
+        /// Create a new construction progress item
+        /// </summary>
+        /// <param name="model">The construction progress item to create</param>
+        /// <returns>The created progress item</returns>
+        /// <remarks>
+        /// Only Technical Managers who are part of the project can create progress items.
+        /// </remarks>
+        [HttpPost("items/create")]
+        public async Task<ResponseDTO<ProgressItemDTO>> CreateProgressItem([FromBody] CreateProgressItemDTO model)
+        {
+            _logger.LogInformation("Creating new progress item for progress ID: {progressId}", model.ProgressId);
+            return await HandleException(_constructionProgressService.CreateProgressItem(model, UserId), Message.ConstructionProgressMessage.CREATE_SUCCESS);
+        }
+
+        /// <summary>
+        /// Update an existing construction progress item
+        /// </summary>
+        /// <param name="model">The updated construction progress item</param>
+        /// <returns>The updated progress item</returns>
+        /// <remarks>
+        /// Only Technical Managers who are part of the project can update progress items.
+        /// </remarks>
+        [HttpPut("items/update")]
+        public async Task<ResponseDTO<ProgressItemDTO>> UpdateProgressItem([FromBody] UpdateProgressItemDTO model)
+        {
+            _logger.LogInformation("Updating progress item with ID: {id}", model.Id);
+            return await HandleException(_constructionProgressService.UpdateProgressItem(model, UserId), Message.ConstructionProgressMessage.UPDATE_SUCCESS);
+        }
     }
 } 
