@@ -15,7 +15,6 @@ namespace Sep490_Backend.Infra.Entities
         public string VehicleName { get; set; }
         public string ChassisNumber { get; set; }
         public string EngineNumber { get; set; }
-        public JsonDocument Image { get; set; }
         public VehicleStatus Status { get; set; }
         public int Driver { get; set; }
         public string Color { get; set; }
@@ -23,7 +22,6 @@ namespace Sep490_Backend.Infra.Entities
         public string Description { get; set; }
         public int FuelTankVolume { get; set; }
         public string FuelUnit { get; set; }
-        public JsonDocument Attachment { get; set; }
         
         // Navigation property
         public virtual User User { get; set; }
@@ -68,10 +66,6 @@ namespace Sep490_Backend.Infra.Entities
                       .IsRequired()
                       .HasColumnType("text");
 
-                entity.Property(e => e.Image)
-                      .IsRequired()
-                      .HasColumnType("jsonb");
-
                 entity.Property(e => e.Status)
                       .IsRequired()
                       .HasDefaultValue(VehicleStatus.Unavailable);
@@ -91,11 +85,6 @@ namespace Sep490_Backend.Infra.Entities
                 entity.Property(e => e.FuelUnit)
                       .IsRequired()
                       .HasColumnType("text");
-
-                entity.Property(e => e.Attachment)
-                      .IsRequired()
-                      .HasColumnType("jsonb");
-
 
                 entity.Property(e => e.CreatedAt)
                       .HasColumnType("timestamp without time zone");

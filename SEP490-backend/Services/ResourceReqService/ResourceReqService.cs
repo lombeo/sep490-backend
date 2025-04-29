@@ -1402,7 +1402,6 @@ namespace Sep490_Backend.Services.ResourceReqService
                                         CountryOfManufacture = "Unknown",
                                         ChassisNumber = "N/A",
                                         EngineNumber = "N/A",
-                                        Image = JsonDocument.Parse("[]"),
                                         Status = VehicleStatus.Available,
                                         Driver = 0, // No driver assigned yet
                                         Color = "Unknown",
@@ -1410,7 +1409,6 @@ namespace Sep490_Backend.Services.ResourceReqService
                                         Description = detail.Description,
                                         FuelTankVolume = 0,
                                         FuelUnit = "L",
-                                        Attachment = JsonDocument.Parse("[]"),
                                         Creator = actionBy,
                                         Updater = actionBy,
                                         CreatedAt = DateTime.UtcNow,

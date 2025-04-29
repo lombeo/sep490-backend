@@ -43,7 +43,7 @@ namespace Sep490_Backend.Controllers
 
         [HttpPost("create")]
         [ResponseCache(NoStore = true)]
-        public async Task<ResponseDTO<Vehicle>> Create([FromForm] VehicleCreateDTO model)
+        public async Task<ResponseDTO<Vehicle>> Create([FromBody] VehicleCreateDTO model)
         {
             var result = await HandleException(_vehicleService.CreateVehicle(model, UserId), Message.VehicleMessage.CREATE_SUCCESS);
             return result;
@@ -51,7 +51,7 @@ namespace Sep490_Backend.Controllers
 
         [HttpPut("update")]
         [ResponseCache(NoStore = true)]
-        public async Task<ResponseDTO<Vehicle>> Update([FromForm] VehicleUpdateDTO model)
+        public async Task<ResponseDTO<Vehicle>> Update([FromBody] VehicleUpdateDTO model)
         {
             var result = await HandleException(_vehicleService.UpdateVehicle(model, UserId), Message.VehicleMessage.UPDATE_SUCCESS);
             return result;

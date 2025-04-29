@@ -152,94 +152,6 @@ namespace Sep490_Backend.Services.VehicleService
                 throw new ArgumentException(Message.CommonMessage.NOT_FOUND);
             }
 
-            // Process image upload
-            var imageInfos = new List<AttachmentInfo>();
-            if (vehicleDto.ImageFile != null)
-            {
-                // Validate image file type
-                if (!_googleDriveService.IsValidImageFile(vehicleDto.ImageFile.FileName, vehicleDto.ImageFile.ContentType))
-                {
-                    throw new ArgumentException($"Invalid image file type: {vehicleDto.ImageFile.FileName}. Only JPEG, PNG, GIF, BMP, WebP and TIFF are allowed.");
-                }
-                
-                using (var stream = vehicleDto.ImageFile.OpenReadStream())
-                {
-                    var uploadResult = await _googleDriveService.UploadFile(
-                        stream,
-                        vehicleDto.ImageFile.FileName,
-                        vehicleDto.ImageFile.ContentType
-                    );
-
-                    // Parse Google Drive response to get file ID
-                    var fileId = uploadResult.Split("id=").Last().Split("&").First();
-                    
-                    imageInfos.Add(new AttachmentInfo
-                    {
-                        Id = fileId,
-                        Name = vehicleDto.ImageFile.FileName,
-                        WebViewLink = $"https://drive.google.com/file/d/{fileId}/view",
-                        WebContentLink = uploadResult,
-                        MimeType = vehicleDto.ImageFile.ContentType
-                    });
-                }
-            }
-
-            // Process attachments
-            var attachmentInfos = new List<AttachmentInfo>();
-            
-            // Single attachment file
-            if (vehicleDto.AttachmentFile != null)
-            {
-                using (var stream = vehicleDto.AttachmentFile.OpenReadStream())
-                {
-                    var uploadResult = await _googleDriveService.UploadFile(
-                        stream,
-                        vehicleDto.AttachmentFile.FileName,
-                        vehicleDto.AttachmentFile.ContentType
-                    );
-
-                    // Parse Google Drive response to get file ID
-                    var fileId = uploadResult.Split("id=").Last().Split("&").First();
-                    
-                    attachmentInfos.Add(new AttachmentInfo
-                    {
-                        Id = fileId,
-                        Name = vehicleDto.AttachmentFile.FileName,
-                        WebViewLink = $"https://drive.google.com/file/d/{fileId}/view",
-                        WebContentLink = uploadResult,
-                        MimeType = vehicleDto.AttachmentFile.ContentType
-                    });
-                }
-            }
-            
-            // Multiple attachment files
-            if (vehicleDto.AttachmentFiles != null && vehicleDto.AttachmentFiles.Any())
-            {
-                foreach (var file in vehicleDto.AttachmentFiles)
-                {
-                    using (var stream = file.OpenReadStream())
-                    {
-                        var uploadResult = await _googleDriveService.UploadFile(
-                            stream,
-                            file.FileName,
-                            file.ContentType
-                        );
-
-                        // Parse Google Drive response to get file ID
-                        var fileId = uploadResult.Split("id=").Last().Split("&").First();
-                        
-                        attachmentInfos.Add(new AttachmentInfo
-                        {
-                            Id = fileId,
-                            Name = file.FileName,
-                            WebViewLink = $"https://drive.google.com/file/d/{fileId}/view",
-                            WebContentLink = uploadResult,
-                            MimeType = file.ContentType
-                        });
-                    }
-                }
-            }
-
             var vehicle = new Vehicle
             {
                 LicensePlate = vehicleDto.LicensePlate,
@@ -250,9 +162,6 @@ namespace Sep490_Backend.Services.VehicleService
                 VehicleName = vehicleDto.VehicleName,
                 ChassisNumber = vehicleDto.ChassisNumber,
                 EngineNumber = vehicleDto.EngineNumber,
-                Image = imageInfos.Any() 
-                    ? JsonDocument.Parse(JsonSerializer.Serialize(imageInfos, DefaultSerializerOptions))
-                    : JsonDocument.Parse(JsonSerializer.Serialize(new List<AttachmentInfo>(), DefaultSerializerOptions)),
                 Status = vehicleDto.Status,
                 Driver = vehicleDto.Driver,
                 Color = vehicleDto.Color,
@@ -260,9 +169,6 @@ namespace Sep490_Backend.Services.VehicleService
                 Description = vehicleDto.Description,
                 FuelTankVolume = vehicleDto.FuelTankVolume,
                 FuelUnit = vehicleDto.FuelUnit,
-                Attachment = attachmentInfos.Any() 
-                    ? JsonDocument.Parse(JsonSerializer.Serialize(attachmentInfos, DefaultSerializerOptions))
-                    : JsonDocument.Parse(JsonSerializer.Serialize(new List<AttachmentInfo>(), DefaultSerializerOptions)),
                 Creator = userId,
                 Updater = userId
             };
@@ -308,172 +214,6 @@ namespace Sep490_Backend.Services.VehicleService
                 throw new ArgumentException(Message.CommonMessage.NOT_FOUND);
             }
 
-            // Process image update
-            var imageInfos = new List<AttachmentInfo>();
-            
-            // Get existing images
-            if (vehicle.Image != null)
-            {
-                imageInfos = JsonSerializer.Deserialize<List<AttachmentInfo>>(vehicle.Image.RootElement.ToString(), DefaultSerializerOptions) ?? new List<AttachmentInfo>();
-                
-                // Delete old images if there are new ones
-                if (vehicleDto.ImageFile != null)
-                {
-                    try
-                    {
-                        var linksToDelete = imageInfos.Select(a => a.WebContentLink).ToList();
-                        await _googleDriveService.DeleteFilesByLinks(linksToDelete);
-                        imageInfos.Clear();
-                    }
-                    catch (Exception ex)
-                    {
-                        // Log error but continue with upload
-                        Console.WriteLine($"Failed to delete old images: {ex.Message}");
-                    }
-                }
-            }
-            
-            // Upload new image if provided
-            if (vehicleDto.ImageFile != null)
-            {
-                // Validate image file type
-                if (!_googleDriveService.IsValidImageFile(vehicleDto.ImageFile.FileName, vehicleDto.ImageFile.ContentType))
-                {
-                    throw new ArgumentException($"Invalid image file type: {vehicleDto.ImageFile.FileName}. Only JPEG, PNG, GIF, BMP, WebP and TIFF are allowed.");
-                }
-                
-                using (var stream = vehicleDto.ImageFile.OpenReadStream())
-                {
-                    var uploadResult = await _googleDriveService.UploadFile(
-                        stream,
-                        vehicleDto.ImageFile.FileName,
-                        vehicleDto.ImageFile.ContentType
-                    );
-
-                    // Parse Google Drive response to get file ID
-                    var fileId = uploadResult.Split("id=").Last().Split("&").First();
-                    
-                    imageInfos.Add(new AttachmentInfo
-                    {
-                        Id = fileId,
-                        Name = vehicleDto.ImageFile.FileName,
-                        WebViewLink = $"https://drive.google.com/file/d/{fileId}/view",
-                        WebContentLink = uploadResult,
-                        MimeType = vehicleDto.ImageFile.ContentType
-                    });
-                }
-            }
-            // If no new image but has existing images passed
-            else if (vehicleDto.ExistingImages != null && vehicleDto.ExistingImages.Any())
-            {
-                // Clear existing and use the provided ones
-                imageInfos.Clear();
-                vehicleDto.ExistingImages.ForEach(url => 
-                {
-                    imageInfos.Add(new AttachmentInfo
-                    {
-                        Id = Guid.NewGuid().ToString(),
-                        Name = "Existing Image",
-                        WebViewLink = url,
-                        WebContentLink = url
-                    });
-                });
-            }
-
-            // Process attachments update
-            var attachmentInfos = new List<AttachmentInfo>();
-            
-            // Get existing attachments
-            if (vehicle.Attachment != null)
-            {
-                attachmentInfos = JsonSerializer.Deserialize<List<AttachmentInfo>>(vehicle.Attachment.RootElement.ToString(), DefaultSerializerOptions) ?? new List<AttachmentInfo>();
-                
-                // Delete old attachments if there are new ones
-                if (vehicleDto.AttachmentFile != null || (vehicleDto.AttachmentFiles != null && vehicleDto.AttachmentFiles.Any()))
-                {
-                    try
-                    {
-                        var linksToDelete = attachmentInfos.Select(a => a.WebContentLink).ToList();
-                        await _googleDriveService.DeleteFilesByLinks(linksToDelete);
-                        attachmentInfos.Clear();
-                    }
-                    catch (Exception ex)
-                    {
-                        // Log error but continue with upload
-                        Console.WriteLine($"Failed to delete old attachments: {ex.Message}");
-                    }
-                }
-            }
-            
-            // Single attachment file
-            if (vehicleDto.AttachmentFile != null)
-            {
-                using (var stream = vehicleDto.AttachmentFile.OpenReadStream())
-                {
-                    var uploadResult = await _googleDriveService.UploadFile(
-                        stream,
-                        vehicleDto.AttachmentFile.FileName,
-                        vehicleDto.AttachmentFile.ContentType
-                    );
-
-                    // Parse Google Drive response to get file ID
-                    var fileId = uploadResult.Split("id=").Last().Split("&").First();
-                    
-                    attachmentInfos.Add(new AttachmentInfo
-                    {
-                        Id = fileId,
-                        Name = vehicleDto.AttachmentFile.FileName,
-                        WebViewLink = $"https://drive.google.com/file/d/{fileId}/view",
-                        WebContentLink = uploadResult,
-                        MimeType = vehicleDto.AttachmentFile.ContentType
-                    });
-                }
-            }
-            
-            // Multiple attachment files
-            if (vehicleDto.AttachmentFiles != null && vehicleDto.AttachmentFiles.Any())
-            {
-                foreach (var file in vehicleDto.AttachmentFiles)
-                {
-                    using (var stream = file.OpenReadStream())
-                    {
-                        var uploadResult = await _googleDriveService.UploadFile(
-                            stream,
-                            file.FileName,
-                            file.ContentType
-                        );
-
-                        // Parse Google Drive response to get file ID
-                        var fileId = uploadResult.Split("id=").Last().Split("&").First();
-                        
-                        attachmentInfos.Add(new AttachmentInfo
-                        {
-                            Id = fileId,
-                            Name = file.FileName,
-                            WebViewLink = $"https://drive.google.com/file/d/{fileId}/view",
-                            WebContentLink = uploadResult,
-                            MimeType = file.ContentType
-                        });
-                    }
-                }
-            }
-            // If no new attachments but has existing attachments passed
-            else if (vehicleDto.ExistingAttachments != null && vehicleDto.ExistingAttachments.Any())
-            {
-                // Clear existing and use the provided ones
-                attachmentInfos.Clear();
-                vehicleDto.ExistingAttachments.ForEach(url => 
-                {
-                    attachmentInfos.Add(new AttachmentInfo
-                    {
-                        Id = Guid.NewGuid().ToString(),
-                        Name = "Existing Attachment",
-                        WebViewLink = url,
-                        WebContentLink = url
-                    });
-                });
-            }
-
             vehicle.LicensePlate = vehicleDto.LicensePlate;
             vehicle.Brand = vehicleDto.Brand;
             vehicle.YearOfManufacture = vehicleDto.YearOfManufacture;
@@ -482,9 +222,6 @@ namespace Sep490_Backend.Services.VehicleService
             vehicle.VehicleName = vehicleDto.VehicleName;
             vehicle.ChassisNumber = vehicleDto.ChassisNumber;
             vehicle.EngineNumber = vehicleDto.EngineNumber;
-            vehicle.Image = imageInfos.Any() 
-                ? JsonDocument.Parse(JsonSerializer.Serialize(imageInfos, DefaultSerializerOptions))
-                : vehicle.Image;
             vehicle.Status = vehicleDto.Status;
             vehicle.Driver = vehicleDto.Driver;
             vehicle.Color = vehicleDto.Color;
@@ -492,9 +229,6 @@ namespace Sep490_Backend.Services.VehicleService
             vehicle.Description = vehicleDto.Description;
             vehicle.FuelTankVolume = vehicleDto.FuelTankVolume;
             vehicle.FuelUnit = vehicleDto.FuelUnit;
-            vehicle.Attachment = attachmentInfos.Any() 
-                ? JsonDocument.Parse(JsonSerializer.Serialize(attachmentInfos, DefaultSerializerOptions))
-                : vehicle.Attachment;
             vehicle.Updater = userId;
 
             _context.Vehicles.Update(vehicle);
@@ -519,43 +253,6 @@ namespace Sep490_Backend.Services.VehicleService
             if (vehicle == null)
             {
                 throw new KeyNotFoundException(Message.VehicleMessage.NOT_FOUND);
-            }
-
-            // Delete files from Google Drive
-            if (vehicle.Image != null)
-            {
-                try
-                {
-                    var images = JsonSerializer.Deserialize<List<AttachmentInfo>>(vehicle.Image.RootElement.ToString(), DefaultSerializerOptions);
-                    if (images != null && images.Any())
-                    {
-                        var linksToDelete = images.Select(a => a.WebContentLink).ToList();
-                        await _googleDriveService.DeleteFilesByLinks(linksToDelete);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    // Log error but continue with deletion
-                    Console.WriteLine($"Failed to delete images from Google Drive: {ex.Message}");
-                }
-            }
-            
-            if (vehicle.Attachment != null)
-            {
-                try
-                {
-                    var attachments = JsonSerializer.Deserialize<List<AttachmentInfo>>(vehicle.Attachment.RootElement.ToString(), DefaultSerializerOptions);
-                    if (attachments != null && attachments.Any())
-                    {
-                        var linksToDelete = attachments.Select(a => a.WebContentLink).ToList();
-                        await _googleDriveService.DeleteFilesByLinks(linksToDelete);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    // Log error but continue with deletion
-                    Console.WriteLine($"Failed to delete attachments from Google Drive: {ex.Message}");
-                }
             }
 
             vehicle.Deleted = true;
