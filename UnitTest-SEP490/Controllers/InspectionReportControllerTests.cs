@@ -59,7 +59,7 @@ namespace UnitTest_SEP490.Controllers
                 new InspectionReportDTO
                 {
                     Id = 1,
-                    ProjectId = 1,
+                    ConstructionProgressItemId = 1,
                     ProjectName = "Test Project 1",
                     InspectCode = "IR001",
                     InspectorId = 1,
@@ -68,7 +68,7 @@ namespace UnitTest_SEP490.Controllers
                 new InspectionReportDTO
                 {
                     Id = 2,
-                    ProjectId = 1,
+                    ConstructionProgressItemId = 2,
                     ProjectName = "Test Project 1",
                     InspectCode = "IR002",
                     InspectorId = 2,
@@ -145,7 +145,7 @@ namespace UnitTest_SEP490.Controllers
             var report = new InspectionReportDTO
             {
                 Id = 1,
-                ProjectId = 1,
+                ConstructionProgressItemId = 1,
                 ProjectName = "Test Project",
                 InspectCode = "IR001",
                 InspectorId = 1,
@@ -227,7 +227,7 @@ namespace UnitTest_SEP490.Controllers
                 new InspectionReportDTO
                 {
                     Id = 1,
-                    ProjectId = 1,
+                    ConstructionProgressItemId = 1,
                     ProjectName = "Test Project",
                     InspectCode = "IR001",
                     Status = InspectionReportStatus.Draft
@@ -235,7 +235,7 @@ namespace UnitTest_SEP490.Controllers
                 new InspectionReportDTO
                 {
                     Id = 2,
-                    ProjectId = 1,
+                    ConstructionProgressItemId = 2,
                     ProjectName = "Test Project",
                     InspectCode = "IR002",
                     Status = InspectionReportStatus.Submitted
@@ -255,7 +255,7 @@ namespace UnitTest_SEP490.Controllers
             result.Message.Should().Be(Message.InspectionReportMessage.GET_BY_PROJECT_SUCCESS);
             result.Data.Should().NotBeNull();
             result.Data.Should().HaveCount(2);
-            result.Data.All(r => r.ProjectId == projectId).Should().BeTrue();
+            result.Data.All(r => r.ProjectName == "Test Project").Should().BeTrue();
             
             // Verify that correct userId was passed
             _mockInspectionReportService.Verify(s => s.GetByProject(projectId, 1), Times.Once);
