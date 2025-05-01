@@ -2502,6 +2502,7 @@ namespace Sep490_Backend.Services.ResourceReqService
                     var newTaskDetail = new ConstructionProgressItemDetail
                     {
                         ProgressItemId = request.ToTaskId.Value,
+                        WorkCode = $"{progressItem.WorkCode}-{detail.ResourceType}-{detail.ResourceId}", // Generate a WorkCode from task and resource
                         ResourceType = detail.ResourceType,
                         ResourceId = detail.ResourceId,
                         Quantity = detail.Quantity,
@@ -2672,6 +2673,7 @@ namespace Sep490_Backend.Services.ResourceReqService
                     var newDetail = new ConstructionProgressItemDetail
                     {
                         ProgressItemId = request.ToTaskId.Value,
+                        WorkCode = sourceDetail.WorkCode, // Added the WorkCode from source detail
                         ResourceType = detail.ResourceType,
                         ResourceId = detail.ResourceId,
                         Quantity = detail.Quantity,
