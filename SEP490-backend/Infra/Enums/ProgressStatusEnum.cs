@@ -1,5 +1,3 @@
-using System;
-
 namespace Sep490_Backend.Infra.Enums
 {
     public enum ProgressStatusEnum

@@ -253,6 +253,11 @@ namespace Sep490_Backend.Services.InspectionReportService
             // Invalidate caches
             await InvalidateInspectionReportCaches(inspectionReport.Id, projectId);
             
+            // Invalidate construction progress caches
+            var progressId = progressItem.ConstructionProgress.Id;
+            var planId = progressItem.ConstructionProgress.PlanId;
+            await InvalidateProgressCache(progressId, projectId, planId);
+            
             // Return the updated data with additional details
             return await MapToInspectionReportDTO(inspectionReport);
         }
@@ -289,6 +294,7 @@ namespace Sep490_Backend.Services.InspectionReportService
                 (InspectionDecision)report.InspectionDecision == InspectionDecision.Pass)
             {
                 var progressItem = await _context.ConstructionProgressItems
+                    .Include(pi => pi.ConstructionProgress)
                     .FirstOrDefaultAsync(pi => pi.Id == report.ConstructionProgressItemId && !pi.Deleted);
                 
                 if (progressItem != null)
@@ -307,6 +313,15 @@ namespace Sep490_Backend.Services.InspectionReportService
             // Invalidate cache
             int projectId = report.ConstructionProgressItem.ConstructionProgress.ProjectId;
             await InvalidateInspectionReportCaches(report.Id, projectId);
+            
+            // Invalidate construction progress caches if we updated a progress item
+            if (status == InspectionReportStatus.Approved && 
+                (InspectionDecision)report.InspectionDecision == InspectionDecision.Pass)
+            {
+                var progressId = report.ConstructionProgressItem.ConstructionProgress.Id;
+                var planId = report.ConstructionProgressItem.ConstructionProgress.PlanId;
+                await InvalidateProgressCache(progressId, projectId, planId);
+            }
             
             // Return updated report
             return await MapToInspectionReportDTO(report);
@@ -618,6 +633,23 @@ namespace Sep490_Backend.Services.InspectionReportService
                 // Log error but don't fail the operation
                 Console.WriteLine($"Error invalidating inspection report caches: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Invalidates construction progress related caches
+        /// </summary>
+        private async Task InvalidateProgressCache(int progressId, int projectId, int planId)
+        {
+            // Clear specific caches
+            await _cacheService.DeleteAsync(string.Format(RedisCacheKey.CONSTRUCTION_PROGRESS_BY_ID_CACHE_KEY, progressId));
+            await _cacheService.DeleteAsync(string.Format(RedisCacheKey.CONSTRUCTION_PROGRESS_BY_PLAN_CACHE_KEY, planId));
+            await _cacheService.DeleteAsync(string.Format(RedisCacheKey.CONSTRUCTION_PROGRESS_BY_PROJECT_CACHE_KEY, projectId));
+            
+            // Clear general cache
+            await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PROGRESS_CACHE_KEY);
+            
+            // Clear pattern-based caches
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.CONSTRUCTION_PROGRESS_ALL_PATTERN);
         }
     }
 } 
