@@ -238,6 +238,9 @@ namespace Sep490_Backend.Services.InspectionReportService
                             
                             // Log the project status change
                             Console.WriteLine($"All progress items for project {relatedProjectId} are marked as Done, changing status to WaitingApproveCompleted");
+                            
+                            // Invalidate project caches after status update
+                            await InvalidateProjectCaches(relatedProjectId);
                         }
                     }
                 }
@@ -359,6 +362,9 @@ namespace Sep490_Backend.Services.InspectionReportService
                             
                             // Log the project status change
                             Console.WriteLine($"All progress items for project {relatedProjectId} are marked as Done, changing status to WaitingApproveCompleted");
+                            
+                            // Invalidate project caches after status update
+                            await InvalidateProjectCaches(relatedProjectId);
                         }
                     }
                 }
@@ -706,6 +712,28 @@ namespace Sep490_Backend.Services.InspectionReportService
             
             // Clear pattern-based caches
             await _cacheService.DeleteByPatternAsync(RedisCacheKey.CONSTRUCTION_PROGRESS_ALL_PATTERN);
+        }
+
+        private async Task InvalidateProjectCaches(int projectId)
+        {
+            try
+            {
+                // Invalidate specific project cache
+                string projectCacheKey = string.Format(RedisCacheKey.PROJECT_BY_ID_CACHE_KEY, projectId);
+                await _cacheService.DeleteAsync(projectCacheKey);
+                
+                // Invalidate main project caches
+                await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_CACHE_KEY);
+                await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_LIST_CACHE_KEY);
+                
+                // Invalidate project status count cache
+                await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_STATUS_CACHE_KEY);
+            }
+            catch (Exception ex)
+            {
+                // Log error but don't fail the operation
+                Console.WriteLine($"Error invalidating project caches: {ex.Message}");
+            }
         }
     }
 } 
