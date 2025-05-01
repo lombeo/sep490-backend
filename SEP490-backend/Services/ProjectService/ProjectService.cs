@@ -772,6 +772,14 @@ namespace Sep490_Backend.Services.ProjectService
         {
             switch (targetStatus)
             {
+                case ProjectStatusEnum.Planning:
+                    // Can only move to Planning from ReceiveRequest
+                    if (currentStatus != ProjectStatusEnum.ReceiveRequest)
+                    {
+                        throw new InvalidOperationException($"Cannot change status to Planning from {currentStatus}. Project must be in ReceiveRequest status.");
+                    }
+                    break;
+                    
                 case ProjectStatusEnum.Paused:
                     // Can only pause from InProgress
                     if (currentStatus != ProjectStatusEnum.InProgress)

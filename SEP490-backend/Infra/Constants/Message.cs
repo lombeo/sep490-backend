@@ -126,6 +126,10 @@
             public const string REJECT_SUCCESS = "S-CP-007"; //Reject construction plan successfully!
             public const string IMPORT_SUCCESS = "S-CP-008"; //Import construction plan successfully!
             public const string ASSIGN_TEAM_SUCCESS = "S-CP-009"; //Assign team to construction plan successfully!
+            public const string LOCK_ACQUIRED_SUCCESS = "S-CP-010"; //Lock acquired successfully!
+            public const string LOCK_RELEASED_SUCCESS = "S-CP-011"; //Lock released successfully!
+            public const string LOCK_STATUS_SUCCESS = "S-CP-012"; //Lock status retrieved successfully!
+            public const string LOCK_EXTENDED_SUCCESS = "S-CP-013"; //Lock extended successfully!
             
             //Error
             public const string NOT_FOUND = "E-CP-001"; //Construction plan not found!
@@ -134,6 +138,9 @@
             public const string INVALID_FILE_FORMAT = "E-CP-004"; //Invalid file format!
             public const string INVALID_FILE_CONTENT = "E-CP-005"; //Invalid file content!
             public const string INVALID_TEAM = "E-CP-006"; //Invalid construction team!
+            public const string PLAN_ALREADY_LOCKED = "E-CP-007"; //Plan is already being edited by another user!
+            public const string LOCK_NOT_FOUND = "E-CP-008"; //Lock not found or expired!
+            public const string LOCK_BELONGS_TO_ANOTHER_USER = "E-CP-009"; //Lock belongs to another user!
         }
 
         public static class ResourceRequestMessage

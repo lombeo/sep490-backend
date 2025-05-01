@@ -44,6 +44,7 @@ namespace Sep490_Backend.Infra
         public virtual DbSet<ConstructionProgressItem> ConstructionProgressItems { get; set; }
         public virtual DbSet<ConstructionProgressItemDetail> ConstructionProgressItemDetails { get; set; }
         public virtual DbSet<InspectionReport> InspectionReports { get; set; }
+        public virtual DbSet<PlanEditLock> PlanEditLocks { get; set; }
 
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -71,6 +72,7 @@ namespace Sep490_Backend.Infra
             ConstructionLogConfiguration.Config(modelBuilder);
             ConstructionProgressConfiguration.Config(modelBuilder);
             InspectionReportConfiguration.Config(modelBuilder);
+            PlanEditLockConfiguration.Config(modelBuilder);
             
             // Apply global query filters for soft delete to all entities that inherit from CommonEntity
             ApplyGlobalFilters(modelBuilder);

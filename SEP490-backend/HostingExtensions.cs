@@ -36,6 +36,7 @@ using Sep490_Backend.Services.ConstructionLogService;
 using Sep490_Backend.Services.ConstructionProgressService;
 using Sep490_Backend.Services.InspectionReportService;
 using Sep490_Backend.Infra.Helps;
+using Sep490_Backend.Services.HostedService;
 
 namespace Sep490_Backend
 {
@@ -124,12 +125,14 @@ namespace Sep490_Backend
             builder.Services.AddScoped<IConstructionTeamService, ConstructionTeamService>();
             builder.Services.AddScoped<IResourceReqService, ResourceReqService>();
             builder.Services.AddScoped<IConstructionPlanService, ConstructionPlanService>();
+            builder.Services.AddScoped<Sep490_Backend.Services.ConstructionPlanService.IPlanEditLockService, Sep490_Backend.Services.ConstructionPlanService.PlanEditLockService>();
             builder.Services.AddScoped<IVehicleService, VehicleService>();
             builder.Services.AddScoped<IActionLogService, ActionLogService>();
             builder.Services.AddScoped<IConstructionLogService, ConstructionLogService>();
             builder.Services.AddScoped<IConstructionProgressService, ConstructionProgressService>();
             builder.Services.AddScoped<IInspectionReportService, InspectionReportService>();
             builder.Services.AddHostedService<DefaultBackgroundService>();
+            builder.Services.AddHostedService<LockCleanupHostedService>();
 
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddHealthChecks();
