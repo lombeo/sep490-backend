@@ -215,15 +215,15 @@ namespace Sep490_Backend.Services.InspectionReportService
                     
                     // Check if all progress items for the project are now Done, and if so,
                     // update the project status to WaitingApproveCompleted
-                    var projectId = progressItem.ConstructionProgress.ProjectId;
+                    var relatedProjectId = progressItem.ConstructionProgress.ProjectId;
                     var allProgressItems = await _context.ConstructionProgresses
-                        .Where(cp => cp.ProjectId == projectId && !cp.Deleted)
+                        .Where(cp => cp.ProjectId == relatedProjectId && !cp.Deleted)
                         .SelectMany(cp => cp.ProgressItems.Where(pi => !pi.Deleted))
                         .ToListAsync();
                         
                     if (allProgressItems.Any() && allProgressItems.All(pi => pi.Status == ProgressStatusEnum.Done))
                     {
-                        var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == projectId && !p.Deleted);
+                        var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == relatedProjectId && !p.Deleted);
                         
                         if (project != null && 
                             project.Status != ProjectStatusEnum.WaitingApproveCompleted && 
@@ -237,7 +237,7 @@ namespace Sep490_Backend.Services.InspectionReportService
                             _context.Projects.Update(project);
                             
                             // Log the project status change
-                            Console.WriteLine($"All progress items for project {projectId} are marked as Done, changing status to WaitingApproveCompleted");
+                            Console.WriteLine($"All progress items for project {relatedProjectId} are marked as Done, changing status to WaitingApproveCompleted");
                         }
                     }
                 }
@@ -336,15 +336,15 @@ namespace Sep490_Backend.Services.InspectionReportService
                     
                     // Check if all progress items for the project are now Done, and if so,
                     // update the project status to WaitingApproveCompleted
-                    var projectId = progressItem.ConstructionProgress.ProjectId;
+                    var relatedProjectId = progressItem.ConstructionProgress.ProjectId;
                     var allProgressItems = await _context.ConstructionProgresses
-                        .Where(cp => cp.ProjectId == projectId && !cp.Deleted)
+                        .Where(cp => cp.ProjectId == relatedProjectId && !cp.Deleted)
                         .SelectMany(cp => cp.ProgressItems.Where(pi => !pi.Deleted))
                         .ToListAsync();
                         
                     if (allProgressItems.Any() && allProgressItems.All(pi => pi.Status == ProgressStatusEnum.Done))
                     {
-                        var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == projectId && !p.Deleted);
+                        var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == relatedProjectId && !p.Deleted);
                         
                         if (project != null && 
                             project.Status != ProjectStatusEnum.WaitingApproveCompleted && 
@@ -358,7 +358,7 @@ namespace Sep490_Backend.Services.InspectionReportService
                             _context.Projects.Update(project);
                             
                             // Log the project status change
-                            Console.WriteLine($"All progress items for project {projectId} are marked as Done, changing status to WaitingApproveCompleted");
+                            Console.WriteLine($"All progress items for project {relatedProjectId} are marked as Done, changing status to WaitingApproveCompleted");
                         }
                     }
                 }
