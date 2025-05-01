@@ -33,8 +33,9 @@ namespace Sep490_Backend.Services.InspectionReportService
 
         public async Task<InspectionReportDTO> Save(SaveInspectionReportDTO model, int actionBy)
         {
-            // Check authorization - only Quality Assurance can create/update reports
-            if (!_helperService.IsInRole(actionBy, RoleConstValue.QUALITY_ASSURANCE))
+            // Check authorization - both Quality Assurance and Executive Board can create/update reports
+            if (!_helperService.IsInRole(actionBy, RoleConstValue.QUALITY_ASSURANCE) && 
+                !_helperService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD))
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
@@ -263,8 +264,9 @@ namespace Sep490_Backend.Services.InspectionReportService
                 throw new KeyNotFoundException(Message.InspectionReportMessage.NOT_FOUND);
             }
             
-            // Check authorization - only Quality Assurance users can update report statuses
-            if (!_helperService.IsInRole(actionBy, RoleConstValue.QUALITY_ASSURANCE))
+            // Check authorization - both Quality Assurance users and Executive Board members can update report statuses
+            if (!_helperService.IsInRole(actionBy, RoleConstValue.QUALITY_ASSURANCE) && 
+                !_helperService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD))
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
@@ -286,8 +288,9 @@ namespace Sep490_Backend.Services.InspectionReportService
 
         public async Task<int> Delete(int id, int actionBy)
         {
-            // Check if user is authorized to delete reports
-            if (!_helperService.IsInRole(actionBy, RoleConstValue.QUALITY_ASSURANCE))
+            // Check if user is authorized to delete reports - both Quality Assurance and Executive Board can delete
+            if (!_helperService.IsInRole(actionBy, RoleConstValue.QUALITY_ASSURANCE) && 
+                !_helperService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD))
             {
                 throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
             }
@@ -305,13 +308,16 @@ namespace Sep490_Backend.Services.InspectionReportService
             
             int projectId = report.ConstructionProgressItem.ConstructionProgress.ProjectId;
             
-            // Check if user has access to the project
-            var hasAccess = await _context.ProjectUsers
-                .AnyAsync(pu => pu.ProjectId == projectId && pu.UserId == actionBy && !pu.Deleted);
-                
-            if (!hasAccess)
+            // Check if user has access to the project - skip this check for Executive Board
+            if (!_helperService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD))
             {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+                var hasAccess = await _context.ProjectUsers
+                    .AnyAsync(pu => pu.ProjectId == projectId && pu.UserId == actionBy && !pu.Deleted);
+                    
+                if (!hasAccess)
+                {
+                    throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED);
+                }
             }
             
             // Soft delete the report
