@@ -15,6 +15,10 @@ using Sep490_Backend.Controllers;
 using System.Text.Json;
 using Sep490_Backend.DTO;
 using Microsoft.Extensions.Logging;
+using System.Collections.Generic;
+using System.Text.Json.Nodes;
+using Sep490_Backend.Infra.Models;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Sep490_Backend.Services.ProjectService
 {
@@ -735,8 +739,8 @@ namespace Sep490_Backend.Services.ProjectService
                 if ((model.TargetStatus == ProjectStatusEnum.Completed || model.TargetStatus == ProjectStatusEnum.Closed) &&
                     project.Status != ProjectStatusEnum.Completed && project.Status != ProjectStatusEnum.Closed)
                 {
-                    // Roll back materials to main inventory
-                    var rollbackCount = await _materialService.RollbackMaterialsFromProjectInventory(project.Id, actionBy);
+                    // Roll back materials to main inventory - pass the current transaction
+                    var rollbackCount = await _materialService.RollbackMaterialsFromProjectInventory(project.Id, actionBy, transaction);
                     _logger.LogInformation($"Rolled back {rollbackCount} materials from project {project.Id} during status change to {model.TargetStatus}");
                 }
                 

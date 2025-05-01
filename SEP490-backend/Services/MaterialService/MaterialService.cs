@@ -12,6 +12,7 @@ using System.Text.RegularExpressions;
 using Sep490_Backend.Controllers;
 using Sep490_Backend.DTO.Material;
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Sep490_Backend.Services.MaterialService
 {
@@ -20,7 +21,7 @@ namespace Sep490_Backend.Services.MaterialService
         Task<Material> SaveMaterial(MaterialSaveDTO model, int actionBy);
         Task<bool> DeleteMaterial(int materialId, int actionBy);
         Task<MaterialDetailDTO> GetMaterialById(int materialId, int actionBy);
-        Task<int> RollbackMaterialsFromProjectInventory(int projectId, int actionBy);
+        Task<int> RollbackMaterialsFromProjectInventory(int projectId, int actionBy, IDbContextTransaction externalTransaction = null);
     }
 
     public class MaterialService : IMaterialService
@@ -295,16 +296,24 @@ namespace Sep490_Backend.Services.MaterialService
         /// </summary>
         /// <param name="projectId">ID of the project</param>
         /// <param name="actionBy">ID of the user performing the action</param>
+        /// <param name="externalTransaction">Optional external transaction to use instead of creating a new one</param>
         /// <returns>The number of materials rolled back</returns>
-        public async Task<int> RollbackMaterialsFromProjectInventory(int projectId, int actionBy)
+        public async Task<int> RollbackMaterialsFromProjectInventory(int projectId, int actionBy, IDbContextTransaction externalTransaction = null)
         {
             _logger.LogInformation($"Rolling back materials from project {projectId} to main inventory");
             
-            // Start transaction
-            using var transaction = await _context.Database.BeginTransactionAsync();
+            // Track if we're managing the transaction or using an external one
+            bool manageTransaction = externalTransaction == null;
+            IDbContextTransaction transaction = externalTransaction;
             
             try
             {
+                // Start transaction only if we're not using an external one
+                if (manageTransaction)
+                {
+                    transaction = await _context.Database.BeginTransactionAsync();
+                }
+                
                 // Get all materials in the project inventory that have CanRollBack=true
                 var resourceInventories = await _context.ResourceInventory
                     .Where(ri => ri.ProjectId == projectId && 
@@ -316,7 +325,10 @@ namespace Sep490_Backend.Services.MaterialService
                 if (!resourceInventories.Any())
                 {
                     _logger.LogInformation($"No materials found in project {projectId} to roll back");
-                    await transaction.CommitAsync();
+                    if (manageTransaction)
+                    {
+                        await transaction.CommitAsync();
+                    }
                     return 0;
                 }
                 
@@ -358,7 +370,12 @@ namespace Sep490_Backend.Services.MaterialService
                 }
                 
                 await _context.SaveChangesAsync();
-                await transaction.CommitAsync();
+                
+                // Only commit if we're managing the transaction
+                if (manageTransaction)
+                {
+                    await transaction.CommitAsync();
+                }
                 
                 // Invalidate caches
                 if (rolledBackCount > 0)
@@ -374,7 +391,13 @@ namespace Sep490_Backend.Services.MaterialService
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Error rolling back materials from project {projectId}: {ex.Message}");
-                await transaction.RollbackAsync();
+                
+                // Only rollback if we're managing the transaction
+                if (manageTransaction && transaction != null)
+                {
+                    await transaction.RollbackAsync();
+                }
+                
                 throw;
             }
         }
