@@ -472,9 +472,9 @@ namespace Sep490_Backend.Services.ConstructionProgressService
                 return;
             }
             
-            // Determine if all progress items are completed (progress = 100%)
-            bool allCompleted = allProgressItems.All(pi => pi.Progress == 100);
-            bool anyIncomplete = allProgressItems.Any(pi => pi.Progress < 100);
+            // Determine if all progress items are completed (status = Done)
+            bool allCompleted = allProgressItems.All(pi => pi.Status == ProgressStatusEnum.Done);
+            bool anyIncomplete = allProgressItems.Any(pi => pi.Status != ProgressStatusEnum.Done);
             
             // If the project is in WaitingApproveCompleted status but we have incomplete items,
             // change back to InProgress
@@ -486,12 +486,12 @@ namespace Sep490_Backend.Services.ConstructionProgressService
                 project.Updater = actionBy;
                 _context.Projects.Update(project);
             }
-            // If all items are complete and project is not already waiting for completion approval,
+            // If all items are Done and project is not already waiting for completion approval,
             // change to WaitingApproveCompleted
             else if (allCompleted && project.Status != ProjectStatusEnum.WaitingApproveCompleted && 
                     project.Status != ProjectStatusEnum.Completed && project.Status != ProjectStatusEnum.Closed)
             {
-                _logger.LogInformation($"All progress items for project {projectId} are complete, changing status to WaitingApproveCompleted");
+                _logger.LogInformation($"All progress items for project {projectId} are marked as Done, changing status to WaitingApproveCompleted");
                 project.Status = ProjectStatusEnum.WaitingApproveCompleted;
                 project.UpdatedAt = DateTime.Now;
                 project.Updater = actionBy;

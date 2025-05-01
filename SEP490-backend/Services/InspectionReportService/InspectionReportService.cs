@@ -212,6 +212,34 @@ namespace Sep490_Backend.Services.InspectionReportService
                     progressItem.UpdatedAt = DateTime.Now;
                     
                     _context.ConstructionProgressItems.Update(progressItem);
+                    
+                    // Check if all progress items for the project are now Done, and if so,
+                    // update the project status to WaitingApproveCompleted
+                    var projectId = progressItem.ConstructionProgress.ProjectId;
+                    var allProgressItems = await _context.ConstructionProgresses
+                        .Where(cp => cp.ProjectId == projectId && !cp.Deleted)
+                        .SelectMany(cp => cp.ProgressItems.Where(pi => !pi.Deleted))
+                        .ToListAsync();
+                        
+                    if (allProgressItems.Any() && allProgressItems.All(pi => pi.Status == ProgressStatusEnum.Done))
+                    {
+                        var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == projectId && !p.Deleted);
+                        
+                        if (project != null && 
+                            project.Status != ProjectStatusEnum.WaitingApproveCompleted && 
+                            project.Status != ProjectStatusEnum.Completed && 
+                            project.Status != ProjectStatusEnum.Closed)
+                        {
+                            project.Status = ProjectStatusEnum.WaitingApproveCompleted;
+                            project.UpdatedAt = DateTime.Now;
+                            project.Updater = actionBy;
+                            
+                            _context.Projects.Update(project);
+                            
+                            // Log the project status change
+                            Console.WriteLine($"All progress items for project {projectId} are marked as Done, changing status to WaitingApproveCompleted");
+                        }
+                    }
                 }
             }
             else
@@ -305,6 +333,34 @@ namespace Sep490_Backend.Services.InspectionReportService
                     progressItem.UpdatedAt = DateTime.Now;
                     
                     _context.ConstructionProgressItems.Update(progressItem);
+                    
+                    // Check if all progress items for the project are now Done, and if so,
+                    // update the project status to WaitingApproveCompleted
+                    var projectId = progressItem.ConstructionProgress.ProjectId;
+                    var allProgressItems = await _context.ConstructionProgresses
+                        .Where(cp => cp.ProjectId == projectId && !cp.Deleted)
+                        .SelectMany(cp => cp.ProgressItems.Where(pi => !pi.Deleted))
+                        .ToListAsync();
+                        
+                    if (allProgressItems.Any() && allProgressItems.All(pi => pi.Status == ProgressStatusEnum.Done))
+                    {
+                        var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == projectId && !p.Deleted);
+                        
+                        if (project != null && 
+                            project.Status != ProjectStatusEnum.WaitingApproveCompleted && 
+                            project.Status != ProjectStatusEnum.Completed && 
+                            project.Status != ProjectStatusEnum.Closed)
+                        {
+                            project.Status = ProjectStatusEnum.WaitingApproveCompleted;
+                            project.UpdatedAt = DateTime.Now;
+                            project.Updater = actionBy;
+                            
+                            _context.Projects.Update(project);
+                            
+                            // Log the project status change
+                            Console.WriteLine($"All progress items for project {projectId} are marked as Done, changing status to WaitingApproveCompleted");
+                        }
+                    }
                 }
             }
             
