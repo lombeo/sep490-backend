@@ -199,14 +199,20 @@ namespace Sep490_Backend.Services.InspectionReportService
                 
                 _context.Set<InspectionReport>().Add(inspectionReport);
                 
-                // Update the associated ConstructionProgressItem
-                // Set its progress to 100% and status to Done
-                progressItem.Progress = 100;
-                progressItem.Status = ProgressStatusEnum.Done;
-                progressItem.Updater = actionBy;
-                progressItem.UpdatedAt = DateTime.Now;
-                
-                _context.ConstructionProgressItems.Update(progressItem);
+                // Update the associated ConstructionProgressItem only if:
+                // 1. InspectionDecision is Pass
+                // 2. Status is Approved
+                if (model.InspectionDecision == InspectionDecision.Pass && 
+                    model.Status == InspectionReportStatus.Approved)
+                {
+                    // Set its progress to 100% and status to Done
+                    progressItem.Progress = 100;
+                    progressItem.Status = ProgressStatusEnum.Done;
+                    progressItem.Updater = actionBy;
+                    progressItem.UpdatedAt = DateTime.Now;
+                    
+                    _context.ConstructionProgressItems.Update(progressItem);
+                }
             }
             else
             {
@@ -276,6 +282,26 @@ namespace Sep490_Backend.Services.InspectionReportService
             report.Updater = actionBy;
             
             _context.Set<InspectionReport>().Update(report);
+            
+            // If status is being set to Approved and the inspection decision is Pass,
+            // update the construction progress item status and progress
+            if (status == InspectionReportStatus.Approved && 
+                (InspectionDecision)report.InspectionDecision == InspectionDecision.Pass)
+            {
+                var progressItem = await _context.ConstructionProgressItems
+                    .FirstOrDefaultAsync(pi => pi.Id == report.ConstructionProgressItemId && !pi.Deleted);
+                
+                if (progressItem != null)
+                {
+                    progressItem.Progress = 100;
+                    progressItem.Status = ProgressStatusEnum.Done;
+                    progressItem.Updater = actionBy;
+                    progressItem.UpdatedAt = DateTime.Now;
+                    
+                    _context.ConstructionProgressItems.Update(progressItem);
+                }
+            }
+            
             await _context.SaveChangesAsync();
             
             // Invalidate cache
