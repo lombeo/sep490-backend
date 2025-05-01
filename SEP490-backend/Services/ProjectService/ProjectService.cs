@@ -14,11 +14,6 @@ using Sep490_Backend.Infra.Helps;
 using Sep490_Backend.Controllers;
 using System.Text.Json;
 using Sep490_Backend.DTO;
-using Microsoft.Extensions.Logging;
-using System.Collections.Generic;
-using System.Text.Json.Nodes;
-using Sep490_Backend.Infra.Models;
-using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Sep490_Backend.Services.ProjectService
 {
