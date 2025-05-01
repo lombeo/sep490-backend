@@ -276,15 +276,14 @@ namespace Sep490_Backend.Services.ConstructionProgressService
 
                     // Update progress item
                     progressItem.Progress = updateItem.Progress;
-                    progressItem.Status = (ProgressStatusEnum)updateItem.Status;
-                    progressItem.ActualStartDate = updateItem.ActualStartDate;
-                    progressItem.ActualEndDate = updateItem.ActualEndDate;
-                    progressItem.Updater = actionBy;
-
-                    // If progress is 100%, set status to Done
-                    if (progressItem.Progress == 100)
+                    // Update status based on progress value
+                    if (updateItem.Progress > 0 && updateItem.Progress < 100)
                     {
-                        progressItem.Status = ProgressStatusEnum.Done;
+                        progressItem.Status = ProgressStatusEnum.InProgress;
+                    }
+                    else if (updateItem.Progress == 100)
+                    {
+                        progressItem.Status = ProgressStatusEnum.WaitForInspection;
                         
                         // If the item just became completed, add it to our tracked list
                         if (becameCompleted)
@@ -292,6 +291,14 @@ namespace Sep490_Backend.Services.ConstructionProgressService
                             newlyCompletedItems.Add(progressItem);
                         }
                     }
+                    else
+                    {
+                        progressItem.Status = (ProgressStatusEnum)updateItem.Status;
+                    }
+                    
+                    progressItem.ActualStartDate = updateItem.ActualStartDate;
+                    progressItem.ActualEndDate = updateItem.ActualEndDate;
+                    progressItem.Updater = actionBy;
 
                     _context.ConstructionProgressItems.Update(progressItem);
                 }
@@ -751,7 +758,7 @@ namespace Sep490_Backend.Services.ConstructionProgressService
                     UnitPrice = model.UnitPrice,
                     TotalPrice = model.Quantity * model.UnitPrice,
                     Progress = model.Progress,
-                    Status = (ProgressStatusEnum)model.Status,
+                    Status = ProgressStatusEnum.NotStarted,  // Default to NotStarted
                     PlanStartDate = model.PlanStartDate,
                     PlanEndDate = model.PlanEndDate,
                     ActualStartDate = model.ActualStartDate,
@@ -763,6 +770,20 @@ namespace Sep490_Backend.Services.ConstructionProgressService
                     CreatedAt = DateTime.Now,
                     UpdatedAt = DateTime.Now
                 };
+
+                // Apply progress-based status rules
+                if (model.Progress > 0 && model.Progress < 100)
+                {
+                    progressItem.Status = ProgressStatusEnum.InProgress;
+                }
+                else if (model.Progress == 100)
+                {
+                    progressItem.Status = ProgressStatusEnum.WaitForInspection;
+                }
+                else if (model.Progress == 0 && model.Status != 0)
+                {
+                    progressItem.Status = (ProgressStatusEnum)model.Status;
+                }
 
                 await _context.ConstructionProgressItems.AddAsync(progressItem);
                 await _context.SaveChangesAsync();
@@ -862,7 +883,20 @@ namespace Sep490_Backend.Services.ConstructionProgressService
 
                 // Update progress item
                 progressItem.Progress = model.Progress;
-                progressItem.Status = (ProgressStatusEnum)model.Status;
+                // Update status based on progress value
+                if (model.Progress > 0 && model.Progress < 100)
+                {
+                    progressItem.Status = ProgressStatusEnum.InProgress;
+                }
+                else if (model.Progress == 100)
+                {
+                    progressItem.Status = ProgressStatusEnum.WaitForInspection;
+                }
+                else
+                {
+                    progressItem.Status = (ProgressStatusEnum)model.Status;
+                }
+                
                 progressItem.ActualStartDate = model.ActualStartDate;
                 progressItem.ActualEndDate = model.ActualEndDate;
                 progressItem.PlanStartDate = model.PlanStartDate;
@@ -876,12 +910,6 @@ namespace Sep490_Backend.Services.ConstructionProgressService
                 
                 progressItem.Updater = actionBy;
                 progressItem.UpdatedAt = DateTime.Now;
-
-                // If progress is 100%, set status to Done
-                if (progressItem.Progress == 100)
-                {
-                    progressItem.Status = ProgressStatusEnum.Done;
-                }
 
                 _context.ConstructionProgressItems.Update(progressItem);
 

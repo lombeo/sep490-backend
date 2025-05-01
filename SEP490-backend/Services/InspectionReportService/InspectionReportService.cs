@@ -197,6 +197,15 @@ namespace Sep490_Backend.Services.InspectionReportService
                 };
                 
                 _context.Set<InspectionReport>().Add(inspectionReport);
+                
+                // Update the associated ConstructionProgressItem
+                // Set its progress to 100% and status to Done
+                progressItem.Progress = 100;
+                progressItem.Status = ProgressStatusEnum.Done;
+                progressItem.Updater = actionBy;
+                progressItem.UpdatedAt = DateTime.Now;
+                
+                _context.ConstructionProgressItems.Update(progressItem);
             }
             else
             {

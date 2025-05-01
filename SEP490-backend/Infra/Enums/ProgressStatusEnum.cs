@@ -8,6 +8,7 @@ namespace Sep490_Backend.Infra.Enums
         InProgress = 1,
         Done = 2,
         Paused = 3,
-        Cancelled = 4
+        Cancelled = 4,
+        WaitForInspection = 5
     }
 } 
