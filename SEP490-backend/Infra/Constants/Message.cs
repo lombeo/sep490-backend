@@ -285,7 +285,7 @@
             public const string INVALID_DATE = "E-CL-004"; // Invalid date format or value!
             public const string UNAUTHORIZED = "E-CL-005"; // You are not authorized to perform this action!
             public const string ONLY_CONSTRUCTION_MANAGER = "E-CL-006"; // Only the Construction Manager can create or update construction logs!
-            public const string ONLY_TECHNICAL_MANAGER = "E-CL-010"; // Only the Technical Manager can approve or reject construction logs!
+            public const string ONLY_TECHNICAL_MANAGER = "E-CL-010"; // Only the Technical Manager or Executive Board can approve or reject construction logs!
             public const string APPROVAL_REQUIRED = "E-CL-007"; // Construction log requires approval!
             public const string ONLY_WAITING_APPROVAL_CAN_BE_APPROVED = "E-CL-008"; // Only logs waiting for approval can be approved!
             public const string ONLY_WAITING_APPROVAL_CAN_BE_REJECTED = "E-CL-009"; // Only logs waiting for approval can be rejected!

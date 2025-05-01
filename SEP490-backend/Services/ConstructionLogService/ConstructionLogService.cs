@@ -55,18 +55,18 @@ namespace Sep490_Backend.Services.ConstructionLogService
 
         public async Task<ConstructionLogDTO> Save(SaveConstructionLogDTO model, int actionBy)
         {
-            // Check if user is a Construction Manager
-            if (!_helperService.IsInRole(actionBy, RoleConstValue.CONSTRUCTION_MANAGER) &&
-                !_helperService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD))
-            {
-                throw new UnauthorizedAccessException(Message.ConstructionLogMessage.ONLY_CONSTRUCTION_MANAGER);
-            }
-
             // If only updating the status (approve/reject), handle specially
             if (model.Id != 0 && model.Status.HasValue && 
                 (model.LogName == null && model.ProjectId == 0 && model.LogDate == default))
             {
                 return await UpdateConstructionLogStatus(model.Id, model.Status.Value, actionBy);
+            }
+
+            // Check if user is a Construction Manager
+            if (!_helperService.IsInRole(actionBy, RoleConstValue.CONSTRUCTION_MANAGER) &&
+                !_helperService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD))
+            {
+                throw new UnauthorizedAccessException(Message.ConstructionLogMessage.ONLY_CONSTRUCTION_MANAGER);
             }
 
             // Check if project exists
@@ -434,8 +434,9 @@ namespace Sep490_Backend.Services.ConstructionLogService
 
         private async Task<ConstructionLogDTO> UpdateConstructionLogStatus(int id, ConstructionLogStatus status, int actionBy)
         {
-            // Only Technical Manager can approve/reject (changed from Executive Board)
-            if (!_helperService.IsInRole(actionBy, RoleConstValue.TECHNICAL_MANAGER))
+            // Allow both Technical Manager and Executive Board to approve/reject
+            if (!_helperService.IsInRole(actionBy, RoleConstValue.TECHNICAL_MANAGER) &&
+                !_helperService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD))
             {
                 throw new UnauthorizedAccessException(Message.ConstructionLogMessage.ONLY_TECHNICAL_MANAGER);
             }

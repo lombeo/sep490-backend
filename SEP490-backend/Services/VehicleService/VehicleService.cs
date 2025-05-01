@@ -146,6 +146,15 @@ namespace Sep490_Backend.Services.VehicleService
                 throw new ArgumentException(Message.VehicleMessage.LICENSE_PLATE_EXISTS);
             }
 
+            // Check if a vehicle already exists for the specified driver
+            var existingDriverVehicle = await _context.Vehicles
+                .FirstOrDefaultAsync(v => v.Driver == vehicleDto.Driver && !v.Deleted);
+            
+            if (existingDriverVehicle != null)
+            {
+                throw new ArgumentException("A vehicle is already assigned to this driver.");
+            }
+
             var driver = await _context.Users.FirstOrDefaultAsync(u => u.Id == vehicleDto.Driver && !u.Deleted);
             if (driver == null)
             {
@@ -205,6 +214,18 @@ namespace Sep490_Backend.Services.VehicleService
                 if (existingVehicle != null)
                 {
                     throw new ArgumentException(Message.VehicleMessage.LICENSE_PLATE_EXISTS);
+                }
+            }
+
+            // Check if the driver is being changed and if the new driver already has a vehicle
+            if (vehicle.Driver != vehicleDto.Driver)
+            {
+                var existingDriverVehicle = await _context.Vehicles
+                    .FirstOrDefaultAsync(v => v.Driver == vehicleDto.Driver && v.Id != vehicleDto.Id && !v.Deleted);
+            
+                if (existingDriverVehicle != null)
+                {
+                    throw new ArgumentException("A vehicle is already assigned to this driver.");
                 }
             }
 
