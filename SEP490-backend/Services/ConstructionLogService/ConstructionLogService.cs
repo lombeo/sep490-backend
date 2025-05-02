@@ -570,7 +570,7 @@ namespace Sep490_Backend.Services.ConstructionLogService
                                     
                                     if (progressItem.Progress >= 100)
                                     {
-                                        progressItem.Status = ProgressStatusEnum.WaitingForApproval;
+                                        progressItem.Status = ProgressStatusEnum.WaitForInspection;
                                     }
                                 }
                                 
