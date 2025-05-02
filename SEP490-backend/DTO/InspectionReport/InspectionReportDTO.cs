@@ -19,6 +19,7 @@ namespace Sep490_Backend.DTO.InspectionReport
         public DateTime InspectStartDate { get; set; }
         public DateTime InspectEndDate { get; set; }
         public string? Location { get; set; }
+        public string? InspectionName { get; set; }
         public List<AttachmentInfo>? Attachment { get; set; }
         public InspectionDecision InspectionDecision { get; set; }
         public InspectionReportStatus Status { get; set; }
@@ -38,6 +39,7 @@ namespace Sep490_Backend.DTO.InspectionReport
         public DateTime InspectStartDate { get; set; }
         public DateTime InspectEndDate { get; set; }
         public string? Location { get; set; }
+        public string? InspectionName { get; set; }
         public List<IFormFile>? AttachmentFiles { get; set; }
         public InspectionDecision? InspectionDecision { get; set; }
         public InspectionReportStatus? Status { get; set; }

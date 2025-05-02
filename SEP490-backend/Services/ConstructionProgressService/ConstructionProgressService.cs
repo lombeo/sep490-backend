@@ -330,6 +330,9 @@ namespace Sep490_Backend.Services.ConstructionProgressService
                     
                 // Update progress of parent items based on their children
                 await UpdateParentItemsProgress(allProgressItems, updatedItemIndices, actionBy);
+                
+                // Ensure all parent progress updates are saved to the database
+                await _context.SaveChangesAsync();
 
                 // Update project status based on all progress items
                 await UpdateProjectStatusBasedOnProgress(progress.ProjectId, actionBy);
@@ -972,6 +975,9 @@ namespace Sep490_Backend.Services.ConstructionProgressService
                     
                 // Update progress of parent items based on their children
                 await UpdateParentItemsProgress(allProgressItems, updatedItemIndices, actionBy);
+                
+                // Ensure all parent progress updates are saved to the database
+                await _context.SaveChangesAsync();
 
                 // Update project status based on all progress items
                 await UpdateProjectStatusBasedOnProgress(progress.ProjectId, actionBy);
@@ -1105,30 +1111,65 @@ namespace Sep490_Backend.Services.ConstructionProgressService
                             // Update parent progress
                             parentItem.Progress = averageProgress;
                             
-                            // Update status based on progress value
-                            if (averageProgress > 0 && averageProgress < 100)
+                            // Check specific status conditions for the parent based on children statuses
+                            
+                            // 1. If ALL children have status Done, parent should be Done
+                            bool allChildrenDone = childItems.All(c => c.Status == ProgressStatusEnum.Done);
+                            
+                            // 2. If ANY child has status InProgress, parent should be InProgress
+                            bool anyChildInProgress = childItems.Any(c => c.Status == ProgressStatusEnum.InProgress);
+                            
+                            // 3. If ALL children have status WaitForInspection or Done, parent should be WaitForInspection
+                            bool allChildrenWaitingOrDone = childItems.All(c => 
+                                c.Status == ProgressStatusEnum.WaitForInspection || 
+                                c.Status == ProgressStatusEnum.Done);
+                            
+                            // 4. If ALL children have status NotStarted, parent should be NotStarted
+                            bool allChildrenNotStarted = childItems.All(c => c.Status == ProgressStatusEnum.NotStarted);
+                            
+                            // Update status based on the conditions above (priority order matters)
+                            if (allChildrenDone)
                             {
+                                // If all children are Done, set parent to Done
+                                parentItem.Status = ProgressStatusEnum.Done;
+                                _logger.LogInformation($"Setting parent item {parentItem.Id} status to Done because all children are Done");
+                            }
+                            else if (anyChildInProgress)
+                            {
+                                // If any child is InProgress, set parent to InProgress
                                 parentItem.Status = ProgressStatusEnum.InProgress;
+                                _logger.LogInformation($"Setting parent item {parentItem.Id} status to InProgress because at least one child is InProgress");
                             }
-                            else if (averageProgress == 100)
+                            else if (allChildrenWaitingOrDone)
                             {
-                                // Only set to WaitForInspection if all children are Done or WaitForInspection
-                                bool allChildrenCompleted = childItems.All(c => 
-                                    c.Status == ProgressStatusEnum.Done || 
-                                    c.Status == ProgressStatusEnum.WaitForInspection);
-                                    
-                                parentItem.Status = allChildrenCompleted 
-                                    ? ProgressStatusEnum.WaitForInspection 
-                                    : ProgressStatusEnum.InProgress;
+                                // If all children are either WaitForInspection or Done, set parent to WaitForInspection
+                                parentItem.Status = ProgressStatusEnum.WaitForInspection;
+                                _logger.LogInformation($"Setting parent item {parentItem.Id} status to WaitForInspection because all children are WaitForInspection or Done");
                             }
-                            else if (averageProgress == 0)
+                            else if (allChildrenNotStarted)
                             {
-                                // Only set to NotStarted if all children are NotStarted
-                                bool allChildrenNotStarted = childItems.All(c => c.Status == ProgressStatusEnum.NotStarted);
-                                
-                                parentItem.Status = allChildrenNotStarted 
-                                    ? ProgressStatusEnum.NotStarted 
-                                    : ProgressStatusEnum.InProgress;
+                                // If all children are NotStarted, set parent to NotStarted
+                                parentItem.Status = ProgressStatusEnum.NotStarted;
+                                _logger.LogInformation($"Setting parent item {parentItem.Id} status to NotStarted because all children are NotStarted");
+                            }
+                            else 
+                            {
+                                // Default fallback based on progress value
+                                if (averageProgress > 0 && averageProgress < 100)
+                                {
+                                    parentItem.Status = ProgressStatusEnum.InProgress;
+                                    _logger.LogInformation($"Setting parent item {parentItem.Id} status to InProgress based on progress value");
+                                }
+                                else if (averageProgress == 100)
+                                {
+                                    parentItem.Status = ProgressStatusEnum.WaitForInspection;
+                                    _logger.LogInformation($"Setting parent item {parentItem.Id} status to WaitForInspection based on progress value");
+                                }
+                                else
+                                {
+                                    parentItem.Status = ProgressStatusEnum.NotStarted;
+                                    _logger.LogInformation($"Setting parent item {parentItem.Id} status to NotStarted based on progress value");
+                                }
                             }
                             
                             parentItem.UpdatedAt = DateTime.Now;

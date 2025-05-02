@@ -14,6 +14,7 @@ namespace Sep490_Backend.Infra.Entities
         public DateTime InspectEndDate { get; set; }
         public int ConstructionProgressItemId { get; set; }
         public string Location { get; set; }
+        public string InspectionName { get; set; }
         public JsonDocument Attachment { get; set; }
         public int InspectionDecision { get; set; }
         public int Status { get; set; }
@@ -36,6 +37,7 @@ namespace Sep490_Backend.Infra.Entities
 
             entity.Property(e => e.InspectCode).HasMaxLength(50).IsRequired();
             entity.Property(e => e.Location).HasMaxLength(255);
+            entity.Property(e => e.InspectionName).HasMaxLength(255);
             entity.Property(e => e.QualityNote).HasMaxLength(2000);
             entity.Property(e => e.OtherNote).HasMaxLength(2000);
 
