@@ -227,7 +227,7 @@ namespace Sep490_Backend.Services.InspectionReportService
                     if (becameCompleted && !string.IsNullOrEmpty(progressItem.ParentIndex))
                     {
                         // Get all progress items for this progress to calculate parent progress
-                        var allProgressItems = await _context.ConstructionProgressItems
+                        var progressItems = await _context.ConstructionProgressItems
                             .Where(pi => pi.ProgressId == progressItem.ProgressId && !pi.Deleted)
                             .ToListAsync();
                         
@@ -238,18 +238,18 @@ namespace Sep490_Backend.Services.InspectionReportService
                         updatedItemIndices.Add(progressItem.ParentIndex);
                         
                         // Update progress of parent items based on their children
-                        await UpdateParentItemsProgress(allProgressItems, updatedItemIndices, actionBy);
+                        await UpdateParentItemsProgress(progressItems, updatedItemIndices, actionBy);
                     }
                     
                     // Check if all progress items for the project are now Done, and if so,
                     // update the project status to WaitingApproveCompleted
                     var relatedProjectId = progressItem.ConstructionProgress.ProjectId;
-                    var allProgressItems = await _context.ConstructionProgresses
+                    var projectProgressItems = await _context.ConstructionProgresses
                         .Where(cp => cp.ProjectId == relatedProjectId && !cp.Deleted)
                         .SelectMany(cp => cp.ProgressItems.Where(pi => !pi.Deleted))
                         .ToListAsync();
                         
-                    if (allProgressItems.Any() && allProgressItems.All(pi => pi.Status == ProgressStatusEnum.Done))
+                    if (projectProgressItems.Any() && projectProgressItems.All(pi => pi.Status == ProgressStatusEnum.Done))
                     {
                         var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == relatedProjectId && !p.Deleted);
                         
@@ -373,7 +373,7 @@ namespace Sep490_Backend.Services.InspectionReportService
                     if (becameCompleted && !string.IsNullOrEmpty(progressItem.ParentIndex))
                     {
                         // Get all progress items for this progress to calculate parent progress
-                        var allProgressItems = await _context.ConstructionProgressItems
+                        var progressItems = await _context.ConstructionProgressItems
                             .Where(pi => pi.ProgressId == progressItem.ProgressId && !pi.Deleted)
                             .ToListAsync();
                         
@@ -384,18 +384,18 @@ namespace Sep490_Backend.Services.InspectionReportService
                         updatedItemIndices.Add(progressItem.ParentIndex);
                         
                         // Update progress of parent items based on their children
-                        await UpdateParentItemsProgress(allProgressItems, updatedItemIndices, actionBy);
+                        await UpdateParentItemsProgress(progressItems, updatedItemIndices, actionBy);
                     }
                     
                     // Check if all progress items for the project are now Done, and if so,
                     // update the project status to WaitingApproveCompleted
                     var relatedProjectId = progressItem.ConstructionProgress.ProjectId;
-                    var allProgressItems = await _context.ConstructionProgresses
+                    var projectProgressItems = await _context.ConstructionProgresses
                         .Where(cp => cp.ProjectId == relatedProjectId && !cp.Deleted)
                         .SelectMany(cp => cp.ProgressItems.Where(pi => !pi.Deleted))
                         .ToListAsync();
                         
-                    if (allProgressItems.Any() && allProgressItems.All(pi => pi.Status == ProgressStatusEnum.Done))
+                    if (projectProgressItems.Any() && projectProgressItems.All(pi => pi.Status == ProgressStatusEnum.Done))
                     {
                         var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == relatedProjectId && !p.Deleted);
                         
