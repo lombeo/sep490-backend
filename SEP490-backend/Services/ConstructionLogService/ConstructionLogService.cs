@@ -10,6 +10,10 @@ using System.Text.Json;
 using Sep490_Backend.DTO;
 using Sep490_Backend.Infra.Enums;
 using Sep490_Backend.Infra.Helps;
+using System;
+using System.Linq;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace Sep490_Backend.Services.ConstructionLogService
 {
@@ -517,8 +521,61 @@ namespace Sep490_Backend.Services.ConstructionLogService
 
                             if (progressItem != null)
                             {
+                                // Check if this is the first approved log for this task
+                                bool isFirstApprovedLog = false;
+                                if (progressItem.ActualStartDate == null)
+                                {
+                                    // Check if there were any previously approved logs for this task
+                                    var previousApprovedLogs = await _context.ConstructionLogs
+                                        .Where(cl => cl.ProjectId == constructionLog.ProjectId 
+                                               && cl.Id != constructionLog.Id 
+                                               && cl.Status == ConstructionLogStatus.Approved 
+                                               && !cl.Deleted)
+                                        .ToListAsync();
+
+                                    isFirstApprovedLog = true;
+                                    
+                                    foreach (var prevLog in previousApprovedLogs)
+                                    {
+                                        if (prevLog.WorkAmount != null)
+                                        {
+                                            var prevWorkAmounts = JsonSerializer.Deserialize<List<WorkAmountDTO>>(
+                                                prevLog.WorkAmount.RootElement.ToString(),
+                                                DefaultSerializerOptions);
+                                                
+                                            if (prevWorkAmounts != null && 
+                                                prevWorkAmounts.Any(wa => wa.TaskIndex == workAmount.TaskIndex && wa.WorkAmount > 0))
+                                            {
+                                                isFirstApprovedLog = false;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    
+                                    // If this is the first approved log for this task, set the actual start date
+                                    if (isFirstApprovedLog)
+                                    {
+                                        progressItem.ActualStartDate = constructionLog.UpdatedAt ?? DateTime.UtcNow;
+                                        progressItem.Status = ProgressStatusEnum.InProgress;
+                                    }
+                                }
+
                                 // Update the UsedQuantity for the progress item
                                 progressItem.UsedQuantity += workAmount.WorkAmount;
+                                
+                                // Calculate and update progress percentage
+                                if (progressItem.Quantity > 0)
+                                {
+                                    progressItem.Progress = (int)Math.Min(100, Math.Round((progressItem.UsedQuantity / progressItem.Quantity) * 100));
+                                    
+                                    // If progress is 100%, update status and end date
+                                    if (progressItem.Progress >= 100)
+                                    {
+                                        progressItem.Status = ProgressStatusEnum.Done;
+                                        progressItem.ActualEndDate = DateTime.UtcNow;
+                                    }
+                                }
+                                
                                 _context.ConstructionProgressItems.Update(progressItem);
                             }
                         }
@@ -560,6 +617,12 @@ namespace Sep490_Backend.Services.ConstructionLogService
                 }
 
                 await _context.SaveChangesAsync();
+                
+                // Invalidate construction progress caches after updates
+                if (constructionProgress != null)
+                {
+                    await InvalidateConstructionProgressCaches(constructionProgress.Id, constructionProgress.ProjectId, constructionProgress.PlanId);
+                }
             }
             catch (Exception ex)
             {
@@ -881,7 +944,7 @@ namespace Sep490_Backend.Services.ConstructionLogService
             }
             
             var constructionLogs = await _context.ConstructionLogs
-                .Where(cl => cl.ProjectId == projectId && !cl.Deleted)
+                .Where(cl => cl.ProjectId == projectId && !cl.Deleted && cl.Status == ConstructionLogStatus.Approved)
                 .OrderBy(cl => cl.LogDate)
                 .ToListAsync();
                 
@@ -896,7 +959,7 @@ namespace Sep490_Backend.Services.ConstructionLogService
                 // Process work amount
                 if (log.WorkAmount != null)
                 {
-                    var workAmounts = JsonSerializer.Deserialize<List<WorkAmountDTO>>(log.WorkAmount.RootElement.ToString());
+                    var workAmounts = JsonSerializer.Deserialize<List<WorkAmountDTO>>(log.WorkAmount.RootElement.ToString(), DefaultSerializerOptions);
                     var matchingWorkAmount = workAmounts?.FirstOrDefault(wa => wa.TaskIndex == taskIndex);
                     
                     if (matchingWorkAmount != null)
@@ -1163,6 +1226,23 @@ namespace Sep490_Backend.Services.ConstructionLogService
             }
             
             return true;
+        }
+
+        /// <summary>
+        /// Invalidates all caches related to ConstructionProgress
+        /// </summary>
+        private async Task InvalidateConstructionProgressCaches(int progressId, int projectId, int planId)
+        {
+            // Invalidate specific cache keys
+            await _cacheService.DeleteAsync(string.Format(RedisCacheKey.CONSTRUCTION_PROGRESS_BY_ID_CACHE_KEY, progressId));
+            await _cacheService.DeleteAsync(string.Format(RedisCacheKey.CONSTRUCTION_PROGRESS_BY_PROJECT_CACHE_KEY, projectId));
+            await _cacheService.DeleteAsync(string.Format(RedisCacheKey.CONSTRUCTION_PROGRESS_BY_PLAN_CACHE_KEY, planId));
+            
+            // Invalidate general cache keys
+            await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PROGRESS_CACHE_KEY);
+            
+            // Invalidate pattern-based caches
+            await _cacheService.DeleteByPatternAsync(RedisCacheKey.CONSTRUCTION_PROGRESS_ALL_PATTERN);
         }
     }
 } 

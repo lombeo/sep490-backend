@@ -221,6 +221,7 @@ namespace Sep490_Backend.Services.InspectionReportService
                     progressItem.Status = ProgressStatusEnum.Done;
                     progressItem.Updater = actionBy;
                     progressItem.UpdatedAt = DateTime.Now;
+                    progressItem.ActualEndDate = DateTime.Now;
                     
                     _context.ConstructionProgressItems.Update(progressItem);
                     
@@ -371,6 +372,7 @@ namespace Sep490_Backend.Services.InspectionReportService
                     progressItem.Status = ProgressStatusEnum.Done;
                     progressItem.Updater = actionBy;
                     progressItem.UpdatedAt = DateTime.Now;
+                    progressItem.ActualEndDate = DateTime.Now;
                     
                     _context.ConstructionProgressItems.Update(progressItem);
                     
