@@ -2473,11 +2473,6 @@ namespace Sep490_Backend.Services.ResourceReqService
                 sourceInventory.UpdatedAt = DateTime.UtcNow;
                 sourceInventory.Updater = actionBy;
                 
-                if (sourceInventory.Quantity <= 0)
-                {
-                    sourceInventory.Deleted = true;
-                }
-                
                 _context.ResourceInventory.Update(sourceInventory);
                 
                 // Check if task already has this resource

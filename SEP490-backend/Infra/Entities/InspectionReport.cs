@@ -28,7 +28,7 @@ namespace Sep490_Backend.Infra.Entities
 
     public static class InspectionReportConfiguration
     {
-        public static void Config(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder)
+        public static void Config(ModelBuilder modelBuilder)
         {
             var entity = modelBuilder.Entity<InspectionReport>();
 
@@ -45,12 +45,12 @@ namespace Sep490_Backend.Infra.Entities
             entity.HasOne(e => e.Inspector)
                 .WithMany()
                 .HasForeignKey(e => e.InspectorId)
-                .OnDelete(Microsoft.EntityFrameworkCore.DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasOne(e => e.ConstructionProgressItem)
                 .WithMany()
                 .HasForeignKey(e => e.ConstructionProgressItemId)
-                .OnDelete(Microsoft.EntityFrameworkCore.DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 } 

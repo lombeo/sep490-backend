@@ -1369,7 +1369,7 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
             // Dictionary to group resources by ResourceId, ProjectId, and ResourceType
             // Key is a tuple of (ResourceId, ProjectId, ResourceType), Value is an object with aggregated info
             var resourceGroups = new Dictionary<(int? ResourceId, int ProjectId, ResourceType ResourceType), 
-                (string Name, int Quantity, string Unit)>();
+                (string Name, string Unit)>();
             
             // Process each plan item
             foreach (var planItem in planItems)
@@ -1393,16 +1393,11 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
                     // Get the resource name based on type
                     string resourceName = await GetResourceName(detail.ResourceType, detail.ResourceId.Value);
                     
-                    // If the key already exists in the dictionary, update the quantity
-                    if (resourceGroups.ContainsKey(key))
+                    // If the key doesn't exist in the dictionary, add it
+                    // We're not tracking quantities anymore as they'll all be initialized to 0
+                    if (!resourceGroups.ContainsKey(key))
                     {
-                        var existing = resourceGroups[key];
-                        resourceGroups[key] = (existing.Name, existing.Quantity + detail.Quantity, existing.Unit);
-                    }
-                    else
-                    {
-                        // Otherwise, add a new entry
-                        resourceGroups[key] = (resourceName, detail.Quantity, detail.Unit ?? "Unit");
+                        resourceGroups[key] = (resourceName, detail.Unit ?? "Unit");
                     }
                 }
             }
@@ -1426,25 +1421,16 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
                             r.ProjectId == key.ProjectId &&
                             !r.Deleted);
                     
-                    if (existingInventory != null)
+                    if (existingInventory == null)
                     {
-                        // Update existing inventory
-                        existingInventory.Quantity += value.Quantity;
-                        existingInventory.UpdatedAt = DateTime.UtcNow;
-                        existingInventory.Updater = actionBy;
-                        
-                        _context.ResourceInventory.Update(existingInventory);
-                    }
-                    else
-                    {
-                        // Create new inventory resource
+                        // Create new inventory resource with quantity 0
                         var newResource = new ResourceInventory
                         {
                             Name = value.Name,
                             ResourceId = key.ResourceId,
                             ProjectId = key.ProjectId,
                             ResourceType = key.ResourceType,
-                            Quantity = value.Quantity,
+                            Quantity = 0, // Initialize with 0 quantity
                             Unit = value.Unit,
                             Status = true,
                             Creator = actionBy,
@@ -1455,6 +1441,7 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
                         
                         await _context.ResourceInventory.AddAsync(newResource);
                     }
+                    // We don't update existing inventory quantities anymore
                 }
                 
                 // Save changes
