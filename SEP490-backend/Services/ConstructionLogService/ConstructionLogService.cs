@@ -568,11 +568,9 @@ namespace Sep490_Backend.Services.ConstructionLogService
                                 {
                                     progressItem.Progress = (int)Math.Min(100, Math.Round((progressItem.UsedQuantity / progressItem.Quantity) * 100));
                                     
-                                    // If progress is 100%, update status and end date
                                     if (progressItem.Progress >= 100)
                                     {
-                                        progressItem.Status = ProgressStatusEnum.Done;
-                                        progressItem.ActualEndDate = DateTime.UtcNow;
+                                        progressItem.Status = ProgressStatusEnum.WaitingForApproval;
                                     }
                                 }
                                 
