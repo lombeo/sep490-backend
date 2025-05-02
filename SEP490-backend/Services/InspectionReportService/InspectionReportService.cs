@@ -8,6 +8,7 @@ using Sep490_Backend.Infra.Enums;
 using Sep490_Backend.Services.CacheService;
 using Sep490_Backend.Services.HelperService;
 using Sep490_Backend.Services.GoogleDriveService;
+using Sep490_Backend.Services.ConstructionProgressService;
 using System.Text.Json;
 
 namespace Sep490_Backend.Services.InspectionReportService
@@ -18,17 +19,23 @@ namespace Sep490_Backend.Services.InspectionReportService
         private readonly ICacheService _cacheService;
         private readonly IHelperService _helperService;
         private readonly IGoogleDriveService _googleDriveService;
+        private readonly ILogger<InspectionReportService> _logger;
+        private readonly IConstructionProgressService _constructionProgressService;
 
         public InspectionReportService(
             BackendContext context,
             ICacheService cacheService,
             IHelperService helperService,
-            IGoogleDriveService googleDriveService)
+            IGoogleDriveService googleDriveService,
+            ILogger<InspectionReportService> logger,
+            IConstructionProgressService constructionProgressService)
         {
             _context = context;
             _cacheService = cacheService;
             _helperService = helperService;
             _googleDriveService = googleDriveService;
+            _logger = logger;
+            _constructionProgressService = constructionProgressService;
         }
 
         public async Task<InspectionReportDTO> Save(SaveInspectionReportDTO model, int actionBy)
@@ -205,6 +212,9 @@ namespace Sep490_Backend.Services.InspectionReportService
                 if (model.InspectionDecision == InspectionDecision.Pass && 
                     model.Status == InspectionReportStatus.Approved)
                 {
+                    // Record the old progress value
+                    bool becameCompleted = progressItem.Progress < 100;
+                    
                     // Set its progress to 100% and status to Done
                     progressItem.Progress = 100;
                     progressItem.Status = ProgressStatusEnum.Done;
@@ -212,6 +222,24 @@ namespace Sep490_Backend.Services.InspectionReportService
                     progressItem.UpdatedAt = DateTime.Now;
                     
                     _context.ConstructionProgressItems.Update(progressItem);
+                    
+                    // Update parent progress calculation if needed
+                    if (becameCompleted && !string.IsNullOrEmpty(progressItem.ParentIndex))
+                    {
+                        // Get all progress items for this progress to calculate parent progress
+                        var allProgressItems = await _context.ConstructionProgressItems
+                            .Where(pi => pi.ProgressId == progressItem.ProgressId && !pi.Deleted)
+                            .ToListAsync();
+                        
+                        // Create a set of indices to update
+                        var updatedItemIndices = new HashSet<string> { progressItem.Index };
+                        
+                        // Add parent index
+                        updatedItemIndices.Add(progressItem.ParentIndex);
+                        
+                        // Update progress of parent items based on their children
+                        await UpdateParentItemsProgress(allProgressItems, updatedItemIndices, actionBy);
+                    }
                     
                     // Check if all progress items for the project are now Done, and if so,
                     // update the project status to WaitingApproveCompleted
@@ -237,7 +265,7 @@ namespace Sep490_Backend.Services.InspectionReportService
                             _context.Projects.Update(project);
                             
                             // Log the project status change
-                            Console.WriteLine($"All progress items for project {relatedProjectId} are marked as Done, changing status to WaitingApproveCompleted");
+                            _logger.LogInformation($"All progress items for project {relatedProjectId} are marked as Done, changing status to WaitingApproveCompleted");
                             
                             // Invalidate project caches after status update
                             await InvalidateProjectCaches(relatedProjectId);
@@ -330,12 +358,34 @@ namespace Sep490_Backend.Services.InspectionReportService
                 
                 if (progressItem != null)
                 {
+                    // Record the old progress value
+                    bool becameCompleted = progressItem.Progress < 100;
+                    
+                    // Update progress item status
                     progressItem.Progress = 100;
                     progressItem.Status = ProgressStatusEnum.Done;
                     progressItem.Updater = actionBy;
                     progressItem.UpdatedAt = DateTime.Now;
                     
                     _context.ConstructionProgressItems.Update(progressItem);
+                    
+                    // Update parent progress calculation if needed
+                    if (becameCompleted && !string.IsNullOrEmpty(progressItem.ParentIndex))
+                    {
+                        // Get all progress items for this progress to calculate parent progress
+                        var allProgressItems = await _context.ConstructionProgressItems
+                            .Where(pi => pi.ProgressId == progressItem.ProgressId && !pi.Deleted)
+                            .ToListAsync();
+                        
+                        // Create a set of indices to update
+                        var updatedItemIndices = new HashSet<string> { progressItem.Index };
+                        
+                        // Add parent index
+                        updatedItemIndices.Add(progressItem.ParentIndex);
+                        
+                        // Update progress of parent items based on their children
+                        await UpdateParentItemsProgress(allProgressItems, updatedItemIndices, actionBy);
+                    }
                     
                     // Check if all progress items for the project are now Done, and if so,
                     // update the project status to WaitingApproveCompleted
@@ -361,7 +411,7 @@ namespace Sep490_Backend.Services.InspectionReportService
                             _context.Projects.Update(project);
                             
                             // Log the project status change
-                            Console.WriteLine($"All progress items for project {relatedProjectId} are marked as Done, changing status to WaitingApproveCompleted");
+                            _logger.LogInformation($"All progress items for project {relatedProjectId} are marked as Done, changing status to WaitingApproveCompleted");
                             
                             // Invalidate project caches after status update
                             await InvalidateProjectCaches(relatedProjectId);
@@ -733,6 +783,102 @@ namespace Sep490_Backend.Services.InspectionReportService
             {
                 // Log error but don't fail the operation
                 Console.WriteLine($"Error invalidating project caches: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Updates the progress of parent items based on the progress of their children
+        /// </summary>
+        /// <param name="allItems">All progress items for the construction progress</param>
+        /// <param name="updatedIndices">Set of indices that were updated and need parent progress recalculation</param>
+        /// <param name="actionBy">ID of the user performing the action</param>
+        /// <returns>Async task</returns>
+        private async Task UpdateParentItemsProgress(List<ConstructionProgressItem> allItems, HashSet<string> updatedIndices, int actionBy)
+        {
+            _logger.LogInformation($"Updating parent items progress for {updatedIndices.Count} potentially affected indices");
+            
+            // Create a dictionary of items by index for easy lookup
+            var itemsByIndex = allItems.ToDictionary(item => item.Index, item => item);
+            
+            // Create a dictionary to group items by their parent index
+            var childrenByParentIndex = allItems
+                .Where(item => !string.IsNullOrEmpty(item.ParentIndex))
+                .GroupBy(item => item.ParentIndex)
+                .ToDictionary(group => group.Key, group => group.ToList());
+            
+            // Keep track of processed parent indices to avoid processing the same parent multiple times
+            var processedParentIndices = new HashSet<string>();
+            
+            // Process updated items that are either parents or have a parent
+            foreach (var index in updatedIndices)
+            {
+                // Check if this index has children (is a parent)
+                if (childrenByParentIndex.ContainsKey(index) && !processedParentIndices.Contains(index))
+                {
+                    // Get the parent item
+                    if (itemsByIndex.TryGetValue(index, out var parentItem))
+                    {
+                        // Calculate average progress of all child items
+                        var childItems = childrenByParentIndex[index];
+                        
+                        // Skip calculating parent progress if this is a manually set item or not a parent of other items
+                        if (childItems.Count > 0)
+                        {
+                            int totalProgress = 0;
+                            foreach (var child in childItems)
+                            {
+                                totalProgress += child.Progress;
+                            }
+                            
+                            int averageProgress = totalProgress / childItems.Count;
+                            
+                            _logger.LogInformation($"Setting progress of parent item {parentItem.Id} (index {index}) to {averageProgress}% based on {childItems.Count} children");
+                            
+                            // Update parent progress
+                            parentItem.Progress = averageProgress;
+                            
+                            // Update status based on progress value
+                            if (averageProgress > 0 && averageProgress < 100)
+                            {
+                                parentItem.Status = ProgressStatusEnum.InProgress;
+                            }
+                            else if (averageProgress == 100)
+                            {
+                                // Only set to WaitForInspection if all children are Done or WaitForInspection
+                                bool allChildrenCompleted = childItems.All(c => 
+                                    c.Status == ProgressStatusEnum.Done || 
+                                    c.Status == ProgressStatusEnum.WaitForInspection);
+                                    
+                                parentItem.Status = allChildrenCompleted 
+                                    ? ProgressStatusEnum.WaitForInspection 
+                                    : ProgressStatusEnum.InProgress;
+                            }
+                            else if (averageProgress == 0)
+                            {
+                                // Only set to NotStarted if all children are NotStarted
+                                bool allChildrenNotStarted = childItems.All(c => c.Status == ProgressStatusEnum.NotStarted);
+                                
+                                parentItem.Status = allChildrenNotStarted 
+                                    ? ProgressStatusEnum.NotStarted 
+                                    : ProgressStatusEnum.InProgress;
+                            }
+                            
+                            parentItem.UpdatedAt = DateTime.Now;
+                            parentItem.Updater = actionBy;
+                            
+                            _context.ConstructionProgressItems.Update(parentItem);
+                            
+                            // Mark this parent as processed
+                            processedParentIndices.Add(index);
+                            
+                            // If this parent has a parent, add its index to be processed
+                            if (!string.IsNullOrEmpty(parentItem.ParentIndex) && !processedParentIndices.Contains(parentItem.ParentIndex))
+                            {
+                                updatedIndices.Add(parentItem.ParentIndex);
+                            }
+                        }
+                    }
+                }
             }
         }
     }
