@@ -866,13 +866,7 @@ namespace Sep490_Backend.Services.InspectionReportService
                             bool allChildrenNotStarted = childItems.All(c => c.Status == ProgressStatusEnum.NotStarted);
                             
                             // Update status based on the conditions above (priority order matters)
-                            if (allChildrenWaitingOrDone)
-                            {
-                                // If all children are either WaitForInspection or Done, set parent to WaitForInspection
-                                parentItem.Status = ProgressStatusEnum.WaitForInspection;
-                                _logger.LogInformation($"Setting parent item {parentItem.Id} status to WaitForInspection because all children are WaitForInspection or Done");
-                            }
-                            else if (allChildrenDone)
+                            if (allChildrenDone)
                             {
                                 // If all children are Done, set parent to Done
                                 parentItem.Status = ProgressStatusEnum.Done;
@@ -883,6 +877,12 @@ namespace Sep490_Backend.Services.InspectionReportService
                                 // If any child is InProgress, set parent to InProgress
                                 parentItem.Status = ProgressStatusEnum.InProgress;
                                 _logger.LogInformation($"Setting parent item {parentItem.Id} status to InProgress because at least one child is InProgress");
+                            }
+                            else if (allChildrenWaitingOrDone)
+                            {
+                                // If all children are either WaitForInspection or Done, set parent to WaitForInspection
+                                parentItem.Status = ProgressStatusEnum.WaitForInspection;
+                                _logger.LogInformation($"Setting parent item {parentItem.Id} status to WaitForInspection because all children are WaitForInspection or Done");
                             }
                             else if (allChildrenNotStarted)
                             {

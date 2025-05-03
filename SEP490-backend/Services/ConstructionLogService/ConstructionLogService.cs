@@ -504,6 +504,9 @@ namespace Sep490_Backend.Services.ConstructionLogService
                     return;
                 }
 
+                // Track items that have been updated to recalculate parent progress
+                var updatedItemIndices = new HashSet<string>();
+
                 // Process WorkAmount entries
                 if (constructionLog.WorkAmount != null)
                 {
@@ -575,6 +578,15 @@ namespace Sep490_Backend.Services.ConstructionLogService
                                 }
                                 
                                 _context.ConstructionProgressItems.Update(progressItem);
+                                
+                                // Add this item index to the set of updated items
+                                updatedItemIndices.Add(progressItem.Index);
+                                
+                                // If this item has a parent, add parent index to be updated as well
+                                if (!string.IsNullOrEmpty(progressItem.ParentIndex))
+                                {
+                                    updatedItemIndices.Add(progressItem.ParentIndex);
+                                }
                             }
                         }
                     }
@@ -614,18 +626,251 @@ namespace Sep490_Backend.Services.ConstructionLogService
                     }
                 }
 
+                // If any progress items were updated and they have parent items, update parent progress
+                if (updatedItemIndices.Count > 0)
+                {
+                    // Get all progress items for this progress
+                    var allProgressItems = await _context.ConstructionProgressItems
+                        .Where(pi => pi.ProgressId == constructionProgress.Id && !pi.Deleted)
+                        .ToListAsync();
+                    
+                    // Update progress of parent items based on their children
+                    await UpdateParentItemsProgress(allProgressItems, updatedItemIndices, constructionLog.Updater);
+                }
+
+                await _context.SaveChangesAsync();
+                
+                // Check if project status needs to be updated
+                await UpdateProjectStatusBasedOnProgress(constructionLog.ProjectId, constructionLog.Updater);
+                
                 await _context.SaveChangesAsync();
                 
                 // Invalidate construction progress caches after updates
                 if (constructionProgress != null)
                 {
                     await InvalidateConstructionProgressCaches(constructionProgress.Id, constructionProgress.ProjectId, constructionProgress.PlanId);
+                    
+                    // Also invalidate project caches since the project status might have changed
+                    await InvalidateProjectCaches(constructionLog.ProjectId);
                 }
             }
             catch (Exception ex)
             {
                 // Log the error but don't throw it to avoid disrupting the approval process
                 Console.WriteLine($"Error updating construction progress: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Updates the progress of parent items based on the progress of their children
+        /// </summary>
+        /// <param name="allItems">All progress items for the construction progress</param>
+        /// <param name="updatedIndices">Set of indices that were updated and need parent progress recalculation</param>
+        /// <param name="actionBy">ID of the user performing the action</param>
+        /// <returns>Async task</returns>
+        private async Task UpdateParentItemsProgress(List<ConstructionProgressItem> allItems, HashSet<string> updatedIndices, int actionBy)
+        {
+            Console.WriteLine($"Updating parent items progress for {updatedIndices.Count} potentially affected indices");
+            
+            // Create a dictionary of items by index for easy lookup
+            var itemsByIndex = allItems.ToDictionary(item => item.Index, item => item);
+            
+            // Create a dictionary to group items by their parent index
+            var childrenByParentIndex = allItems
+                .Where(item => !string.IsNullOrEmpty(item.ParentIndex))
+                .GroupBy(item => item.ParentIndex)
+                .ToDictionary(group => group.Key, group => group.ToList());
+            
+            // Keep track of processed parent indices to avoid processing the same parent multiple times
+            var processedParentIndices = new HashSet<string>();
+            
+            // Process updated items that are either parents or have a parent
+            foreach (var index in updatedIndices)
+            {
+                // Check if this index has children (is a parent)
+                if (childrenByParentIndex.ContainsKey(index) && !processedParentIndices.Contains(index))
+                {
+                    // Get the parent item
+                    if (itemsByIndex.TryGetValue(index, out var parentItem))
+                    {
+                        // Calculate average progress of all child items
+                        var childItems = childrenByParentIndex[index];
+                        
+                        // Skip calculating parent progress if this is a manually set item or not a parent of other items
+                        if (childItems.Count > 0)
+                        {
+                            int totalProgress = 0;
+                            foreach (var child in childItems)
+                            {
+                                totalProgress += child.Progress;
+                            }
+                            
+                            int averageProgress = totalProgress / childItems.Count;
+                            
+                            Console.WriteLine($"Setting progress of parent item {parentItem.Id} (index {index}) to {averageProgress}% based on {childItems.Count} children");
+                            
+                            // Update parent progress
+                            parentItem.Progress = averageProgress;
+                            
+                            // Check specific status conditions for the parent based on children statuses
+                            
+                            // 1. If ALL children have status Done, parent should be Done
+                            bool allChildrenDone = childItems.All(c => c.Status == ProgressStatusEnum.Done);
+                            
+                            // 2. If ANY child has status InProgress, parent should be InProgress
+                            bool anyChildInProgress = childItems.Any(c => c.Status == ProgressStatusEnum.InProgress);
+                            
+                            // 3. If ALL children have status WaitForInspection or Done, parent should be WaitForInspection
+                            bool allChildrenWaitingOrDone = childItems.All(c => 
+                                c.Status == ProgressStatusEnum.WaitForInspection || 
+                                c.Status == ProgressStatusEnum.Done);
+                            
+                            // 4. If ALL children have status NotStarted, parent should be NotStarted
+                            bool allChildrenNotStarted = childItems.All(c => c.Status == ProgressStatusEnum.NotStarted);
+                            
+                            // Update status based on the conditions above (priority order matters)
+                            if (allChildrenDone)
+                            {
+                                // If all children are Done, set parent to Done
+                                parentItem.Status = ProgressStatusEnum.Done;
+                                Console.WriteLine($"Setting parent item {parentItem.Id} status to Done because all children are Done");
+                            }
+                            else if (anyChildInProgress)
+                            {
+                                // If any child is InProgress, set parent to InProgress
+                                parentItem.Status = ProgressStatusEnum.InProgress;
+                                Console.WriteLine($"Setting parent item {parentItem.Id} status to InProgress because at least one child is InProgress");
+                            }
+                            else if (allChildrenWaitingOrDone)
+                            {
+                                // If all children are either WaitForInspection or Done, set parent to WaitForInspection
+                                parentItem.Status = ProgressStatusEnum.WaitForInspection;
+                                Console.WriteLine($"Setting parent item {parentItem.Id} status to WaitForInspection because all children are WaitForInspection or Done");
+                            }
+                            else if (allChildrenNotStarted)
+                            {
+                                // If all children are NotStarted, set parent to NotStarted
+                                parentItem.Status = ProgressStatusEnum.NotStarted;
+                                Console.WriteLine($"Setting parent item {parentItem.Id} status to NotStarted because all children are NotStarted");
+                            }
+                            else 
+                            {
+                                // Default fallback based on progress value
+                                if (averageProgress > 0 && averageProgress < 100)
+                                {
+                                    parentItem.Status = ProgressStatusEnum.InProgress;
+                                    Console.WriteLine($"Setting parent item {parentItem.Id} status to InProgress based on progress value");
+                                }
+                                else if (averageProgress == 100)
+                                {
+                                    parentItem.Status = ProgressStatusEnum.WaitForInspection;
+                                    Console.WriteLine($"Setting parent item {parentItem.Id} status to WaitForInspection based on progress value");
+                                }
+                                else
+                                {
+                                    parentItem.Status = ProgressStatusEnum.NotStarted;
+                                    Console.WriteLine($"Setting parent item {parentItem.Id} status to NotStarted based on progress value");
+                                }
+                            }
+                            
+                            parentItem.UpdatedAt = DateTime.Now;
+                            parentItem.Updater = actionBy;
+                            
+                            _context.ConstructionProgressItems.Update(parentItem);
+                            
+                            // Mark this parent as processed
+                            processedParentIndices.Add(index);
+                            
+                            // If this parent has a parent, add its index to be processed
+                            if (!string.IsNullOrEmpty(parentItem.ParentIndex) && !processedParentIndices.Contains(parentItem.ParentIndex))
+                            {
+                                updatedIndices.Add(parentItem.ParentIndex);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Checks and updates project status based on the completion of all progress items
+        /// </summary>
+        private async Task UpdateProjectStatusBasedOnProgress(int projectId, int actionBy)
+        {
+            // Get the project
+            var project = await _context.Projects
+                .FirstOrDefaultAsync(p => p.Id == projectId && !p.Deleted);
+            
+            if (project == null)
+            {
+                Console.WriteLine($"Project with ID {projectId} not found or deleted");
+                return;
+            }
+            
+            // Get all progress items for this project across all construction progresses
+            var allProgressItems = await _context.ConstructionProgresses
+                .Where(cp => cp.ProjectId == projectId && !cp.Deleted)
+                .SelectMany(cp => cp.ProgressItems.Where(pi => !pi.Deleted))
+                .ToListAsync();
+            
+            if (!allProgressItems.Any())
+            {
+                Console.WriteLine($"No progress items found for project {projectId}");
+                return;
+            }
+            
+            // Determine if all progress items are completed (status = Done)
+            bool allCompleted = allProgressItems.All(pi => pi.Status == ProgressStatusEnum.Done);
+            bool anyIncomplete = allProgressItems.Any(pi => pi.Status != ProgressStatusEnum.Done);
+            
+            // If the project is in WaitingApproveCompleted status but we have incomplete items,
+            // change back to InProgress
+            if (project.Status == ProjectStatusEnum.WaitingApproveCompleted && anyIncomplete)
+            {
+                Console.WriteLine($"Project {projectId} has incomplete items, changing status from WaitingApproveCompleted to InProgress");
+                project.Status = ProjectStatusEnum.InProgress;
+                project.UpdatedAt = DateTime.Now;
+                project.Updater = actionBy;
+                _context.Projects.Update(project);
+            }
+            // If all items are Done and project is not already waiting for completion approval,
+            // change to WaitingApproveCompleted
+            else if (allCompleted && project.Status != ProjectStatusEnum.WaitingApproveCompleted && 
+                    project.Status != ProjectStatusEnum.Completed && project.Status != ProjectStatusEnum.Closed)
+            {
+                Console.WriteLine($"All progress items for project {projectId} are marked as Done, changing status to WaitingApproveCompleted");
+                project.Status = ProjectStatusEnum.WaitingApproveCompleted;
+                project.UpdatedAt = DateTime.Now;
+                project.Updater = actionBy;
+                _context.Projects.Update(project);
+            }
+        }
+
+        /// <summary>
+        /// Invalidates all caches related to a project
+        /// </summary>
+        private async Task InvalidateProjectCaches(int projectId)
+        {
+            try
+            {
+                // Invalidate specific project cache
+                string projectCacheKey = string.Format(RedisCacheKey.PROJECT_BY_ID_CACHE_KEY, projectId);
+                await _cacheService.DeleteAsync(projectCacheKey);
+                
+                // Invalidate main project caches
+                await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_CACHE_KEY);
+                await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_LIST_CACHE_KEY);
+                
+                // Invalidate project status count cache
+                await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_STATUS_CACHE_KEY);
+                
+                // Clear pattern-based caches related to projects
+                await _cacheService.DeleteByPatternAsync($"{RedisCacheKey.PROJECT_ALL_PATTERN}*");
+            }
+            catch (Exception ex)
+            {
+                // Log error but don't fail the operation
+                Console.WriteLine($"Error invalidating project caches: {ex.Message}");
             }
         }
 

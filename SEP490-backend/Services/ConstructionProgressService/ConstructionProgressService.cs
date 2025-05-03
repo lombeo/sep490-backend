@@ -828,11 +828,19 @@ namespace Sep490_Backend.Services.ConstructionProgressService
                     await _context.SaveChangesAsync();
                 }
 
+                // Update project status based on all progress items
+                await UpdateProjectStatusBasedOnProgress(progress.ProjectId, actionBy);
+                
+                await _context.SaveChangesAsync();
+
                 // Commit transaction
                 await transaction.CommitAsync();
 
                 // Clear cache
                 await InvalidateProgressCache(progress.Id, progress.ProjectId, progress.PlanId);
+                
+                // Also invalidate project caches since the project status might have changed
+                await InvalidateProjectCaches(progress.ProjectId);
 
                 // Map to DTO and return
                 var itemDto = new ProgressItemDTO
@@ -989,6 +997,9 @@ namespace Sep490_Backend.Services.ConstructionProgressService
 
                 // Clear cache
                 await InvalidateProgressCache(progress.Id, progress.ProjectId, progress.PlanId);
+                
+                // Also invalidate project caches since the project status might have changed
+                await InvalidateProjectCaches(progress.ProjectId);
 
                 // Map to DTO and return
                 var itemDto = new ProgressItemDTO
@@ -1188,6 +1199,37 @@ namespace Sep490_Backend.Services.ConstructionProgressService
                         }
                     }
                 }
+            }
+        }
+
+        private async Task InvalidateProjectCaches(int projectId)
+        {
+            try
+            {
+                // Invalidate specific project cache
+                string projectCacheKey = string.Format(RedisCacheKey.PROJECT_BY_ID_CACHE_KEY, projectId);
+                await _cacheService.DeleteAsync(projectCacheKey);
+                
+                // Invalidate main project caches
+                await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_CACHE_KEY);
+                await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_LIST_CACHE_KEY);
+                
+                // Invalidate project status count cache
+                await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_STATUS_CACHE_KEY);
+                
+                // Clear pattern-based caches related to projects
+                await _cacheService.DeleteByPatternAsync($"{RedisCacheKey.PROJECT_ALL_PATTERN}*");
+                
+                // Also clear construction progress caches related to this project
+                await _cacheService.DeleteAsync(string.Format(RedisCacheKey.CONSTRUCTION_PROGRESS_BY_PROJECT_CACHE_KEY, projectId));
+                
+                // Clear general project-based caches for construction progress
+                await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PROGRESS_CACHE_KEY);
+            }
+            catch (Exception ex)
+            {
+                // Log error but don't fail the operation
+                _logger.LogError(ex, "Error invalidating project caches: {message}", ex.Message);
             }
         }
     }
