@@ -10,6 +10,7 @@ using Sep490_Backend.Services.HelperService;
 using Sep490_Backend.Services.GoogleDriveService;
 using Sep490_Backend.Services.ConstructionProgressService;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Sep490_Backend.Services.InspectionReportService
 {
@@ -225,6 +226,9 @@ namespace Sep490_Backend.Services.InspectionReportService
                     
                     _context.ConstructionProgressItems.Update(progressItem);
                     
+                    // Rollback materials from the progress item to resource inventory
+                    await RollbackMaterials(progressItem, actionBy);
+                    
                     // Update parent progress calculation if needed
                     if (becameCompleted && !string.IsNullOrEmpty(progressItem.ParentIndex))
                     {
@@ -360,6 +364,7 @@ namespace Sep490_Backend.Services.InspectionReportService
             {
                 var progressItem = await _context.ConstructionProgressItems
                     .Include(pi => pi.ConstructionProgress)
+                    .Include(pi => pi.Details)
                     .FirstOrDefaultAsync(pi => pi.Id == report.ConstructionProgressItemId && !pi.Deleted);
                 
                 if (progressItem != null)
@@ -375,6 +380,9 @@ namespace Sep490_Backend.Services.InspectionReportService
                     progressItem.ActualEndDate = DateTime.Now;
                     
                     _context.ConstructionProgressItems.Update(progressItem);
+
+                    // Rollback materials from the progress item to resource inventory
+                    await RollbackMaterials(progressItem, actionBy);
                     
                     // Update parent progress calculation if needed
                     if (becameCompleted && !string.IsNullOrEmpty(progressItem.ParentIndex))
@@ -836,77 +844,92 @@ namespace Sep490_Backend.Services.InspectionReportService
                         // Skip calculating parent progress if this is a manually set item or not a parent of other items
                         if (childItems.Count > 0)
                         {
-                            int totalProgress = 0;
-                            foreach (var child in childItems)
+                            // 1. Check if ALL children are Done and at 100% progress
+                            bool allChildrenDoneAndCompleted = childItems.All(c => 
+                                c.Status == ProgressStatusEnum.Done && c.Progress == 100);
+                            
+                            if (allChildrenDoneAndCompleted)
                             {
-                                totalProgress += child.Progress;
-                            }
-                            
-                            int averageProgress = totalProgress / childItems.Count;
-                            
-                            _logger.LogInformation($"Setting progress of parent item {parentItem.Id} (index {index}) to {averageProgress}% based on {childItems.Count} children");
-                            
-                            // Update parent progress
-                            parentItem.Progress = averageProgress;
-                            
-                            // Check specific status conditions for the parent based on children statuses
-                            
-                            // 1. If ALL children have status Done, parent should be Done
-                            bool allChildrenDone = childItems.All(c => c.Status == ProgressStatusEnum.Done);
-                            
-                            // 2. If ANY child has status InProgress, parent should be InProgress
-                            bool anyChildInProgress = childItems.Any(c => c.Status == ProgressStatusEnum.InProgress);
-                            
-                            // 3. If ALL children have status WaitForInspection or Done, parent should be WaitForInspection
-                            bool allChildrenWaitingOrDone = childItems.All(c => 
-                                c.Status == ProgressStatusEnum.WaitForInspection || 
-                                c.Status == ProgressStatusEnum.Done);
-                            
-                            // 4. If ALL children have status NotStarted, parent should be NotStarted
-                            bool allChildrenNotStarted = childItems.All(c => c.Status == ProgressStatusEnum.NotStarted);
-                            
-                            // Update status based on the conditions above (priority order matters)
-                            if (allChildrenDone)
-                            {
-                                // If all children are Done, set parent to Done
+                                // If all children are Done and at 100%, set parent to 100% and Done status
+                                parentItem.Progress = 100;
                                 parentItem.Status = ProgressStatusEnum.Done;
-                                _logger.LogInformation($"Setting parent item {parentItem.Id} status to Done because all children are Done");
+                                _logger.LogInformation($"Setting parent item {parentItem.Id} progress to 100% and status to Done because all children are Done and at 100% progress");
                             }
-                            else if (anyChildInProgress)
+                            else
                             {
-                                // If any child is InProgress, set parent to InProgress
-                                parentItem.Status = ProgressStatusEnum.InProgress;
-                                _logger.LogInformation($"Setting parent item {parentItem.Id} status to InProgress because at least one child is InProgress");
-                            }
-                            else if (allChildrenWaitingOrDone)
-                            {
-                                // If all children are either WaitForInspection or Done, set parent to WaitForInspection
-                                parentItem.Status = ProgressStatusEnum.WaitForInspection;
-                                _logger.LogInformation($"Setting parent item {parentItem.Id} status to WaitForInspection because all children are WaitForInspection or Done");
-                            }
-                            else if (allChildrenNotStarted)
-                            {
-                                // If all children are NotStarted, set parent to NotStarted
-                                parentItem.Status = ProgressStatusEnum.NotStarted;
-                                _logger.LogInformation($"Setting parent item {parentItem.Id} status to NotStarted because all children are NotStarted");
-                            }
-                            else 
-                            {
-                                // Default fallback based on progress value
-                                if (averageProgress > 0 && averageProgress < 100)
+                                // Calculate average progress as before for other cases
+                                int totalProgress = 0;
+                                foreach (var child in childItems)
                                 {
+                                    totalProgress += child.Progress;
+                                }
+                                
+                                int averageProgress = totalProgress / childItems.Count;
+                                
+                                _logger.LogInformation($"Setting progress of parent item {parentItem.Id} (index {index}) to {averageProgress}% based on {childItems.Count} children");
+                                
+                                // Update parent progress
+                                parentItem.Progress = averageProgress;
+                                
+                                // Check specific status conditions for the parent based on children statuses
+                                
+                                // 1. If ALL children have status Done, parent should be Done
+                                bool allChildrenDone = childItems.All(c => c.Status == ProgressStatusEnum.Done);
+                                
+                                // 2. If ANY child has status InProgress, parent should be InProgress
+                                bool anyChildInProgress = childItems.Any(c => c.Status == ProgressStatusEnum.InProgress);
+                                
+                                // 3. If ALL children have status WaitForInspection or Done, parent should be WaitForInspection
+                                bool allChildrenWaitingOrDone = childItems.All(c => 
+                                    c.Status == ProgressStatusEnum.WaitForInspection || 
+                                    c.Status == ProgressStatusEnum.Done);
+                                
+                                // 4. If ALL children have status NotStarted, parent should be NotStarted
+                                bool allChildrenNotStarted = childItems.All(c => c.Status == ProgressStatusEnum.NotStarted);
+                                
+                                // Update status based on the conditions above (priority order matters)
+                                if (allChildrenDone)
+                                {
+                                    // If all children are Done, set parent to Done
+                                    parentItem.Status = ProgressStatusEnum.Done;
+                                    _logger.LogInformation($"Setting parent item {parentItem.Id} status to Done because all children are Done");
+                                }
+                                else if (anyChildInProgress)
+                                {
+                                    // If any child is InProgress, set parent to InProgress
                                     parentItem.Status = ProgressStatusEnum.InProgress;
-                                    _logger.LogInformation($"Setting parent item {parentItem.Id} status to InProgress based on progress value");
+                                    _logger.LogInformation($"Setting parent item {parentItem.Id} status to InProgress because at least one child is InProgress");
                                 }
-                                else if (averageProgress == 100)
+                                else if (allChildrenWaitingOrDone)
                                 {
+                                    // If all children are either WaitForInspection or Done, set parent to WaitForInspection
                                     parentItem.Status = ProgressStatusEnum.WaitForInspection;
-                                    _logger.LogInformation($"Setting parent item {parentItem.Id} status to WaitForInspection based on progress value");
+                                    _logger.LogInformation($"Setting parent item {parentItem.Id} status to WaitForInspection because all children are WaitForInspection or Done");
                                 }
-                                else
+                                else if (allChildrenNotStarted)
                                 {
+                                    // If all children are NotStarted, set parent to NotStarted
                                     parentItem.Status = ProgressStatusEnum.NotStarted;
-                                    _logger.LogInformation($"Setting parent item {parentItem.Id} status to NotStarted based on progress value");
+                                    _logger.LogInformation($"Setting parent item {parentItem.Id} status to NotStarted because all children are NotStarted");
+                                }
+                                else 
+                                {
+                                    // Default fallback based on progress value
+                                    if (averageProgress > 0 && averageProgress < 100)
+                                    {
+                                        parentItem.Status = ProgressStatusEnum.InProgress;
+                                        _logger.LogInformation($"Setting parent item {parentItem.Id} status to InProgress based on progress value");
+                                    }
+                                    else if (averageProgress == 100)
+                                    {
+                                        parentItem.Status = ProgressStatusEnum.WaitForInspection;
+                                        _logger.LogInformation($"Setting parent item {parentItem.Id} status to WaitForInspection based on progress value");
+                                    }
+                                    else
+                                    {
+                                        parentItem.Status = ProgressStatusEnum.NotStarted;
+                                        _logger.LogInformation($"Setting parent item {parentItem.Id} status to NotStarted based on progress value");
+                                    }
                                 }
                             }
                             
@@ -926,6 +949,129 @@ namespace Sep490_Backend.Services.InspectionReportService
                         }
                     }
                 }
+            }
+        }
+
+        /// <summary>
+        /// Rolls back materials from a completed construction progress item to project inventory
+        /// based on CanRollBack flag and unused quantities
+        /// </summary>
+        /// <param name="progressItem">The completed progress item with its details</param>
+        /// <param name="actionBy">ID of the user performing the action</param>
+        private async Task RollbackMaterials(ConstructionProgressItem progressItem, int actionBy)
+        {
+            _logger.LogInformation($"Rolling back materials from completed progress item {progressItem.Id} to resource inventory");
+            
+            // Get progress item details with material resources if they are not already loaded
+            var progressItemDetails = progressItem.Details?.Where(d => d.ResourceType == ResourceType.MATERIAL 
+                                                                  && d.ResourceId.HasValue 
+                                                                  && !d.Deleted).ToList()
+                ?? await _context.ConstructionProgressItemDetails
+                    .Where(pid => pid.ProgressItemId == progressItem.Id && 
+                                pid.ResourceType == ResourceType.MATERIAL && 
+                                pid.ResourceId.HasValue &&
+                                !pid.Deleted)
+                    .ToListAsync();
+
+            if (!progressItemDetails.Any())
+            {
+                _logger.LogInformation($"No material details found for progress item {progressItem.Id}");
+                return;
+            }
+            
+            int projectId = progressItem.ConstructionProgress.ProjectId;
+            
+            foreach (var detail in progressItemDetails)
+            {
+                // Get the material to check rollback flag
+                var material = await _context.Materials
+                    .FirstOrDefaultAsync(m => m.Id == detail.ResourceId.Value && !m.Deleted);
+                
+                if (material == null)
+                {
+                    _logger.LogWarning($"Material with ID {detail.ResourceId.Value} not found or deleted, skipping rollback");
+                    continue;
+                }
+                
+                // Calculate quantity to roll back (remaining quantity that wasn't used)
+                int unusedQuantity = detail.Quantity - detail.UsedQuantity;
+                
+                if (unusedQuantity <= 0)
+                {
+                    _logger.LogInformation($"No unused quantity to roll back for material {material.Id} in progress item detail {detail.Id}");
+                    continue;
+                }
+
+                // Rollback logic based on CanRollBack flag
+                if (material.CanRollBack)
+                {
+                    // Materials with CanRollBack=true should be returned to ResourceInventory
+                    _logger.LogInformation($"Rolling back material {material.Id} ({material.MaterialName}) with CanRollBack=true");
+                    await RollbackMaterialToInventory(material, projectId, unusedQuantity, actionBy);
+                }
+                else
+                {
+                    // Materials with CanRollBack=false that are leftover (unused) should also be returned to ResourceInventory
+                    _logger.LogInformation($"Returning leftover material {material.Id} ({material.MaterialName}) with CanRollBack=false to inventory");
+                    await RollbackMaterialToInventory(material, projectId, unusedQuantity, actionBy);
+                }
+                
+                // Update the detail to mark the rolled back quantity
+                detail.UsedQuantity = detail.Quantity; // Mark all as used, since we're rolling back the unused portion
+                detail.UpdatedAt = DateTime.Now;
+                detail.Updater = actionBy;
+                
+                _context.ConstructionProgressItemDetails.Update(detail);
+            }
+            
+            await _context.SaveChangesAsync();
+        }
+
+        /// <summary>
+        /// Adds material quantity back to ResourceInventory
+        /// </summary>
+        private async Task RollbackMaterialToInventory(Material material, int projectId, int quantity, int actionBy)
+        {
+            // Check if this material already exists in the project's inventory
+            var existingInventory = await _context.ResourceInventory
+                .FirstOrDefaultAsync(ri => ri.ProjectId == projectId && 
+                                          ri.ResourceId == material.Id && 
+                                          ri.ResourceType == ResourceType.MATERIAL && 
+                                          !ri.Deleted);
+            
+            if (existingInventory != null)
+            {
+                // Update existing inventory record
+                existingInventory.Quantity += quantity;
+                existingInventory.UpdatedAt = DateTime.Now;
+                existingInventory.Updater = actionBy;
+                
+                _context.ResourceInventory.Update(existingInventory);
+                
+                _logger.LogInformation($"Added {quantity} of material {material.Id} ({material.MaterialName}) " +
+                                     $"to existing project inventory (new total: {existingInventory.Quantity})");
+            }
+            else
+            {
+                // Create new inventory record
+                var newInventory = new ResourceInventory
+                {
+                    Name = material.MaterialName,
+                    ResourceId = material.Id,
+                    ProjectId = projectId,
+                    ResourceType = ResourceType.MATERIAL,
+                    Quantity = quantity,
+                    Unit = material.Unit ?? "unit",
+                    Status = true,
+                    Creator = actionBy,
+                    Updater = actionBy,
+                    CreatedAt = DateTime.Now,
+                    UpdatedAt = DateTime.Now
+                };
+                
+                await _context.ResourceInventory.AddAsync(newInventory);
+                
+                _logger.LogInformation($"Created new project inventory record with {quantity} of material {material.Id} ({material.MaterialName})");
             }
         }
     }
