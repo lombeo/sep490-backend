@@ -75,5 +75,9 @@
 
         // Add the missing cache key
         public const string PROJECT_STATUS_CACHE_KEY = "PROJECT_STATUS_CACHE_KEY";
+        
+        // Project Statistics cache keys
+        public const string PROJECT_STATISTICS_USER_CACHE_KEY = "PROJECT_STATISTICS:USER:{0}"; // Cache key for user-specific project statistics
+        public const string PROJECT_STATISTICS_PROJECT_CACHE_KEY = "PROJECT_STATISTICS:PROJECT:{0}"; // Cache key for project-specific statistics
     }
 }

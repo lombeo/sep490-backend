@@ -75,5 +75,28 @@ namespace Sep490_Backend.Controllers
             _logger.LogInformation($"Updating project {model.ProjectId} status to {model.TargetStatus}");
             return await HandleException(_projectService.UpdateStatus(model, UserId), Message.ProjectMessage.UPDATE_STATUS_SUCCESS);
         }
+
+        /// <summary>
+        /// Get statistics for all projects the current user participates in
+        /// </summary>
+        /// <returns>Project statistics (planned, inprogress, inspected, remain)</returns>
+        [HttpGet("statistic")]
+        public async Task<ResponseDTO<ProjectStatisticsDTO>> GetUserProjectStatistics()
+        {
+            _logger.LogInformation($"Getting project statistics for user {UserId}");
+            return await HandleException(_projectService.GetUserProjectStatistics(UserId), Message.ProjectMessage.STATISTICS_SUCCESS);
+        }
+
+        /// <summary>
+        /// Get statistics for a specific project
+        /// </summary>
+        /// <param name="projectId">ID of the project</param>
+        /// <returns>Project statistics (planned, inprogress, inspected, remain)</returns>
+        [HttpGet("statistic/{projectId}")]
+        public async Task<ResponseDTO<ProjectStatisticsDTO>> GetProjectStatistics(int projectId)
+        {
+            _logger.LogInformation($"Getting statistics for project {projectId}");
+            return await HandleException(_projectService.GetProjectStatistics(projectId, UserId), Message.ProjectMessage.STATISTICS_SUCCESS);
+        }
     }
 }

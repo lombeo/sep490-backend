@@ -24,6 +24,8 @@ namespace Sep490_Backend.Services.ProjectService
         Task<ListProjectStatusDTO> ListProjectStatus(int actionBy);
         Task<ProjectDTO> Detail(int id, int actionBy);
         Task<bool> UpdateStatus(UpdateProjectStatusDTO model, int actionBy);
+        Task<ProjectStatisticsDTO> GetUserProjectStatistics(int actionBy);
+        Task<ProjectStatisticsDTO> GetProjectStatistics(int projectId, int actionBy);
     }
 
     public class ProjectService : IProjectService
@@ -818,16 +820,201 @@ namespace Sep490_Backend.Services.ProjectService
         /// <param name="projectId">The ID of the project</param>
         private async Task InvalidateProjectCaches(int projectId)
         {
-            // Invalidate specific project cache
-            string projectCacheKey = string.Format(RedisCacheKey.PROJECT_BY_ID_CACHE_KEY, projectId);
-            await _cacheService.DeleteAsync(projectCacheKey);
+            try
+            {
+                // Invalidate specific project cache
+                string projectCacheKey = string.Format(RedisCacheKey.PROJECT_BY_ID_CACHE_KEY, projectId);
+                await _cacheService.DeleteAsync(projectCacheKey);
+                
+                // Invalidate main project caches
+                await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_CACHE_KEY);
+                await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_LIST_CACHE_KEY);
+                
+                // Invalidate project status count cache
+                await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_STATUS_CACHE_KEY);
+                
+                // Invalidate project statistics cache
+                await _cacheService.DeleteAsync(string.Format(RedisCacheKey.PROJECT_STATISTICS_PROJECT_CACHE_KEY, projectId));
+                
+                // Clear pattern-based caches related to projects
+                await _cacheService.DeleteByPatternAsync($"{RedisCacheKey.PROJECT_ALL_PATTERN}*");
+                
+                // Also clear construction progress caches related to this project
+                await _cacheService.DeleteAsync(string.Format(RedisCacheKey.CONSTRUCTION_PROGRESS_BY_PROJECT_CACHE_KEY, projectId));
+                
+                // Clear general project-based caches for construction progress
+                await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PROGRESS_CACHE_KEY);
+                
+                // Try to invalidate user-specific statistics caches, but we don't know which users
+                // have access to this project, so we can't target specific user caches
+                // Instead, we'll invalidate all project statistics user caches
+                await _cacheService.DeleteByPatternAsync("PROJECT_STATISTICS:USER:*");
+            }
+            catch (Exception ex)
+            {
+                // Log error but don't fail the operation
+                _logger.LogError(ex, "Error invalidating project caches: {message}", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Gets statistics for all projects that the current user participates in
+        /// </summary>
+        /// <param name="actionBy">The ID of the user requesting the statistics</param>
+        /// <returns>Project statistics including planned, inprogress, inspected and remain values</returns>
+        public async Task<ProjectStatisticsDTO> GetUserProjectStatistics(int actionBy)
+        {
+            // Try to get from cache first
+            string cacheKey = string.Format(RedisCacheKey.PROJECT_STATISTICS_USER_CACHE_KEY, actionBy);
+            var cachedResult = await _cacheService.GetAsync<ProjectStatisticsDTO>(cacheKey);
+            if (cachedResult != null)
+            {
+                return cachedResult;
+            }
+
+            // Get projects that the user has access to
+            var userProjects = await _context.ProjectUsers
+                .Where(pu => pu.UserId == actionBy && !pu.Deleted)
+                .Select(pu => pu.ProjectId)
+                .ToListAsync();
+
+            // If user is not part of any project, return empty statistics
+            if (!userProjects.Any())
+            {
+                var emptyResult = new ProjectStatisticsDTO
+                {
+                    Statistics = new List<ProjectStatisticItemDTO>
+                    {
+                        new ProjectStatisticItemDTO { Label = "planned", Value = 0 },
+                        new ProjectStatisticItemDTO { Label = "inprogress", Value = 0 },
+                        new ProjectStatisticItemDTO { Label = "inspected", Value = 0 },
+                        new ProjectStatisticItemDTO { Label = "remain", Value = 0 }
+                    }
+                };
+
+                await _cacheService.SetAsync(cacheKey, emptyResult, TimeSpan.FromMinutes(30));
+                return emptyResult;
+            }
+
+            // Calculate statistics for all projects the user has access to
             
-            // Invalidate main project caches
-            await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_CACHE_KEY);
-            await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_LIST_CACHE_KEY);
+            // 1. Get all contract details sums (planned value)
+            decimal planned = await _context.ContractDetails
+                .Where(cd => userProjects.Contains(cd.Contract.ProjectId) && !cd.Deleted)
+                .SumAsync(cd => cd.Total);
+
+            // 2. Get all progress items with status = InProgress (1)
+            decimal inProgress = await _context.ConstructionProgressItems
+                .Where(pi => userProjects.Contains(pi.ConstructionProgress.ProjectId) && 
+                            pi.Status == Infra.Enums.ProgressStatusEnum.InProgress && 
+                            !pi.Deleted)
+                .SumAsync(pi => pi.UsedQuantity * pi.UnitPrice);
+
+            // 3. Get all progress items with status = Done (2)
+            decimal inspected = await _context.ConstructionProgressItems
+                .Where(pi => userProjects.Contains(pi.ConstructionProgress.ProjectId) && 
+                            pi.Status == Infra.Enums.ProgressStatusEnum.Done && 
+                            !pi.Deleted)
+                .SumAsync(pi => pi.UsedQuantity * pi.UnitPrice);
+
+            // 4. Calculate remaining value
+            decimal remain = planned - inProgress - inspected;
+
+            // Create result object
+            var result = new ProjectStatisticsDTO
+            {
+                Statistics = new List<ProjectStatisticItemDTO>
+                {
+                    new ProjectStatisticItemDTO { Label = "planned", Value = planned },
+                    new ProjectStatisticItemDTO { Label = "inprogress", Value = inProgress },
+                    new ProjectStatisticItemDTO { Label = "inspected", Value = inspected },
+                    new ProjectStatisticItemDTO { Label = "remain", Value = remain }
+                }
+            };
+
+            // Cache the result
+            await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(30));
+
+            return result;
+        }
+
+        /// <summary>
+        /// Gets statistics for a specific project
+        /// </summary>
+        /// <param name="projectId">The ID of the project</param>
+        /// <param name="actionBy">The ID of the user requesting the statistics</param>
+        /// <returns>Project statistics including planned, inprogress, inspected and remain values</returns>
+        public async Task<ProjectStatisticsDTO> GetProjectStatistics(int projectId, int actionBy)
+        {
+            // Check if project exists
+            var project = await _context.Projects
+                .FirstOrDefaultAsync(p => p.Id == projectId && !p.Deleted);
+
+            if (project == null)
+            {
+                throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
+            }
+
+            // Check if user has access to the project
+            bool userHasAccess = _helperService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD) ||
+                                 await _context.ProjectUsers
+                                     .AnyAsync(pu => pu.ProjectId == projectId && 
+                                              pu.UserId == actionBy && 
+                                              !pu.Deleted);
+
+            if (!userHasAccess)
+            {
+                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED_PROJECT);
+            }
+
+            // Try to get from cache
+            string cacheKey = string.Format(RedisCacheKey.PROJECT_STATISTICS_PROJECT_CACHE_KEY, projectId);
+            var cachedResult = await _cacheService.GetAsync<ProjectStatisticsDTO>(cacheKey);
+            if (cachedResult != null)
+            {
+                return cachedResult;
+            }
+
+            // Calculate statistics for the specific project
             
-            // Invalidate project status count cache
-            await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_STATUS_CACHE_KEY);
+            // 1. Get all contract details sums for the project (planned value)
+            decimal planned = await _context.ContractDetails
+                .Where(cd => cd.Contract.ProjectId == projectId && !cd.Deleted)
+                .SumAsync(cd => cd.Total);
+
+            // 2. Get all progress items with status = InProgress (1)
+            decimal inProgress = await _context.ConstructionProgressItems
+                .Where(pi => pi.ConstructionProgress.ProjectId == projectId && 
+                            pi.Status == Infra.Enums.ProgressStatusEnum.InProgress && 
+                            !pi.Deleted)
+                .SumAsync(pi => pi.UsedQuantity * pi.UnitPrice);
+
+            // 3. Get all progress items with status = Done (2)
+            decimal inspected = await _context.ConstructionProgressItems
+                .Where(pi => pi.ConstructionProgress.ProjectId == projectId && 
+                            pi.Status == Infra.Enums.ProgressStatusEnum.Done && 
+                            !pi.Deleted)
+                .SumAsync(pi => pi.UsedQuantity * pi.UnitPrice);
+
+            // 4. Calculate remaining value
+            decimal remain = planned - inProgress - inspected;
+
+            // Create result object
+            var result = new ProjectStatisticsDTO
+            {
+                Statistics = new List<ProjectStatisticItemDTO>
+                {
+                    new ProjectStatisticItemDTO { Label = "planned", Value = planned },
+                    new ProjectStatisticItemDTO { Label = "inprogress", Value = inProgress },
+                    new ProjectStatisticItemDTO { Label = "inspected", Value = inspected },
+                    new ProjectStatisticItemDTO { Label = "remain", Value = remain }
+                }
+            };
+
+            // Cache the result
+            await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(30));
+
+            return result;
         }
     }
 }
