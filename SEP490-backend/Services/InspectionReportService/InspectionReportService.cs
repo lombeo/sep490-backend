@@ -230,8 +230,10 @@ namespace Sep490_Backend.Services.InspectionReportService
                     await RollbackMaterials(progressItem, actionBy);
                     
                     // Update parent progress calculation if needed
-                    if (becameCompleted && !string.IsNullOrEmpty(progressItem.ParentIndex))
+                    if (!string.IsNullOrEmpty(progressItem.ParentIndex))
                     {
+                        _logger.LogInformation($"Progress item {progressItem.Id} has parent index {progressItem.ParentIndex}, checking siblings status");
+                        
                         // Get all progress items for this progress to calculate parent progress
                         var progressItems = await _context.ConstructionProgressItems
                             .Where(pi => pi.ProgressId == progressItem.ProgressId && !pi.Deleted)
@@ -242,6 +244,36 @@ namespace Sep490_Backend.Services.InspectionReportService
                         
                         // Add parent index
                         updatedItemIndices.Add(progressItem.ParentIndex);
+                        
+                        // Check if all siblings (children of parent) are in Done status
+                        var parentItem = progressItems.FirstOrDefault(pi => pi.Index == progressItem.ParentIndex);
+                        if (parentItem != null)
+                        {
+                            var siblingItems = progressItems
+                                .Where(pi => pi.ParentIndex == progressItem.ParentIndex && !pi.Deleted)
+                                .ToList();
+                                
+                            bool allSiblingsDone = siblingItems.All(si => si.Status == ProgressStatusEnum.Done);
+                            
+                            if (allSiblingsDone)
+                            {
+                                _logger.LogInformation($"All siblings of progress item {progressItem.Id} are Done, setting parent {parentItem.Id} to Done");
+                                
+                                // Set parent to Done
+                                parentItem.Progress = 100;
+                                parentItem.Status = ProgressStatusEnum.Done;
+                                parentItem.UpdatedAt = DateTime.Now;
+                                parentItem.Updater = actionBy;
+                                
+                                _context.ConstructionProgressItems.Update(parentItem);
+                                
+                                // If this parent also has a parent, add its parent to the updated indices
+                                if (!string.IsNullOrEmpty(parentItem.ParentIndex))
+                                {
+                                    updatedItemIndices.Add(parentItem.ParentIndex);
+                                }
+                            }
+                        }
                         
                         // Update progress of parent items based on their children
                         await UpdateParentItemsProgress(progressItems, updatedItemIndices, actionBy);
@@ -385,8 +417,10 @@ namespace Sep490_Backend.Services.InspectionReportService
                     await RollbackMaterials(progressItem, actionBy);
                     
                     // Update parent progress calculation if needed
-                    if (becameCompleted && !string.IsNullOrEmpty(progressItem.ParentIndex))
+                    if (!string.IsNullOrEmpty(progressItem.ParentIndex))
                     {
+                        _logger.LogInformation($"Progress item {progressItem.Id} has parent index {progressItem.ParentIndex}, checking siblings status");
+                        
                         // Get all progress items for this progress to calculate parent progress
                         var progressItems = await _context.ConstructionProgressItems
                             .Where(pi => pi.ProgressId == progressItem.ProgressId && !pi.Deleted)
@@ -397,6 +431,36 @@ namespace Sep490_Backend.Services.InspectionReportService
                         
                         // Add parent index
                         updatedItemIndices.Add(progressItem.ParentIndex);
+                        
+                        // Check if all siblings (children of parent) are in Done status
+                        var parentItem = progressItems.FirstOrDefault(pi => pi.Index == progressItem.ParentIndex);
+                        if (parentItem != null)
+                        {
+                            var siblingItems = progressItems
+                                .Where(pi => pi.ParentIndex == progressItem.ParentIndex && !pi.Deleted)
+                                .ToList();
+                                
+                            bool allSiblingsDone = siblingItems.All(si => si.Status == ProgressStatusEnum.Done);
+                            
+                            if (allSiblingsDone)
+                            {
+                                _logger.LogInformation($"All siblings of progress item {progressItem.Id} are Done, setting parent {parentItem.Id} to Done");
+                                
+                                // Set parent to Done
+                                parentItem.Progress = 100;
+                                parentItem.Status = ProgressStatusEnum.Done;
+                                parentItem.UpdatedAt = DateTime.Now;
+                                parentItem.Updater = actionBy;
+                                
+                                _context.ConstructionProgressItems.Update(parentItem);
+                                
+                                // If this parent also has a parent, add its parent to the updated indices
+                                if (!string.IsNullOrEmpty(parentItem.ParentIndex))
+                                {
+                                    updatedItemIndices.Add(parentItem.ParentIndex);
+                                }
+                            }
+                        }
                         
                         // Update progress of parent items based on their children
                         await UpdateParentItemsProgress(progressItems, updatedItemIndices, actionBy);
