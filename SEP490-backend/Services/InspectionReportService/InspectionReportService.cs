@@ -973,6 +973,41 @@ namespace Sep490_Backend.Services.InspectionReportService
                                 !pid.Deleted)
                     .ToListAsync();
 
+            // Get vehicle resources associated with this progress item to set their status to Available
+            var vehicleDetails = progressItem.Details?.Where(d => d.ResourceType == ResourceType.MACHINE 
+                                                              && d.ResourceId.HasValue 
+                                                              && !d.Deleted).ToList()
+                ?? await _context.ConstructionProgressItemDetails
+                    .Where(pid => pid.ProgressItemId == progressItem.Id && 
+                                pid.ResourceType == ResourceType.MACHINE && 
+                                pid.ResourceId.HasValue &&
+                                !pid.Deleted)
+                    .ToListAsync();
+
+            if (vehicleDetails != null && vehicleDetails.Any())
+            {
+                foreach (var vehicleDetail in vehicleDetails)
+                {
+                    if (vehicleDetail.ResourceId.HasValue)
+                    {
+                        var vehicle = await _context.Vehicles
+                            .FirstOrDefaultAsync(v => v.Id == vehicleDetail.ResourceId.Value && !v.Deleted);
+                        
+                        if (vehicle != null)
+                        {
+                            // Set vehicle status to Available
+                            vehicle.Status = VehicleStatus.Available;
+                            vehicle.UpdatedAt = DateTime.UtcNow;
+                            vehicle.Updater = actionBy;
+                            
+                            _context.Vehicles.Update(vehicle);
+                            
+                            _logger.LogInformation($"Set vehicle {vehicle.Id} ({vehicle.VehicleName}) status to Available when progress item {progressItem.Id} was approved");
+                        }
+                    }
+                }
+            }
+
             if (!progressItemDetails.Any())
             {
                 _logger.LogInformation($"No material details found for progress item {progressItem.Id}");
@@ -1015,14 +1050,10 @@ namespace Sep490_Backend.Services.InspectionReportService
                     _logger.LogInformation($"Returning leftover material {material.Id} ({material.MaterialName}) with CanRollBack=false to inventory");
                     await RollbackMaterialToInventory(material, projectId, unusedQuantity, actionBy);
                 }
-                
-                // Update the detail to mark the rolled back quantity
-                detail.UsedQuantity = detail.Quantity; // Mark all as used, since we're rolling back the unused portion
-                detail.UpdatedAt = DateTime.Now;
-                detail.Updater = actionBy;
-                
-                _context.ConstructionProgressItemDetails.Update(detail);
             }
+            
+            // Invalidate vehicle caches
+            await _cacheService.DeleteByPatternAsync("VEHICLE:*");
             
             await _context.SaveChangesAsync();
         }

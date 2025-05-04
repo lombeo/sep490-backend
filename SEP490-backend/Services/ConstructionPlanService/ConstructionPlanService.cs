@@ -16,6 +16,7 @@ using Sep490_Backend.Services.CacheService;
 using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.HelperService;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Logging;
 
 namespace Sep490_Backend.Services.ConstructionPlanService
 {
@@ -38,17 +39,20 @@ namespace Sep490_Backend.Services.ConstructionPlanService
         private readonly ICacheService _cacheService;
         private readonly IHelperService _helperService;
         private readonly IDataService _dataService;
+        private readonly ILogger<ConstructionPlanService> _logger;
 
         public ConstructionPlanService(
             BackendContext context,
             ICacheService cacheService,
             IHelperService helperService,
-            IDataService dataService)
+            IDataService dataService,
+            ILogger<ConstructionPlanService> logger)
         {
             _context = context;
             _cacheService = cacheService;
             _helperService = helperService;
             _dataService = dataService;
+            _logger = logger;
         }
 
         public async Task<List<ConstructionPlanDTO>> Search(ConstructionPlanQuery query)
@@ -1371,6 +1375,9 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
             var resourceGroups = new Dictionary<(int? ResourceId, int ProjectId, ResourceType ResourceType), 
                 (string Name, string Unit)>();
             
+            // List to track vehicles that need status updates
+            var vehiclesToUpdate = new HashSet<int>();
+            
             // Process each plan item
             foreach (var planItem in planItems)
             {
@@ -1398,6 +1405,12 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
                     if (!resourceGroups.ContainsKey(key))
                     {
                         resourceGroups[key] = (resourceName, detail.Unit ?? "Unit");
+                    }
+                    
+                    // Track vehicle IDs for status update
+                    if (detail.ResourceType == ResourceType.MACHINE && detail.ResourceId.HasValue)
+                    {
+                        vehiclesToUpdate.Add(detail.ResourceId.Value);
                     }
                 }
             }
@@ -1444,12 +1457,29 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
                     // We don't update existing inventory quantities anymore
                 }
                 
+                // Update vehicle statuses to Unavailable
+                foreach (var vehicleId in vehiclesToUpdate)
+                {
+                    var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v => v.Id == vehicleId && !v.Deleted);
+                    if (vehicle != null)
+                    {
+                        vehicle.Status = VehicleStatus.Unavailable;
+                        vehicle.UpdatedAt = DateTime.UtcNow;
+                        vehicle.Updater = actionBy;
+                        _context.Vehicles.Update(vehicle);
+                        
+                        _logger.LogInformation($"Set vehicle {vehicle.Id} ({vehicle.VehicleName}) status to Unavailable when construction plan was approved");
+                    }
+                }
+                
                 // Save changes
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
                 
                 // Invalidate resource inventory cache
                 await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
+                // Invalidate vehicle cache
+                await _cacheService.DeleteByPatternAsync("VEHICLE:*");
             }
             catch (Exception ex)
             {
@@ -1473,7 +1503,7 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
                 case ResourceType.MACHINE:
                     var vehicle = await _context.Vehicles
                         .FirstOrDefaultAsync(v => v.Id == resourceId && !v.Deleted);
-                    return vehicle?.LicensePlate ?? $"Vehicle {resourceId}";
+                    return vehicle?.VehicleName ?? $"Vehicle {resourceId}";
                     
                 case ResourceType.MATERIAL:
                     var material = await _context.Materials

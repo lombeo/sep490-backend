@@ -1348,10 +1348,6 @@ namespace Sep490_Backend.Services.ResourceReqService
                                 {
                                     throw new ArgumentException(Message.ResourceRequestMessage.VEHICLE_UNAVAILABLE);
                                 }
-                                else if (vehicle != null && vehicle.Status == VehicleStatus.UnderMaintenance)
-                                {
-                                    throw new ArgumentException(Message.ResourceRequestMessage.VEHICLE_UNDERMAINTANCE);
-                                }
                                 break;
                                 
                             case ResourceType.HUMAN:
@@ -2511,6 +2507,23 @@ namespace Sep490_Backend.Services.ResourceReqService
                     await _context.ConstructionProgressItemDetails.AddAsync(newTaskDetail);
                 }
                 
+                // If the resource is a vehicle, set its status to Unavailable
+                if (detail.ResourceType == ResourceType.MACHINE && detail.ResourceId > 0)
+                {
+                    var vehicle = await _context.Vehicles
+                        .FirstOrDefaultAsync(v => v.Id == detail.ResourceId && !v.Deleted);
+                    
+                    if (vehicle != null)
+                    {
+                        vehicle.Status = VehicleStatus.Unavailable;
+                        vehicle.UpdatedAt = DateTime.UtcNow;
+                        vehicle.Updater = actionBy;
+                        _context.Vehicles.Update(vehicle);
+                        
+                        _logger.LogInformation($"Set vehicle {vehicle.Id} ({vehicle.VehicleName}) status to Unavailable when assigned to task");
+                    }
+                }
+                
                 // For team resources, update ProjectUser entries for the task's project
                 if (detail.ResourceType == ResourceType.HUMAN)
                 {
@@ -2570,6 +2583,8 @@ namespace Sep490_Backend.Services.ResourceReqService
             await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
             await _cacheService.DeleteByPatternAsync(RedisCacheKey.PROJECT_USER_CACHE_KEY);
             await _cacheService.DeleteByPatternAsync(RedisCacheKey.CONSTRUCTION_PROGRESS_ALL_PATTERN);
+            // Invalidate vehicle cache
+            await _cacheService.DeleteByPatternAsync("VEHICLE:*");
         }
 
         /// <summary>
@@ -2682,6 +2697,23 @@ namespace Sep490_Backend.Services.ResourceReqService
                     await _context.ConstructionProgressItemDetails.AddAsync(newDetail);
                 }
                 
+                // If the resource is a vehicle, set its status to Unavailable when completely moved to destination task
+                if (detail.ResourceType == ResourceType.MACHINE && detail.ResourceId > 0 && sourceDetail.Quantity <= 0)
+                {
+                    var vehicle = await _context.Vehicles
+                        .FirstOrDefaultAsync(v => v.Id == detail.ResourceId && !v.Deleted);
+                    
+                    if (vehicle != null)
+                    {
+                        vehicle.Status = VehicleStatus.Unavailable;
+                        vehicle.UpdatedAt = DateTime.UtcNow;
+                        vehicle.Updater = actionBy;
+                        _context.Vehicles.Update(vehicle);
+                        
+                        _logger.LogInformation($"Set vehicle {vehicle.Id} ({vehicle.VehicleName}) status to Unavailable when assigned to destination task");
+                    }
+                }
+                
                 // For team resources, add team members to ProjectUser for destination project
                 // Only needed if source and destination projects are different
                 if (detail.ResourceType == ResourceType.HUMAN && sourceProjectId != destProjectId)
@@ -2741,6 +2773,8 @@ namespace Sep490_Backend.Services.ResourceReqService
             // Invalidate caches
             await _cacheService.DeleteByPatternAsync(RedisCacheKey.CONSTRUCTION_PROGRESS_ALL_PATTERN);
             await _cacheService.DeleteByPatternAsync(RedisCacheKey.PROJECT_USER_CACHE_KEY);
+            // Invalidate vehicle cache
+            await _cacheService.DeleteByPatternAsync("VEHICLE:*");
         }
 
         /// <summary>

@@ -378,6 +378,36 @@ namespace Sep490_Backend.Services.ConstructionProgressService
                               !pid.Deleted)
                 .ToListAsync();
                 
+            // Get vehicle resources to update their status
+            var vehicleDetails = await _context.ConstructionProgressItemDetails
+                .Where(pid => pid.ProgressItemId == progressItemId && 
+                              pid.ResourceType == ResourceType.MACHINE && 
+                              pid.ResourceId.HasValue &&
+                              !pid.Deleted)
+                .ToListAsync();
+                
+            // Update vehicle status to Available
+            if (vehicleDetails.Any())
+            {
+                foreach (var vehicleDetail in vehicleDetails)
+                {
+                    var vehicle = await _context.Vehicles
+                        .FirstOrDefaultAsync(v => v.Id == vehicleDetail.ResourceId.Value && !v.Deleted);
+                        
+                    if (vehicle != null)
+                    {
+                        // Set vehicle status to Available
+                        vehicle.Status = VehicleStatus.Available;
+                        vehicle.UpdatedAt = DateTime.UtcNow;
+                        vehicle.Updater = actionBy;
+                        
+                        _context.Vehicles.Update(vehicle);
+                        
+                        _logger.LogInformation($"Set vehicle {vehicle.Id} ({vehicle.VehicleName}) status to Available when progress item was canceled");
+                    }
+                }
+            }
+                
             if (!progressItemDetails.Any())
             {
                 _logger.LogInformation($"No material details found for progress item {progressItemId}");
@@ -461,6 +491,11 @@ namespace Sep490_Backend.Services.ConstructionProgressService
                 
                 _context.ConstructionProgressItemDetails.Update(detail);
             }
+            
+            // Invalidate resource inventory caches after rollback
+            await InvalidateResourceInventoryCachesByProject(projectId);
+            // Invalidate vehicle caches
+            await _cacheService.DeleteByPatternAsync("VEHICLE:*");
             
             // Save is handled by the calling method in its transaction
         }
@@ -945,6 +980,33 @@ namespace Sep490_Backend.Services.ConstructionProgressService
                     progressItem.Status = (ProgressStatusEnum)model.Status;
                 }
                 
+                // Handle specific status transitions
+                if (model.Status == (int)ProgressStatusEnum.Paused)
+                {
+                    // Can only pause if currently in InProgress status
+                    if (progressItem.Status != ProgressStatusEnum.InProgress)
+                    {
+                        throw new InvalidOperationException("Progress item can only be paused when it is in progress");
+                    }
+                    progressItem.Status = ProgressStatusEnum.Paused;
+                }
+                else if (model.Status == (int)ProgressStatusEnum.InProgress && progressItem.Status == ProgressStatusEnum.Paused)
+                {
+                    // Resuming from paused
+                    progressItem.Status = ProgressStatusEnum.InProgress;
+                }
+                else if (model.Status == (int)ProgressStatusEnum.Cancelled)
+                {
+                    // When canceling, keep current progress but change status
+                    progressItem.Status = ProgressStatusEnum.Cancelled;
+                    
+                    // Rollback materials (similar to inspection approval with Pass)
+                    await RollbackMaterialsFromCompletedItem(progressItem.Id, progress.ProjectId, actionBy);
+                    
+                    // Invalidate resource inventory caches for this project
+                    await InvalidateResourceInventoryCachesByProject(progress.ProjectId);
+                }
+                
                 progressItem.ActualStartDate = model.ActualStartDate;
                 progressItem.ActualEndDate = model.ActualEndDate;
                 progressItem.PlanStartDate = model.PlanStartDate;
@@ -1231,6 +1293,15 @@ namespace Sep490_Backend.Services.ConstructionProgressService
                 // Log error but don't fail the operation
                 _logger.LogError(ex, "Error invalidating project caches: {message}", ex.Message);
             }
+        }
+
+        private async Task InvalidateResourceInventoryCachesByProject(int projectId)
+        {
+            // Clear specific cache for this project's resource inventory
+            await _cacheService.DeleteAsync("RESOURCE_INVENTORY:PROJECT:" + projectId);
+            
+            // Clear all resource inventory related caches
+            await _cacheService.DeleteByPatternAsync("RESOURCE_INVENTORY:*");
         }
     }
 } 
