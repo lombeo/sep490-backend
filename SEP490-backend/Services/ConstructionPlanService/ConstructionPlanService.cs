@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json;
 using Npgsql;
 using NPOI.SS.UserModel;
@@ -17,6 +18,7 @@ using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.HelperService;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.Http;
 
 namespace Sep490_Backend.Services.ConstructionPlanService
 {
@@ -40,19 +42,22 @@ namespace Sep490_Backend.Services.ConstructionPlanService
         private readonly IHelperService _helperService;
         private readonly IDataService _dataService;
         private readonly ILogger<ConstructionPlanService> _logger;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
         public ConstructionPlanService(
             BackendContext context,
             ICacheService cacheService,
             IHelperService helperService,
             IDataService dataService,
-            ILogger<ConstructionPlanService> logger)
+            ILogger<ConstructionPlanService> logger,
+            IHttpContextAccessor httpContextAccessor)
         {
             _context = context;
             _cacheService = cacheService;
             _helperService = helperService;
             _dataService = dataService;
             _logger = logger;
+            _httpContextAccessor = httpContextAccessor;
         }
 
         public async Task<List<ConstructionPlanDTO>> Search(ConstructionPlanQuery query)
@@ -1221,6 +1226,33 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
             // Invalidate all related caches
             await InvalidateConstructionPlanCaches(constructionPlan.Id, constructionPlan.ProjectId);
             
+            // Check if plan is fully approved
+            bool isFullyApproved = constructionPlan.Reviewer != null && 
+                                  constructionPlan.Reviewer.Count > 0 && 
+                                  constructionPlan.Reviewer.All(r => r.Value == true);
+            
+            // Trigger email notification in the background (non-blocking)
+            using (var scope = _httpContextAccessor.HttpContext?.RequestServices.CreateScope())
+            {
+                var emailService = scope?.ServiceProvider.GetService<IConstructionPlanEmailService>();
+                if (emailService != null)
+                {
+                    // Fire and forget - don't await this
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await emailService.SendConstructionPlanStatusNotification(constructionPlan.Id, true, actionBy);
+                        }
+                        catch (Exception ex)
+                        {
+                            // Log the error but don't stop execution
+                            _logger.LogError(ex, "Error sending email notification for construction plan approval: {PlanId}", constructionPlan.Id);
+                        }
+                    });
+                }
+            }
+            
             return true;
         }
 
@@ -1565,6 +1597,28 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
 
             // Invalidate all related caches
             await InvalidateConstructionPlanCaches(constructionPlan.Id, constructionPlan.ProjectId);
+            
+            // Trigger email notification in the background (non-blocking)
+            using (var scope = _httpContextAccessor.HttpContext?.RequestServices.CreateScope())
+            {
+                var emailService = scope?.ServiceProvider.GetService<IConstructionPlanEmailService>();
+                if (emailService != null)
+                {
+                    // Fire and forget - don't await this
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await emailService.SendConstructionPlanStatusNotification(constructionPlan.Id, false, actionBy);
+                        }
+                        catch (Exception ex)
+                        {
+                            // Log the error but don't stop execution
+                            _logger.LogError(ex, "Error sending email notification for construction plan rejection: {PlanId}", constructionPlan.Id);
+                        }
+                    });
+                }
+            }
             
             return true;
         }
