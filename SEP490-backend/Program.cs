@@ -13,7 +13,19 @@ namespace Sep490_Backend
             //AppContext.SetSwitch("Npgsql.DisableDateTimeInfinityConversions", true);
 
             // Load environment variables from .env
-            DotNetEnv.Env.Load();
+            try
+            {
+                DotNetEnv.Env.Load();
+                Console.WriteLine("Environment variables loaded from .env file");
+                
+                // Print out some environment variables to verify they're loaded (don't print sensitive ones in production)
+                Console.WriteLine($"JWT_VALID_ISSUER: {Environment.GetEnvironmentVariable("JWT_VALID_ISSUER")}");
+                Console.WriteLine($"MAIL_PASSWORD present: {!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("MAIL_PASSWORD"))}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading .env file: {ex.Message}");
+            }
 
             var builder = WebApplication.CreateBuilder(args);
             // Add services to the container.
@@ -31,8 +43,6 @@ namespace Sep490_Backend
             var utcNow = DateTime.UtcNow;
             int timeToday = utcNow.Year + utcNow.Month + utcNow.Day;
             StaticVariable.TimeToday = timeToday;
-
-            
 
             app.Run();
         }

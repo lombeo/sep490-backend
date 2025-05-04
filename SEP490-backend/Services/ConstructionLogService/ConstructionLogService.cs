@@ -14,6 +14,7 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Sep490_Backend.Services.ConstructionLogService;
 
 namespace Sep490_Backend.Services.ConstructionLogService
 {
@@ -480,6 +481,29 @@ namespace Sep490_Backend.Services.ConstructionLogService
             
             // Invalidate related caches
             await InvalidateConstructionLogCaches(constructionLog.Id, constructionLog.ProjectId);
+            
+            // Trigger email notification in the background (non-blocking)
+            // This needs to be injected via the service provider to avoid circular dependencies
+            using (var scope = _httpContextAccessor.HttpContext?.RequestServices.CreateScope())
+            {
+                var emailService = scope?.ServiceProvider.GetService<IConstructionLogEmailService>();
+                if (emailService != null)
+                {
+                    // Fire and forget - don't await this
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await emailService.SendConstructionLogStatusNotification(constructionLog.Id, status, actionBy);
+                        }
+                        catch (Exception ex)
+                        {
+                            // Log the error but don't stop execution
+                            Console.WriteLine($"Error sending email notification: {ex.Message}");
+                        }
+                    });
+                }
+            }
             
             return await MapToConstructionLogDTO(constructionLog);
         }

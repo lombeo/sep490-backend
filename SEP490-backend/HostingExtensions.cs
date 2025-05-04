@@ -5,12 +5,9 @@ using Sep490_Backend.Services.CacheService;
 using Sep490_Backend.Services.Hosted;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
-using System.ComponentModel.Design;
 using System.Security.Cryptography.X509Certificates;
-using System.Text;
 using Sep490_Backend.Services.AuthenService;
 using Microsoft.OpenApi.Models;
 using Sep490_Backend.Services.EmailService;
@@ -23,7 +20,6 @@ using Sep490_Backend.Services.ProjectService;
 using Sep490_Backend.Services.ContractService;
 using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.GoogleDriveService;
-using Sep490_Backend.Infra.ModelBinders;
 using Sep490_Backend.Services.SiteSurveyService;
 using Sep490_Backend.Services.MaterialService;
 using Sep490_Backend.Services.ConstructionTeamService;
@@ -31,7 +27,6 @@ using Sep490_Backend.Services.ResourceReqService;
 using Sep490_Backend.Services.ConstructionPlanService;
 using Sep490_Backend.Services.VehicleService;
 using Sep490_Backend.Services.ActionLogService;
-using System.Net;
 using Sep490_Backend.Services.ConstructionLogService;
 using Sep490_Backend.Services.ConstructionProgressService;
 using Sep490_Backend.Services.InspectionReportService;
@@ -125,14 +120,19 @@ namespace Sep490_Backend
             builder.Services.AddScoped<IConstructionTeamService, ConstructionTeamService>();
             builder.Services.AddScoped<IResourceReqService, ResourceReqService>();
             builder.Services.AddScoped<IConstructionPlanService, ConstructionPlanService>();
-            builder.Services.AddScoped<Sep490_Backend.Services.ConstructionPlanService.IPlanEditLockService, Sep490_Backend.Services.ConstructionPlanService.PlanEditLockService>();
+            builder.Services.AddScoped<IPlanEditLockService, PlanEditLockService>();
             builder.Services.AddScoped<IVehicleService, VehicleService>();
             builder.Services.AddScoped<IActionLogService, ActionLogService>();
             builder.Services.AddScoped<IConstructionLogService, ConstructionLogService>();
             builder.Services.AddScoped<IConstructionProgressService, ConstructionProgressService>();
             builder.Services.AddScoped<IInspectionReportService, InspectionReportService>();
+            
+            // Add email notification services - only register as hosted service, which also makes it a singleton
+            builder.Services.AddScoped<IConstructionLogEmailService, ConstructionLogEmailService>();
+            
             builder.Services.AddHostedService<DefaultBackgroundService>();
             builder.Services.AddHostedService<LockCleanupHostedService>();
+            builder.Services.AddHostedService<Services.Hosted.EmailNotificationService>();
 
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddHealthChecks();
