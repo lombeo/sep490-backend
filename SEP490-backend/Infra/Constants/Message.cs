@@ -307,6 +307,8 @@
             public const string DELETE_SUCCESS = "Delete construction progress successfully";
             public const string ONLY_TECHNICAL_MANAGER = "Only Technical Managers are allowed to modify progress items";
             public const string ITEM_NOT_FOUND = "Construction progress item not found";
+            public const string INVALID_QUANTITY_UPDATE = "New quantity must be greater than or equal to used quantity";
+            public const string PAUSE_REQUIRES_IN_PROGRESS = "Progress item can only be paused when it is in progress";
         }
 
         public static class InspectionReportMessage

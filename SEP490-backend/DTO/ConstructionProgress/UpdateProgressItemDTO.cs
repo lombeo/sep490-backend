@@ -25,5 +25,9 @@ namespace Sep490_Backend.DTO.ConstructionProgress
         public DateTime PlanEndDate { get; set; }
         
         public Dictionary<string, string>? ItemRelations { get; set; }
+        
+        // Optional quantity field for updating progress item quantity
+        [Range(0, int.MaxValue)]
+        public int? Quantity { get; set; }
     }
 } 

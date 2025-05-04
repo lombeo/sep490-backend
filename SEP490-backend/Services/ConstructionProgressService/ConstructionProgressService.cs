@@ -949,6 +949,38 @@ namespace Sep490_Backend.Services.ConstructionProgressService
                     throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
                 }
 
+                // Handle quantity update if provided
+                if (model.Quantity.HasValue && model.Quantity.Value > 0)
+                {
+                    // Check if the new quantity is greater than used quantity
+                    if (model.Quantity.Value < progressItem.UsedQuantity)
+                    {
+                        throw new ArgumentException(Message.ConstructionProgressMessage.INVALID_QUANTITY_UPDATE);
+                    }
+                    
+                    // Update quantity
+                    progressItem.Quantity = model.Quantity.Value;
+                    
+                    // Recalculate progress based on used quantity / total quantity
+                    if (progressItem.Quantity > 0)
+                    {
+                        progressItem.Progress = (int)Math.Round((double)progressItem.UsedQuantity / (double)progressItem.Quantity * 100);
+                        
+                        // Cap progress at 100%
+                        if (progressItem.Progress > 100)
+                        {
+                            progressItem.Progress = 100;
+                        }
+                    }
+                    
+                    // If status is InspectionFailed, change to InProgress when quantity is updated
+                    if (progressItem.Status == ProgressStatusEnum.InspectionFailed)
+                    {
+                        progressItem.Status = ProgressStatusEnum.InProgress;
+                        _logger.LogInformation($"Progress item {progressItem.Id} status changed from InspectionFailed to InProgress due to quantity update");
+                    }
+                }
+
                 // Validate progress value
                 if (model.Progress < 0 || model.Progress > 100)
                 {
@@ -986,7 +1018,7 @@ namespace Sep490_Backend.Services.ConstructionProgressService
                     // Can only pause if currently in InProgress status
                     if (progressItem.Status != ProgressStatusEnum.InProgress)
                     {
-                        throw new InvalidOperationException("Progress item can only be paused when it is in progress");
+                        throw new InvalidOperationException(Message.ConstructionProgressMessage.PAUSE_REQUIRES_IN_PROGRESS);
                     }
                     progressItem.Status = ProgressStatusEnum.Paused;
                 }

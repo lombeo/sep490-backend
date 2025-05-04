@@ -7,6 +7,7 @@ namespace Sep490_Backend.Infra.Enums
         Done = 2,
         Paused = 3,
         Cancelled = 4,
-        WaitForInspection = 5
+        WaitForInspection = 5,
+        InspectionFailed = 6
     }
 } 

@@ -21,22 +21,19 @@ namespace Sep490_Backend.Services.InspectionReportService
         private readonly IHelperService _helperService;
         private readonly IGoogleDriveService _googleDriveService;
         private readonly ILogger<InspectionReportService> _logger;
-        private readonly IConstructionProgressService _constructionProgressService;
 
         public InspectionReportService(
             BackendContext context,
             ICacheService cacheService,
             IHelperService helperService,
             IGoogleDriveService googleDriveService,
-            ILogger<InspectionReportService> logger,
-            IConstructionProgressService constructionProgressService)
+            ILogger<InspectionReportService> logger)
         {
             _context = context;
             _cacheService = cacheService;
             _helperService = helperService;
             _googleDriveService = googleDriveService;
             _logger = logger;
-            _constructionProgressService = constructionProgressService;
         }
 
         public async Task<InspectionReportDTO> Save(SaveInspectionReportDTO model, int actionBy)
@@ -391,8 +388,7 @@ namespace Sep490_Backend.Services.InspectionReportService
             
             // If status is being set to Approved and the inspection decision is Pass,
             // update the construction progress item status and progress
-            if (status == InspectionReportStatus.Approved && 
-                (InspectionDecision)report.InspectionDecision == InspectionDecision.Pass)
+            if (status == InspectionReportStatus.Approved)
             {
                 var progressItem = await _context.ConstructionProgressItems
                     .Include(pi => pi.ConstructionProgress)
@@ -401,102 +397,134 @@ namespace Sep490_Backend.Services.InspectionReportService
                 
                 if (progressItem != null)
                 {
-                    // Record the old progress value
-                    bool becameCompleted = progressItem.Progress < 100;
-                    
-                    // Update progress item status
-                    progressItem.Progress = 100;
-                    progressItem.Status = ProgressStatusEnum.Done;
-                    progressItem.Updater = actionBy;
-                    progressItem.UpdatedAt = DateTime.Now;
-                    progressItem.ActualEndDate = DateTime.Now;
-                    
-                    _context.ConstructionProgressItems.Update(progressItem);
-
-                    // Rollback materials from the progress item to resource inventory
-                    await RollbackMaterials(progressItem, actionBy);
-                    
-                    // Update parent progress calculation if needed
-                    if (!string.IsNullOrEmpty(progressItem.ParentIndex))
+                    if ((InspectionDecision)report.InspectionDecision == InspectionDecision.Pass)
                     {
-                        _logger.LogInformation($"Progress item {progressItem.Id} has parent index {progressItem.ParentIndex}, checking siblings status");
+                        // Record the old progress value
+                        bool becameCompleted = progressItem.Progress < 100;
                         
-                        // Get all progress items for this progress to calculate parent progress
-                        var progressItems = await _context.ConstructionProgressItems
-                            .Where(pi => pi.ProgressId == progressItem.ProgressId && !pi.Deleted)
-                            .ToListAsync();
+                        // Update progress item status
+                        progressItem.Progress = 100;
+                        progressItem.Status = ProgressStatusEnum.Done;
+                        progressItem.Updater = actionBy;
+                        progressItem.UpdatedAt = DateTime.Now;
+                        progressItem.ActualEndDate = DateTime.Now;
                         
-                        // Create a set of indices to update
-                        var updatedItemIndices = new HashSet<string> { progressItem.Index };
+                        _context.ConstructionProgressItems.Update(progressItem);
+
+                        // Rollback materials from the progress item to resource inventory
+                        await RollbackMaterials(progressItem, actionBy);
                         
-                        // Add parent index
-                        updatedItemIndices.Add(progressItem.ParentIndex);
-                        
-                        // Check if all siblings (children of parent) are in Done status
-                        var parentItem = progressItems.FirstOrDefault(pi => pi.Index == progressItem.ParentIndex);
-                        if (parentItem != null)
+                        // Update parent progress calculation if needed
+                        if (!string.IsNullOrEmpty(progressItem.ParentIndex))
                         {
-                            var siblingItems = progressItems
-                                .Where(pi => pi.ParentIndex == progressItem.ParentIndex && !pi.Deleted)
-                                .ToList();
-                                
-                            bool allSiblingsDone = siblingItems.All(si => si.Status == ProgressStatusEnum.Done);
+                            _logger.LogInformation($"Progress item {progressItem.Id} has parent index {progressItem.ParentIndex}, checking siblings status");
                             
-                            if (allSiblingsDone)
+                            // Get all progress items for this progress to calculate parent progress
+                            var progressItems = await _context.ConstructionProgressItems
+                                .Where(pi => pi.ProgressId == progressItem.ProgressId && !pi.Deleted)
+                                .ToListAsync();
+                            
+                            // Create a set of indices to update
+                            var updatedItemIndices = new HashSet<string> { progressItem.Index };
+                            
+                            // Add parent index
+                            updatedItemIndices.Add(progressItem.ParentIndex);
+                            
+                            // Check if all siblings (children of parent) are in Done status
+                            var parentItem = progressItems.FirstOrDefault(pi => pi.Index == progressItem.ParentIndex);
+                            if (parentItem != null)
                             {
-                                _logger.LogInformation($"All siblings of progress item {progressItem.Id} are Done, setting parent {parentItem.Id} to Done");
+                                var siblingItems = progressItems
+                                    .Where(pi => pi.ParentIndex == progressItem.ParentIndex && !pi.Deleted)
+                                    .ToList();
+                                    
+                                bool allSiblingsDone = siblingItems.All(si => si.Status == ProgressStatusEnum.Done);
                                 
-                                // Set parent to Done
-                                parentItem.Progress = 100;
-                                parentItem.Status = ProgressStatusEnum.Done;
-                                parentItem.UpdatedAt = DateTime.Now;
-                                parentItem.Updater = actionBy;
-                                
-                                _context.ConstructionProgressItems.Update(parentItem);
-                                
-                                // If this parent also has a parent, add its parent to the updated indices
-                                if (!string.IsNullOrEmpty(parentItem.ParentIndex))
+                                if (allSiblingsDone)
                                 {
-                                    updatedItemIndices.Add(parentItem.ParentIndex);
+                                    _logger.LogInformation($"All siblings of progress item {progressItem.Id} are Done, setting parent {parentItem.Id} to Done");
+                                    
+                                    // Set parent to Done
+                                    parentItem.Progress = 100;
+                                    parentItem.Status = ProgressStatusEnum.Done;
+                                    parentItem.UpdatedAt = DateTime.Now;
+                                    parentItem.Updater = actionBy;
+                                    
+                                    _context.ConstructionProgressItems.Update(parentItem);
+                                    
+                                    // If this parent also has a parent, add its parent to the updated indices
+                                    if (!string.IsNullOrEmpty(parentItem.ParentIndex))
+                                    {
+                                        updatedItemIndices.Add(parentItem.ParentIndex);
+                                    }
                                 }
                             }
+                            
+                            // Update progress of parent items based on their children
+                            await UpdateParentItemsProgress(progressItems, updatedItemIndices, actionBy);
+                            
+                            // Ensure all parent progress updates are saved to the database
+                            await _context.SaveChangesAsync();
                         }
                         
-                        // Update progress of parent items based on their children
-                        await UpdateParentItemsProgress(progressItems, updatedItemIndices, actionBy);
-                        
-                        // Ensure all parent progress updates are saved to the database
-                        await _context.SaveChangesAsync();
-                    }
-                    
-                    // Check if all progress items for the project are now Done, and if so,
-                    // update the project status to WaitingApproveCompleted
-                    var relatedProjectId = progressItem.ConstructionProgress.ProjectId;
-                    var projectProgressItems = await _context.ConstructionProgresses
-                        .Where(cp => cp.ProjectId == relatedProjectId && !cp.Deleted)
-                        .SelectMany(cp => cp.ProgressItems.Where(pi => !pi.Deleted))
-                        .ToListAsync();
-                        
-                    if (projectProgressItems.Any() && projectProgressItems.All(pi => pi.Status == ProgressStatusEnum.Done))
-                    {
-                        var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == relatedProjectId && !p.Deleted);
-                        
-                        if (project != null && 
-                            project.Status != ProjectStatusEnum.WaitingApproveCompleted && 
-                            project.Status != ProjectStatusEnum.Completed && 
-                            project.Status != ProjectStatusEnum.Closed)
+                        // Check if all progress items for the project are now Done, and if so,
+                        // update the project status to WaitingApproveCompleted
+                        var relatedProjectId = progressItem.ConstructionProgress.ProjectId;
+                        var projectProgressItems = await _context.ConstructionProgresses
+                            .Where(cp => cp.ProjectId == relatedProjectId && !cp.Deleted)
+                            .SelectMany(cp => cp.ProgressItems.Where(pi => !pi.Deleted))
+                            .ToListAsync();
+                            
+                        if (projectProgressItems.Any() && projectProgressItems.All(pi => pi.Status == ProgressStatusEnum.Done))
                         {
-                            project.Status = ProjectStatusEnum.WaitingApproveCompleted;
-                            project.UpdatedAt = DateTime.Now;
-                            project.Updater = actionBy;
+                            var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == relatedProjectId && !p.Deleted);
                             
-                            _context.Projects.Update(project);
+                            if (project != null && 
+                                project.Status != ProjectStatusEnum.WaitingApproveCompleted && 
+                                project.Status != ProjectStatusEnum.Completed && 
+                                project.Status != ProjectStatusEnum.Closed)
+                            {
+                                project.Status = ProjectStatusEnum.WaitingApproveCompleted;
+                                project.UpdatedAt = DateTime.Now;
+                                project.Updater = actionBy;
+                                
+                                _context.Projects.Update(project);
+                                
+                                // Log the project status change
+                                _logger.LogInformation($"All progress items for project {relatedProjectId} are marked as Done, changing status to WaitingApproveCompleted");
+                                
+                                // Invalidate project caches after status update
+                                await InvalidateProjectCaches(relatedProjectId);
+                            }
+                        }
+                    }
+                    else if ((InspectionDecision)report.InspectionDecision == InspectionDecision.Fail)
+                    {
+                        // Change progress item status to InspectionFailed when failed inspection is approved
+                        progressItem.Status = ProgressStatusEnum.InspectionFailed;
+                        progressItem.Updater = actionBy;
+                        progressItem.UpdatedAt = DateTime.Now;
+                        
+                        _context.ConstructionProgressItems.Update(progressItem);
+                        
+                        _logger.LogInformation($"Progress item {progressItem.Id} marked as InspectionFailed due to failed inspection report {report.Id}");
+                        
+                        // Update parent progress calculation if needed
+                        if (!string.IsNullOrEmpty(progressItem.ParentIndex))
+                        {
+                            // Get all progress items for this progress to calculate parent progress
+                            var progressItems = await _context.ConstructionProgressItems
+                                .Where(pi => pi.ProgressId == progressItem.ProgressId && !pi.Deleted)
+                                .ToListAsync();
                             
-                            // Log the project status change
-                            _logger.LogInformation($"All progress items for project {relatedProjectId} are marked as Done, changing status to WaitingApproveCompleted");
+                            // Create a set of indices to update
+                            var updatedItemIndices = new HashSet<string> { progressItem.Index };
                             
-                            // Invalidate project caches after status update
-                            await InvalidateProjectCaches(relatedProjectId);
+                            // Add parent index
+                            updatedItemIndices.Add(progressItem.ParentIndex);
+                            
+                            // Update progress of parent items based on their children
+                            await UpdateParentItemsProgress(progressItems, updatedItemIndices, actionBy);
                         }
                     }
                 }
@@ -509,8 +537,7 @@ namespace Sep490_Backend.Services.InspectionReportService
             await InvalidateInspectionReportCaches(report.Id, projectId);
             
             // Invalidate construction progress caches if we updated a progress item
-            if (status == InspectionReportStatus.Approved && 
-                (InspectionDecision)report.InspectionDecision == InspectionDecision.Pass)
+            if (status == InspectionReportStatus.Approved)
             {
                 var progressId = report.ConstructionProgressItem.ConstructionProgress.Id;
                 var planId = report.ConstructionProgressItem.ConstructionProgress.PlanId;

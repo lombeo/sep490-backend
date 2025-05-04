@@ -569,7 +569,7 @@ namespace Sep490_Backend.Services.ConstructionLogService
                                 // Calculate and update progress percentage
                                 if (progressItem.Quantity > 0)
                                 {
-                                    progressItem.Progress = (int)Math.Min(100, Math.Round((progressItem.UsedQuantity / progressItem.Quantity) * 100));
+                                    progressItem.Progress = (int)Math.Min(100, Math.Round((double)progressItem.UsedQuantity / (double)progressItem.Quantity * 100));
                                     
                                     if (progressItem.Progress >= 100)
                                     {
