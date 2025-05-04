@@ -236,7 +236,7 @@ namespace Sep490_Backend.Services.AdminService
             var existingUser = StaticVariable.UserMemory.FirstOrDefault(u => u.Email == model.Email || u.Username == model.UserName);
             if (existingUser != null)
             {
-                throw new ApplicationException(Message.AdminMessage.CREATE_USER_ERROR);
+                throw new ArgumentException(Message.AdminMessage.CREATE_USER_ERROR);
             }
 
             if (model.UserName.Contains(" "))

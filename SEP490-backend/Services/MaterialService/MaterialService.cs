@@ -314,7 +314,7 @@ namespace Sep490_Backend.Services.MaterialService
                     transaction = await _context.Database.BeginTransactionAsync();
                 }
                 
-                // Get all materials in the project inventory that have CanRollBack=true
+                // Get all materials in the project inventory
                 var resourceInventories = await _context.ResourceInventory
                     .Where(ri => ri.ProjectId == projectId && 
                                 ri.ResourceType == ResourceType.MATERIAL && 
@@ -346,27 +346,24 @@ namespace Sep490_Backend.Services.MaterialService
                         continue;
                     }
                     
-                    // Only rollback materials with CanRollBack=true
-                    if (material.CanRollBack)
-                    {
-                        // Update material inventory
-                        material.Inventory = (material.Inventory ?? 0) + inventory.Quantity;
-                        material.UpdatedAt = DateTime.Now;
-                        material.Updater = actionBy;
-                        
-                        _context.Materials.Update(material);
-                        
-                        // Soft delete the resource inventory entry
-                        inventory.Deleted = true;
-                        inventory.UpdatedAt = DateTime.Now;
-                        inventory.Updater = actionBy;
-                        
-                        _context.ResourceInventory.Update(inventory);
-                        
-                        rolledBackCount++;
-                        
-                        _logger.LogInformation($"Rolled back material {material.Id} ({material.MaterialName}), inventory increased from {material.Inventory - inventory.Quantity} to {material.Inventory}");
-                    }
+                    // Roll back all materials regardless of CanRollBack flag when project is completed
+                    // Update material inventory
+                    material.Inventory = (material.Inventory ?? 0) + inventory.Quantity;
+                    material.UpdatedAt = DateTime.Now;
+                    material.Updater = actionBy;
+                    
+                    _context.Materials.Update(material);
+                    
+                    // Soft delete the resource inventory entry
+                    inventory.Deleted = true;
+                    inventory.UpdatedAt = DateTime.Now;
+                    inventory.Updater = actionBy;
+                    
+                    _context.ResourceInventory.Update(inventory);
+                    
+                    rolledBackCount++;
+                    
+                    _logger.LogInformation($"Rolled back material {material.Id} ({material.MaterialName}), inventory increased from {material.Inventory - inventory.Quantity} to {material.Inventory}");
                 }
                 
                 await _context.SaveChangesAsync();
@@ -377,12 +374,20 @@ namespace Sep490_Backend.Services.MaterialService
                     await transaction.CommitAsync();
                 }
                 
-                // Invalidate caches
+                // Invalidate caches only if we actually rolled back materials
                 if (rolledBackCount > 0)
                 {
                     await InvalidateMaterialCache();
                     await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
                     await _cacheService.DeleteByPatternAsync(RedisCacheKey.RESOURCE_INVENTORY_BY_TYPE_CACHE_KEY);
+                    // Also invalidate project-specific resource caches
+                    // These patterns will catch any project-specific resource inventory caches
+                    // that might be using project ID as part of the key
+                    await _cacheService.DeleteByPatternAsync($"*PROJECT:{projectId}*");
+                    await _cacheService.DeleteByPatternAsync($"*:PROJECT:{projectId}*");
+                    
+                    // Invalidate project status cache since resources affect project status
+                    await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_STATUS_CACHE_KEY);
                 }
                 
                 _logger.LogInformation($"Successfully rolled back {rolledBackCount} materials from project {projectId}");

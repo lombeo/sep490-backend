@@ -8,18 +8,18 @@ namespace Sep490_Backend.Infra.Entities
     {
         public int Id { get; set; }
         public string LicensePlate { get; set; }
-        public string Brand { get; set; }
-        public int YearOfManufacture { get; set; }
-        public string CountryOfManufacture { get; set; }
+        public string? Brand { get; set; }
+        public int? YearOfManufacture { get; set; }
+        public string? CountryOfManufacture { get; set; }
         public string VehicleType { get; set; }
         public string VehicleName { get; set; }
         public string ChassisNumber { get; set; }
         public string EngineNumber { get; set; }
         public VehicleStatus Status { get; set; }
         public int Driver { get; set; }
-        public string Color { get; set; }
+        public string? Color { get; set; }
         public string FuelType { get; set; }
-        public string Description { get; set; }
+        public string? Description { get; set; }
         public int FuelTankVolume { get; set; }
         public string FuelUnit { get; set; }
         
@@ -43,11 +43,11 @@ namespace Sep490_Backend.Infra.Entities
                       .HasColumnType("text");
 
                 entity.Property(e => e.Brand)
-                      .IsRequired()
+                      .IsRequired(false)
                       .HasColumnType("text");
 
                 entity.Property(e => e.CountryOfManufacture)
-                      .IsRequired()
+                      .IsRequired(false)
                       .HasColumnType("text");
 
                 entity.Property(e => e.VehicleType)
@@ -71,7 +71,7 @@ namespace Sep490_Backend.Infra.Entities
                       .HasDefaultValue(VehicleStatus.Unavailable);
 
                 entity.Property(e => e.Color)
-                      .IsRequired()
+                      .IsRequired(false)
                       .HasColumnType("text");
 
                 entity.Property(e => e.FuelType)
@@ -79,7 +79,7 @@ namespace Sep490_Backend.Infra.Entities
                       .HasColumnType("text");
 
                 entity.Property(e => e.Description)
-                      .IsRequired()
+                      .IsRequired(false)
                       .HasColumnType("text");
 
                 entity.Property(e => e.FuelUnit)

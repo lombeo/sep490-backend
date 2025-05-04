@@ -130,7 +130,6 @@ namespace Sep490_Backend.DTO.ConstructionPlan
         [Required(ErrorMessage = "Team manager name is required")]
         public string TeamManagerName { get; set; } = string.Empty;
         
-        [Required(ErrorMessage = "Team description is required")]
-        public string Description { get; set; } = string.Empty;
+        public string? Description { get; set; } = string.Empty;
     }
 } 

@@ -11,8 +11,7 @@ namespace Sep490_Backend.DTO.ResourceReqs
         [Required(ErrorMessage = "Resource name is required")]
         public string Name { get; set; } = string.Empty;
         
-        [Required(ErrorMessage = "Resource description is required")]
-        public string Description { get; set; } = string.Empty;
+        public string? Description { get; set; } = string.Empty;
         
         public int? ResourceId { get; set; }
         public int? ProjectId { get; set; }
@@ -35,8 +34,7 @@ namespace Sep490_Backend.DTO.ResourceReqs
         [Required(ErrorMessage = "Resource name is required")]
         public string Name { get; set; } = string.Empty;
         
-        [Required(ErrorMessage = "Resource description is required")]
-        public string Description { get; set; } = string.Empty;
+        public string? Description { get; set; } = string.Empty;
         
         public int? ResourceId { get; set; }
         public int? ProjectId { get; set; }

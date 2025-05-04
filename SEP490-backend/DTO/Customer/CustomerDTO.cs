@@ -23,8 +23,7 @@ namespace Sep490_Backend.DTO.Customer
         [Required(ErrorMessage = "Address is required")]
         public string Address { get; set; } = string.Empty;
         
-        [Required(ErrorMessage = "Description is required")]
-        public string Description { get; set; } = string.Empty;
+        public string? Description { get; set; } = string.Empty;
         
         [Required(ErrorMessage = "Customer code is required")]
         public string CustomerCode { get; set; } = string.Empty;
