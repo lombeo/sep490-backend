@@ -738,8 +738,8 @@ namespace Sep490_Backend.Services.InspectionReportService
                 query = query.Where(ir => ir.InspectCode.Contains(model.Keyword) ||
                                           ir.Location.Contains(model.Keyword) ||
                                           ir.InspectionName.Contains(model.Keyword) ||
-                                          ir.QualityNote.Contains(model.Keyword) ||
-                                          ir.OtherNote.Contains(model.Keyword));
+                                          (ir.QualityNote != null && ir.QualityNote.Contains(model.Keyword)) ||
+                                          (ir.OtherNote != null && ir.OtherNote.Contains(model.Keyword)));
             }
             
             // Get total count for pagination

@@ -15,15 +15,15 @@ namespace Sep490_Backend.DTO.ConstructionLog
         public DateTime LogDate { get; set; }
         public List<ConstructionLogResourceDTO> Resources { get; set; }
         public List<WorkAmountDTO> WorkAmount { get; set; }
-        public List<WeatherDTO> Weather { get; set; }
-        public string Safety { get; set; }
-        public string Quality { get; set; }
-        public string Progress { get; set; }
-        public string Problem { get; set; }
-        public string Advice { get; set; }
-        public List<AttachmentInfo> Images { get; set; }
-        public List<AttachmentInfo> Attachments { get; set; }
-        public string Note { get; set; }
+        public List<WeatherDTO>? Weather { get; set; }
+        public string? Safety { get; set; }
+        public string? Quality { get; set; }
+        public string? Progress { get; set; }
+        public string? Problem { get; set; }
+        public string? Advice { get; set; }
+        public List<AttachmentInfo>? Images { get; set; }
+        public List<AttachmentInfo>? Attachments { get; set; }
+        public string? Note { get; set; }
         public ConstructionLogStatus Status { get; set; }
         public DateTime CreatedAt { get; set; }
         public int Creator { get; set; }
@@ -42,16 +42,16 @@ namespace Sep490_Backend.DTO.ConstructionLog
         public List<ConstructionLogResourceDTO>? Resources { get; set; }
         public List<WorkAmountDTO>? WorkAmount { get; set; }
         public List<WeatherDTO>? Weather { get; set; }
-        public string Safety { get; set; }
-        public string Quality { get; set; }
-        public string Progress { get; set; }
-        public string Problem { get; set; }
-        public string Advice { get; set; }
+        public string? Safety { get; set; }
+        public string? Quality { get; set; }
+        public string? Progress { get; set; }
+        public string? Problem { get; set; }
+        public string? Advice { get; set; }
         public List<string>? Images { get; set; }
         public List<IFormFile>? ImageFiles { get; set; }
         public IFormFile? ImageFile { get; set; }
         public List<IFormFile>? AttachmentFiles { get; set; }
-        public string Note { get; set; }
+        public string? Note { get; set; }
         public ConstructionLogStatus? Status { get; set; }
     }
 

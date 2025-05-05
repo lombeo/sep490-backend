@@ -23,9 +23,15 @@ namespace Sep490_Backend.Services.CacheService
                         lazyConnection = new Lazy<ConnectionMultiplexer>(() =>
                         {
                             var options = ConfigurationOptions.Parse(StaticVariable.RedisConfig.PubSubConnection);
-                            options.ConnectTimeout = 5000; // 5 seconds
-                            options.SyncTimeout = 10000; // 10 seconds
+                            // Reduce timeouts to improve performance
+                            options.ConnectTimeout = 3000; // 3 seconds (reduced from 5)
+                            options.SyncTimeout = 5000; // 5 seconds (reduced from 10)
                             options.AbortOnConnectFail = false; // Don't crash the app if Redis is down
+                            options.ResponseTimeout = 3000; // 3 seconds
+                            
+                            // Optimize connection for command throughput
+                            options.KeepAlive = 60; // Send keepalive every 60 seconds
+                            options.ReconnectRetryPolicy = new ExponentialRetry(200, 1000); // Start at 200ms, max at 1s
                             
                             _logger.LogInformation("Connecting to Redis at " + options.EndPoints.First());
                             return ConnectionMultiplexer.Connect(options);

@@ -18,8 +18,8 @@ namespace Sep490_Backend.Infra.Entities
         public JsonDocument Attachment { get; set; }
         public int InspectionDecision { get; set; }
         public int Status { get; set; }
-        public string QualityNote { get; set; }
-        public string OtherNote { get; set; }
+        public string? QualityNote { get; set; }
+        public string? OtherNote { get; set; }
 
         // Navigation properties
         public virtual User Inspector { get; set; }
@@ -38,8 +38,8 @@ namespace Sep490_Backend.Infra.Entities
             entity.Property(e => e.InspectCode).HasMaxLength(50).IsRequired();
             entity.Property(e => e.Location).HasMaxLength(255);
             entity.Property(e => e.InspectionName).HasMaxLength(255);
-            entity.Property(e => e.QualityNote).HasMaxLength(2000);
-            entity.Property(e => e.OtherNote).HasMaxLength(2000);
+            entity.Property(e => e.QualityNote).HasMaxLength(2000).IsRequired(false);
+            entity.Property(e => e.OtherNote).HasMaxLength(2000).IsRequired(false);
 
             // Relations
             entity.HasOne(e => e.Inspector)

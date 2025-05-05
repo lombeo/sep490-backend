@@ -49,12 +49,21 @@ namespace Sep490_Backend.Services.CacheService
                 {
                     key = _prefixCacheKey + key;
                 }
+                
+                // First remove from memory cache (synchronous operation)
                 _memoryCache.Remove(key);
-                await _database.RemoveAsync(key);
+                
+                // Then remove from distributed cache (awaited properly)
+                if (_database != null)
+                {
+                    await _database.RemoveAsync(key);
+                    _logger.LogDebug($"Successfully deleted cache key: {key}");
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, ex.Message + " " + ex.StackTrace);
+                _logger.LogError(ex, $"Error deleting cache key '{key}': {ex.Message}");
+                // Don't rethrow as cache operations should not break application flow
             }
         }
 
@@ -102,7 +111,9 @@ namespace Sep490_Backend.Services.CacheService
                             var server = _redisConnection.GetServer(endpoint);
                             // Add wildcard at end of pattern if not already present
                             string searchPattern = pattern.EndsWith("*") ? pattern : pattern + "*";
-                            var keys = server.Keys(pattern: searchPattern).ToArray();
+                            
+                            // Use batch to get keys to reduce network round trips
+                            RedisKey[] keys = server.Keys(pattern: searchPattern, pageSize: 1000).ToArray();
                             
                             foreach (var key in keys)
                             {
@@ -123,13 +134,32 @@ namespace Sep490_Backend.Services.CacheService
                             }
                         }
                         
-                        // Delete all matching keys from Redis
+                        // Delete all matching keys from Redis - use batching to speed up operation
                         if (keysToDelete.Count > 0)
                         {
-                            foreach (var key in keysToDelete)
+                            // Use batches of 100 keys to avoid overwhelming Redis
+                            const int batchSize = 100;
+                            for (int i = 0; i < keysToDelete.Count; i += batchSize)
                             {
-                                await database.KeyDeleteAsync(key);
+                                var batch = database.CreateBatch();
+                                var tasks = new List<Task>();
+                                
+                                // Get the keys for this batch
+                                var batchKeys = keysToDelete.Skip(i).Take(batchSize).ToArray();
+                                
+                                // Delete all keys in this batch
+                                foreach (var key in batchKeys)
+                                {
+                                    tasks.Add(batch.KeyDeleteAsync(key));
+                                }
+                                
+                                // Execute the batch
+                                batch.Execute();
+                                
+                                // Wait for all tasks to complete
+                                await Task.WhenAll(tasks);
                             }
+                            
                             _logger.LogInformation($"Deleted {keysToDelete.Count} keys matching pattern '{pattern}'");
                         }
                     }
@@ -154,6 +184,9 @@ namespace Sep490_Backend.Services.CacheService
             {
                 _logger.LogError($"Error deleting cache by pattern '{pattern}': {ex.Message}");
                 _logger.LogError(ex, ex.StackTrace);
+                
+                // Don't rethrow the exception as cache operations should not break application flow
+                // but we need to ensure the method completes to avoid dangling async operations
             }
         }
 

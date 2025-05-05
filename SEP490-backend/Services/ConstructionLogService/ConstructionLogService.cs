@@ -1445,7 +1445,9 @@ namespace Sep490_Backend.Services.ConstructionLogService
             // Check if weather has changed
             if (model.Weather != null)
             {
-                var existingWeather = JsonSerializer.Deserialize<List<WeatherDTO>>(existingLog.Weather.RootElement.ToString(), DefaultSerializerOptions);
+                var existingWeather = existingLog.Weather != null ? 
+                    JsonSerializer.Deserialize<List<WeatherDTO>>(existingLog.Weather.RootElement.ToString(), DefaultSerializerOptions) : 
+                    new List<WeatherDTO>();
                 if (!AreWeatherEqual(existingWeather, model.Weather))
                 {
                     return true;

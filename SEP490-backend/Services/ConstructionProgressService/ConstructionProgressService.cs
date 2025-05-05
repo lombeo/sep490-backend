@@ -379,70 +379,70 @@ namespace Sep490_Backend.Services.ConstructionProgressService
             // Get progress item details containing materials
             var progressItemDetails = await _context.ConstructionProgressItemDetails
                 .Where(pid => pid.ProgressItemId == progressItemId && 
-                             pid.ResourceType == ResourceType.MATERIAL && 
-                             pid.ResourceId.HasValue && 
+                              pid.ResourceType == ResourceType.MATERIAL && 
+                              pid.ResourceId.HasValue &&
                              pid.Quantity > pid.UsedQuantity && 
-                             !pid.Deleted)
+                              !pid.Deleted)
                 .ToListAsync();
-
+                
             if (!progressItemDetails.Any())
             {
                 return;
             }
-
+            
             foreach (var detail in progressItemDetails)
             {
                 // Get the material to check rollback flag
                 var material = await _context.Materials
                     .FirstOrDefaultAsync(m => m.Id == detail.ResourceId.Value && !m.Deleted);
-
+                
                 if (material == null)
                 {
                     continue;
                 }
-
+                
                 // Calculate quantity to roll back (remaining quantity that wasn't used)
                 int rollbackQuantity = detail.Quantity - detail.UsedQuantity;
-
+                
                 // Check if material can be rolled back
                 if (material.CanRollBack)
                 {
                     // Check if this material already exists in inventory
-                    var existingInventory = await _context.ResourceInventory
-                        .FirstOrDefaultAsync(ri => ri.ProjectId == projectId && 
+                var existingInventory = await _context.ResourceInventory
+                    .FirstOrDefaultAsync(ri => ri.ProjectId == projectId && 
                                                  ri.ResourceId == material.Id &&
-                                                 ri.ResourceType == ResourceType.MATERIAL && 
-                                                 !ri.Deleted);
-                    if (existingInventory != null)
-                    {
+                                              ri.ResourceType == ResourceType.MATERIAL && 
+                                              !ri.Deleted);
+                if (existingInventory != null)
+                {
                         // Update existing inventory
                         existingInventory.Quantity += rollbackQuantity;
-                        existingInventory.Updater = actionBy;
+                    existingInventory.Updater = actionBy;
                         existingInventory.UpdatedAt = DateTime.Now;
-                        
-                        _context.ResourceInventory.Update(existingInventory);
-                    }
-                    else
-                    {
+                    
+                    _context.ResourceInventory.Update(existingInventory);
+                }
+                else
+                {
                         // Create new inventory entry
-                        var newInventory = new ResourceInventory
-                        {
-                            ProjectId = projectId,
+                    var newInventory = new ResourceInventory
+                    {
+                        ProjectId = projectId,
                             ResourceId = material.Id,
-                            ResourceType = ResourceType.MATERIAL,
+                        ResourceType = ResourceType.MATERIAL,
                             Name = material.MaterialName,
                             Unit = material.Unit,
                             Quantity = rollbackQuantity,
-                            Status = true,
-                            Creator = actionBy,
-                            Updater = actionBy,
-                            CreatedAt = DateTime.Now,
-                            UpdatedAt = DateTime.Now
-                        };
-                        
-                        await _context.ResourceInventory.AddAsync(newInventory);
+                        Status = true,
+                        Creator = actionBy,
+                        Updater = actionBy,
+                        CreatedAt = DateTime.Now,
+                        UpdatedAt = DateTime.Now
+                    };
+                    
+                    await _context.ResourceInventory.AddAsync(newInventory);
                     }
-
+                    
                     // Update progress item detail used quantity
                     detail.UsedQuantity = detail.Quantity;
                 }

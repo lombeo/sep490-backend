@@ -19,15 +19,15 @@ namespace Sep490_Backend.Infra.Entities
         public DateTime LogDate { get; set; }
         public JsonDocument Resources { get; set; }
         public JsonDocument WorkAmount { get; set; }
-        public JsonDocument Weather { get; set; }
-        public string Safety { get; set; }
-        public string Quality { get; set; }
-        public string Progress { get; set; }
-        public string Problem { get; set; }
-        public string Advice { get; set; }
-        public JsonDocument Images { get; set; }
-        public JsonDocument Attachments { get; set; }
-        public string Note { get; set; }
+        public JsonDocument? Weather { get; set; }
+        public string? Safety { get; set; }
+        public string? Quality { get; set; }
+        public string? Progress { get; set; }
+        public string? Problem { get; set; }
+        public string? Advice { get; set; }
+        public JsonDocument? Images { get; set; }
+        public JsonDocument? Attachments { get; set; }
+        public string? Note { get; set; }
         public ConstructionLogStatus Status { get; set; } = ConstructionLogStatus.WaitingForApproval;
 
         // Navigation property
@@ -69,19 +69,24 @@ namespace Sep490_Backend.Infra.Entities
                       .HasColumnType("jsonb");
 
                 entity.Property(e => e.Safety)
-                      .HasMaxLength(2000);
+                      .HasMaxLength(2000)
+                      .IsRequired(false);
 
                 entity.Property(e => e.Quality)
-                      .HasMaxLength(2000);
+                      .HasMaxLength(2000)
+                      .IsRequired(false);
 
                 entity.Property(e => e.Progress)
-                      .HasMaxLength(2000);
+                      .HasMaxLength(2000)
+                      .IsRequired(false);
 
                 entity.Property(e => e.Problem)
-                      .HasMaxLength(2000);
+                      .HasMaxLength(2000)
+                      .IsRequired(false);
 
                 entity.Property(e => e.Advice)
-                      .HasMaxLength(2000);
+                      .HasMaxLength(2000)
+                      .IsRequired(false);
 
                 entity.Property(e => e.Images)
                       .HasColumnType("jsonb");
@@ -90,7 +95,8 @@ namespace Sep490_Backend.Infra.Entities
                       .HasColumnType("jsonb");
 
                 entity.Property(e => e.Note)
-                      .HasMaxLength(2000);
+                      .HasMaxLength(2000)
+                      .IsRequired(false);
 
                 entity.Property(e => e.Status)
                       .HasDefaultValue(ConstructionLogStatus.WaitingForApproval);
