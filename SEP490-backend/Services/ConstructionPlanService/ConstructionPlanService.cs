@@ -1327,6 +1327,9 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
             // Add all progress items
             await _context.ConstructionProgressItems.AddRangeAsync(progressItems);
             
+            // Save progress items to get their IDs before creating details
+            await _context.SaveChangesAsync();
+            
             // Now get the plan item details and create progress item details
             foreach (var progressItem in progressItems)
             {
