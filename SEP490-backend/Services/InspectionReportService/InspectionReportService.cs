@@ -131,7 +131,7 @@ namespace Sep490_Backend.Services.InspectionReportService
                 inspectCode = existingReport.InspectCode;
             }
 
-            // Handle file attachments
+            // Handle file attachments - Replaced with improved implementation
             List<AttachmentInfo> attachmentInfos = new List<AttachmentInfo>();
             
             // Get existing attachments if updating
@@ -154,13 +154,13 @@ namespace Sep490_Backend.Services.InspectionReportService
                         catch (Exception ex)
                         {
                             // Log error but continue with upload
-                            Console.WriteLine($"Failed to delete old attachments: {ex.Message}");
+                            _logger.LogError($"Failed to delete old attachments: {ex.Message}");
                         }
                     }
                 }
             }
 
-            // Upload new attachments
+            // Upload new attachments if any
             if (model.AttachmentFiles != null && model.AttachmentFiles.Any())
             {
                 foreach (var file in model.AttachmentFiles)
@@ -188,6 +188,13 @@ namespace Sep490_Backend.Services.InspectionReportService
                 }
             }
 
+            // Convert attachments to JsonDocument - this step was missing before
+            JsonDocument? attachmentsJson = null;
+            if (attachmentInfos.Any())
+            {
+                attachmentsJson = JsonDocument.Parse(JsonSerializer.Serialize(attachmentInfos));
+            }
+
             // Create or update the inspection report
             InspectionReport inspectionReport;
             
@@ -203,7 +210,7 @@ namespace Sep490_Backend.Services.InspectionReportService
                     InspectEndDate = model.InspectEndDate,
                     Location = model.Location,
                     InspectionName = model.InspectionName,
-                    Attachment = JsonSerializer.SerializeToDocument(attachmentInfos),
+                    Attachment = attachmentsJson, // Set the JsonDocument
                     InspectionDecision = (int)(model.InspectionDecision ?? InspectionDecision.None),
                     Status = (int)(model.Status ?? InspectionReportStatus.Draft),
                     QualityNote = model.QualityNote,
@@ -312,7 +319,7 @@ namespace Sep490_Backend.Services.InspectionReportService
                 inspectionReport.InspectEndDate = model.InspectEndDate;
                 inspectionReport.Location = model.Location;
                 inspectionReport.InspectionName = model.InspectionName;
-                inspectionReport.Attachment = JsonSerializer.SerializeToDocument(attachmentInfos);
+                inspectionReport.Attachment = attachmentsJson; // Set the JsonDocument
                 
                 if (model.InspectionDecision.HasValue)
                 {

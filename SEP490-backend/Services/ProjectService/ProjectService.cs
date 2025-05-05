@@ -1,20 +1,25 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.Logging;
+using Sep490_Backend.DTO;
 using Sep490_Backend.DTO.Common;
 using Sep490_Backend.DTO.Project;
 using Sep490_Backend.Infra;
 using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Infra.Entities;
 using Sep490_Backend.Infra.Enums;
-using Sep490_Backend.Services.CacheService;
-using Sep490_Backend.Services.DataService;
-using Sep490_Backend.Services.HelperService;
-using Sep490_Backend.Services.GoogleDriveService;
-using Sep490_Backend.Services.MaterialService;
 using Sep490_Backend.Infra.Helps;
 using Sep490_Backend.Controllers;
+using Sep490_Backend.Services.CacheService;
+using Sep490_Backend.Services.DataService;
+using Sep490_Backend.Services.GoogleDriveService;
+using Sep490_Backend.Services.HelperService;
+using Sep490_Backend.Services.MaterialService;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
-using Sep490_Backend.DTO;
-using Microsoft.Extensions.DependencyInjection;
+using System.Threading.Tasks;
 
 namespace Sep490_Backend.Services.ProjectService
 {
@@ -519,6 +524,13 @@ namespace Sep490_Backend.Services.ProjectService
                 }
             }
 
+            // Convert attachments to JsonDocument
+            JsonDocument? attachmentsJson = null;
+            if (attachmentInfos.Any())
+            {
+                attachmentsJson = JsonDocument.Parse(JsonSerializer.Serialize(attachmentInfos));
+            }
+
             var newProject = new Project
             {
                 ProjectCode = model.ProjectCode,
@@ -534,6 +546,7 @@ namespace Sep490_Backend.Services.ProjectService
                 Budget = model.Budget,
                 Status = ProjectStatusEnum.ReceiveRequest, // Set default status for new projects
                 Description = model.Description,
+                Attachments = attachmentsJson, // Set the attachment JSON document
                 Creator = actionBy,
                 Updater = actionBy,
                 CreatedAt = DateTime.Now,
@@ -571,6 +584,7 @@ namespace Sep490_Backend.Services.ProjectService
                 entity.EndDate = model.EndDate;
                 entity.Budget = model.Budget;
                 entity.Description = model.Description;
+                entity.Attachments = attachmentsJson; // Set the attachments JSON document
                 entity.Updater = actionBy;
                 entity.UpdatedAt = DateTime.Now;
 

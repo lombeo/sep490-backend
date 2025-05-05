@@ -15,7 +15,7 @@ namespace Sep490_Backend.Infra.Entities
         public int ConstructionProgressItemId { get; set; }
         public string Location { get; set; }
         public string InspectionName { get; set; }
-        public JsonDocument Attachment { get; set; }
+        public JsonDocument? Attachment { get; set; }
         public int InspectionDecision { get; set; }
         public int Status { get; set; }
         public string? QualityNote { get; set; }
