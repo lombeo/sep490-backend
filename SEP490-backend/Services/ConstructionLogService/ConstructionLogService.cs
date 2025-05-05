@@ -1,18 +1,24 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Sep490_Backend.DTO;
+using Sep490_Backend.DTO.Common;
 using Sep490_Backend.DTO.ConstructionLog;
+using Sep490_Backend.DTO.ConstructionProgress;
 using Sep490_Backend.Infra;
 using Sep490_Backend.Infra.Constants;
 using Sep490_Backend.Infra.Entities;
-using Sep490_Backend.Services.CacheService;
-using Sep490_Backend.Services.HelperService;
-using Sep490_Backend.Services.GoogleDriveService;
-using System.Text.Json;
-using Sep490_Backend.DTO;
 using Sep490_Backend.Infra.Enums;
 using Sep490_Backend.Infra.Helps;
-using System;
-using System.Linq;
+using Sep490_Backend.Services.CacheService;
+using Sep490_Backend.Services.ConstructionProgressService;
+using Sep490_Backend.Services.GoogleDriveService;
+using Sep490_Backend.Services.HelperService;
+using Sep490_Backend.Services.ProjectService;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Sep490_Backend.Services.ConstructionLogService;
 
@@ -35,6 +41,8 @@ namespace Sep490_Backend.Services.ConstructionLogService
         private readonly IHelperService _helperService;
         private readonly IGoogleDriveService _googleDriveService;
         private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly ILogger<ConstructionLogService> _logger;
+        private readonly IServiceProvider _serviceProvider;
 
         // Static JsonSerializerOptions to be reused across all methods
         private static readonly JsonSerializerOptions DefaultSerializerOptions = new JsonSerializerOptions
@@ -49,13 +57,17 @@ namespace Sep490_Backend.Services.ConstructionLogService
             ICacheService cacheService,
             IHelperService helperService,
             IGoogleDriveService googleDriveService,
-            IHttpContextAccessor httpContextAccessor)
+            IHttpContextAccessor httpContextAccessor,
+            ILogger<ConstructionLogService> logger,
+            IServiceProvider serviceProvider)
         {
             _context = context;
             _cacheService = cacheService;
             _helperService = helperService;
             _googleDriveService = googleDriveService;
             _httpContextAccessor = httpContextAccessor;
+            _logger = logger;
+            _serviceProvider = serviceProvider;
         }
 
         public async Task<ConstructionLogDTO> Save(SaveConstructionLogDTO model, int actionBy)
@@ -847,15 +859,21 @@ namespace Sep490_Backend.Services.ConstructionLogService
             bool allCompleted = allProgressItems.All(pi => pi.Status == ProgressStatusEnum.Done);
             bool anyIncomplete = allProgressItems.Any(pi => pi.Status != ProgressStatusEnum.Done);
             
+            // Track if we're changing the status
+            bool statusChanged = false;
+            ProjectStatusEnum newStatus = project.Status;
+            
             // If the project is in WaitingApproveCompleted status but we have incomplete items,
             // change back to InProgress
             if (project.Status == ProjectStatusEnum.WaitingApproveCompleted && anyIncomplete)
             {
                 Console.WriteLine($"Project {projectId} has incomplete items, changing status from WaitingApproveCompleted to InProgress");
+                newStatus = ProjectStatusEnum.InProgress;
                 project.Status = ProjectStatusEnum.InProgress;
                 project.UpdatedAt = DateTime.Now;
                 project.Updater = actionBy;
                 _context.Projects.Update(project);
+                statusChanged = true;
             }
             // If all items are Done and project is not already waiting for completion approval,
             // change to WaitingApproveCompleted
@@ -863,10 +881,34 @@ namespace Sep490_Backend.Services.ConstructionLogService
                     project.Status != ProjectStatusEnum.Completed && project.Status != ProjectStatusEnum.Closed)
             {
                 Console.WriteLine($"All progress items for project {projectId} are marked as Done, changing status to WaitingApproveCompleted");
+                newStatus = ProjectStatusEnum.WaitingApproveCompleted;
                 project.Status = ProjectStatusEnum.WaitingApproveCompleted;
                 project.UpdatedAt = DateTime.Now;
                 project.Updater = actionBy;
                 _context.Projects.Update(project);
+                statusChanged = true;
+            }
+            
+            // Send email notification if status changed
+            if (statusChanged)
+            {
+                try
+                {
+                    var emailService = _serviceProvider.GetService<IProjectEmailService>();
+                    if (emailService != null)
+                    {
+                        // Queue a background task to send emails
+                        _ = Task.Run(async () =>
+                        {
+                            await emailService.SendProjectStatusChangeNotification(projectId, newStatus, actionBy);
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Log but don't fail the operation if email sending fails
+                    _logger.LogError(ex, "Failed to send project status change email notification: {Message}", ex.Message);
+                }
             }
         }
 

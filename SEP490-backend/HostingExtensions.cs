@@ -130,6 +130,8 @@ namespace Sep490_Backend
             // Add email notification services - only register as hosted service, which also makes it a singleton
             builder.Services.AddScoped<IConstructionLogEmailService, ConstructionLogEmailService>();
             builder.Services.AddScoped<IConstructionPlanEmailService, ConstructionPlanEmailService>();
+            builder.Services.AddScoped<IInspectionReportEmailService, InspectionReportEmailService>();
+            builder.Services.AddScoped<IProjectEmailService, ProjectEmailService>();
             
             builder.Services.AddHostedService<DefaultBackgroundService>();
             builder.Services.AddHostedService<LockCleanupHostedService>();

@@ -11,6 +11,8 @@ using Sep490_Backend.Services.GoogleDriveService;
 using Sep490_Backend.Services.ConstructionProgressService;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.DependencyInjection;
+using Sep490_Backend.Services.ProjectService;
 
 namespace Sep490_Backend.Services.InspectionReportService
 {
@@ -21,19 +23,22 @@ namespace Sep490_Backend.Services.InspectionReportService
         private readonly IHelperService _helperService;
         private readonly IGoogleDriveService _googleDriveService;
         private readonly ILogger<InspectionReportService> _logger;
+        private readonly IServiceProvider _serviceProvider;
 
         public InspectionReportService(
             BackendContext context,
             ICacheService cacheService,
             IHelperService helperService,
             IGoogleDriveService googleDriveService,
-            ILogger<InspectionReportService> logger)
+            ILogger<InspectionReportService> logger,
+            IServiceProvider serviceProvider)
         {
             _context = context;
             _cacheService = cacheService;
             _helperService = helperService;
             _googleDriveService = googleDriveService;
             _logger = logger;
+            _serviceProvider = serviceProvider;
         }
 
         public async Task<InspectionReportDTO> Save(SaveInspectionReportDTO model, int actionBy)
@@ -49,7 +54,11 @@ namespace Sep490_Backend.Services.InspectionReportService
             if (model.Id != 0 && model.Status.HasValue && 
                 (model.ConstructionProgressItemId == 0 && model.InspectStartDate == default))
             {
-                return await UpdateInspectionReportStatus(model.Id, model.Status.Value, actionBy);
+                var result = await UpdateInspectionReportStatus(model.Id, model.Status.Value, actionBy);
+                
+                // Email notification is already handled in UpdateInspectionReportStatus
+                
+                return result;
             }
 
             // Check if progress item exists
@@ -282,33 +291,9 @@ namespace Sep490_Backend.Services.InspectionReportService
                     // Check if all progress items for the project are now Done, and if so,
                     // update the project status to WaitingApproveCompleted
                     var relatedProjectId = progressItem.ConstructionProgress.ProjectId;
-                    var projectProgressItems = await _context.ConstructionProgresses
-                        .Where(cp => cp.ProjectId == relatedProjectId && !cp.Deleted)
-                        .SelectMany(cp => cp.ProgressItems.Where(pi => !pi.Deleted))
-                        .ToListAsync();
-                        
-                    if (projectProgressItems.Any() && projectProgressItems.All(pi => pi.Status == ProgressStatusEnum.Done))
-                    {
-                        var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == relatedProjectId && !p.Deleted);
-                        
-                        if (project != null && 
-                            project.Status != ProjectStatusEnum.WaitingApproveCompleted && 
-                            project.Status != ProjectStatusEnum.Completed && 
-                            project.Status != ProjectStatusEnum.Closed)
-                        {
-                            project.Status = ProjectStatusEnum.WaitingApproveCompleted;
-                            project.UpdatedAt = DateTime.Now;
-                            project.Updater = actionBy;
-                            
-                            _context.Projects.Update(project);
-                            
-                            // Log the project status change
-                            _logger.LogInformation($"All progress items for project {relatedProjectId} are marked as Done, changing status to WaitingApproveCompleted");
-                            
-                            // Invalidate project caches after status update
-                            await InvalidateProjectCaches(relatedProjectId);
-                        }
-                    }
+                    
+                    // Use the helper method to check if all progress items are done and update status if needed
+                    await SetProjectStatusToWaitingApproveCompleted(relatedProjectId, actionBy);
                 }
             }
             else
@@ -470,33 +455,9 @@ namespace Sep490_Backend.Services.InspectionReportService
                         // Check if all progress items for the project are now Done, and if so,
                         // update the project status to WaitingApproveCompleted
                         var relatedProjectId = progressItem.ConstructionProgress.ProjectId;
-                        var projectProgressItems = await _context.ConstructionProgresses
-                            .Where(cp => cp.ProjectId == relatedProjectId && !cp.Deleted)
-                            .SelectMany(cp => cp.ProgressItems.Where(pi => !pi.Deleted))
-                            .ToListAsync();
-                            
-                        if (projectProgressItems.Any() && projectProgressItems.All(pi => pi.Status == ProgressStatusEnum.Done))
-                        {
-                            var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == relatedProjectId && !p.Deleted);
-                            
-                            if (project != null && 
-                                project.Status != ProjectStatusEnum.WaitingApproveCompleted && 
-                                project.Status != ProjectStatusEnum.Completed && 
-                                project.Status != ProjectStatusEnum.Closed)
-                            {
-                                project.Status = ProjectStatusEnum.WaitingApproveCompleted;
-                                project.UpdatedAt = DateTime.Now;
-                                project.Updater = actionBy;
-                                
-                                _context.Projects.Update(project);
-                                
-                                // Log the project status change
-                                _logger.LogInformation($"All progress items for project {relatedProjectId} are marked as Done, changing status to WaitingApproveCompleted");
-                                
-                                // Invalidate project caches after status update
-                                await InvalidateProjectCaches(relatedProjectId);
-                            }
-                        }
+                        
+                        // Use the helper method to check if all progress items are done and update status if needed
+                        await SetProjectStatusToWaitingApproveCompleted(relatedProjectId, actionBy);
                     }
                     else if ((InspectionDecision)report.InspectionDecision == InspectionDecision.Fail)
                     {
@@ -531,6 +492,23 @@ namespace Sep490_Backend.Services.InspectionReportService
             }
             
             await _context.SaveChangesAsync();
+            
+            // Send email notification
+            try
+            {
+                var emailService = _serviceProvider.GetService<IInspectionReportEmailService>();
+                if (emailService != null)
+                {
+                    await emailService.SendInspectionReportStatusNotification(report.Id, status, actionBy);
+                    _logger.LogInformation("Email notification queued for inspection report {ReportId} status change to {Status}", 
+                        report.Id, status);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log the error but don't fail the operation
+                _logger.LogError(ex, "Failed to send email notification for inspection report {ReportId}", report.Id);
+            }
             
             // Invalidate cache
             int projectId = report.ConstructionProgressItem.ConstructionProgress.ProjectId;
@@ -1194,6 +1172,90 @@ namespace Sep490_Backend.Services.InspectionReportService
                 await _context.ResourceInventory.AddAsync(newInventory);
                 
                 _logger.LogInformation($"Created new project inventory record with {quantity} of material {material.Id} ({material.MaterialName})");
+            }
+        }
+
+        /// <summary>
+        /// Sets the project status to WaitingApproveCompleted if all progress items are marked as Done
+        /// </summary>
+        private async Task SetProjectStatusToWaitingApproveCompleted(int relatedProjectId, int actionBy)
+        {
+            if (relatedProjectId == 0)
+            {
+                _logger.LogWarning("Cannot update project status for project ID 0");
+                return;
+            }
+
+            try
+            {
+                // Get all progress items for this project
+                var allProgressItems = await _context.ConstructionProgresses
+                    .Where(cp => cp.ProjectId == relatedProjectId && !cp.Deleted)
+                    .SelectMany(cp => cp.ProgressItems.Where(pi => !pi.Deleted))
+                    .ToListAsync();
+
+                if (!allProgressItems.Any())
+                {
+                    _logger.LogWarning("No progress items found for project {ProjectId}", relatedProjectId);
+                    return;
+                }
+
+                // Check if all items are marked as Done
+                bool allCompleted = allProgressItems.All(pi => pi.Status == ProgressStatusEnum.Done);
+
+                if (allCompleted)
+                {
+                    var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == relatedProjectId && !p.Deleted);
+                    
+                    // If project exists and is not already in a completed state
+                    if (project != null && 
+                        project.Status != ProjectStatusEnum.WaitingApproveCompleted && 
+                        project.Status != ProjectStatusEnum.Completed && 
+                        project.Status != ProjectStatusEnum.Closed)
+                    {
+                        // Store old status for comparison
+                        var oldStatus = project.Status;
+                        
+                        // Set to waiting for approval
+                        project.Status = ProjectStatusEnum.WaitingApproveCompleted;
+                        project.UpdatedAt = DateTime.Now;
+                        project.Updater = actionBy;
+                        
+                        _context.Projects.Update(project);
+                        
+                        // Log the project status change
+                        _logger.LogInformation($"All progress items for project {relatedProjectId} are marked as Done, changing status to WaitingApproveCompleted");
+                        
+                        // Invalidate project caches after status update
+                        await InvalidateProjectCaches(relatedProjectId);
+                        
+                        // Send email notification for the status change
+                        if (oldStatus != ProjectStatusEnum.WaitingApproveCompleted)
+                        {
+                            try
+                            {
+                                var emailService = _serviceProvider.GetService<IProjectEmailService>();
+                                if (emailService != null)
+                                {
+                                    // Queue a background task to send emails
+                                    _ = Task.Run(async () =>
+                                    {
+                                        await emailService.SendProjectStatusChangeNotification(relatedProjectId, ProjectStatusEnum.WaitingApproveCompleted, actionBy);
+                                    });
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                // Log but don't fail the operation if email sending fails
+                                _logger.LogError(ex, "Failed to send project status change email notification: {Message}", ex.Message);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating project status for project {ProjectId}: {Message}", relatedProjectId, ex.Message);
             }
         }
     }

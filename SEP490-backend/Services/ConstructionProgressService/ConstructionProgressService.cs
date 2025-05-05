@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Sep490_Backend.DTO;
 using Sep490_Backend.DTO.Common;
 using Sep490_Backend.DTO.ConstructionProgress;
 using Sep490_Backend.Infra;
@@ -9,6 +10,9 @@ using Sep490_Backend.Services.CacheService;
 using Sep490_Backend.Services.DataService;
 using Sep490_Backend.Services.HelperService;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
+using Sep490_Backend.Services.ProjectService;
+using System.Text.Json;
 
 namespace Sep490_Backend.Services.ConstructionProgressService
 {
@@ -30,19 +34,22 @@ namespace Sep490_Backend.Services.ConstructionProgressService
         private readonly IDataService _dataService;
         private readonly TimeSpan _cacheExpirationTime = TimeSpan.FromMinutes(30);
         private readonly ILogger<ConstructionProgressService> _logger;
+        private readonly IServiceProvider _serviceProvider;
 
         public ConstructionProgressService(
             BackendContext context,
             ICacheService cacheService,
             IHelperService helperService,
             IDataService dataService,
-            ILogger<ConstructionProgressService> logger)
+            ILogger<ConstructionProgressService> logger,
+            IServiceProvider serviceProvider)
         {
             _context = context;
             _cacheService = cacheService;
             _helperService = helperService;
             _dataService = dataService;
             _logger = logger;
+            _serviceProvider = serviceProvider;
         }
 
         public async Task<List<ConstructionProgressDTO>> Search(ConstructionProgressQuery query)
@@ -533,15 +540,21 @@ namespace Sep490_Backend.Services.ConstructionProgressService
             bool allCompleted = allProgressItems.All(pi => pi.Status == ProgressStatusEnum.Done);
             bool anyIncomplete = allProgressItems.Any(pi => pi.Status != ProgressStatusEnum.Done);
             
+            // Track if status will change for sending email
+            bool statusChanged = false;
+            ProjectStatusEnum newStatus = project.Status;
+            
             // If the project is in WaitingApproveCompleted status but we have incomplete items,
             // change back to InProgress
             if (project.Status == ProjectStatusEnum.WaitingApproveCompleted && anyIncomplete)
             {
                 _logger.LogInformation($"Project {projectId} has incomplete items, changing status from WaitingApproveCompleted to InProgress");
+                newStatus = ProjectStatusEnum.InProgress;
                 project.Status = ProjectStatusEnum.InProgress;
                 project.UpdatedAt = DateTime.Now;
                 project.Updater = actionBy;
                 _context.Projects.Update(project);
+                statusChanged = true;
             }
             // If all items are Done and project is not already waiting for completion approval,
             // change to WaitingApproveCompleted
@@ -549,13 +562,35 @@ namespace Sep490_Backend.Services.ConstructionProgressService
                     project.Status != ProjectStatusEnum.Completed && project.Status != ProjectStatusEnum.Closed)
             {
                 _logger.LogInformation($"All progress items for project {projectId} are marked as Done, changing status to WaitingApproveCompleted");
+                newStatus = ProjectStatusEnum.WaitingApproveCompleted;
                 project.Status = ProjectStatusEnum.WaitingApproveCompleted;
                 project.UpdatedAt = DateTime.Now;
                 project.Updater = actionBy;
                 _context.Projects.Update(project);
+                statusChanged = true;
             }
             
-            // Save is handled by the calling method in its transaction
+            // Send email notification if status changed
+            if (statusChanged)
+            {
+                try
+                {
+                    var emailService = _serviceProvider.GetService<IProjectEmailService>();
+                    if (emailService != null)
+                    {
+                        // Queue a background task to send emails
+                        _ = Task.Run(async () =>
+                        {
+                            await emailService.SendProjectStatusChangeNotification(projectId, newStatus, actionBy);
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Log but don't fail the operation if email sending fails
+                    _logger.LogError(ex, "Failed to send project status change email notification: {Message}", ex.Message);
+                }
+            }
         }
 
         private async Task<bool> IsAuthorizedToViewProgress(int progressId, int userId)

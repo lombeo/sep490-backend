@@ -14,6 +14,7 @@ using Sep490_Backend.Infra.Helps;
 using Sep490_Backend.Controllers;
 using System.Text.Json;
 using Sep490_Backend.DTO;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Sep490_Backend.Services.ProjectService
 {
@@ -37,6 +38,7 @@ namespace Sep490_Backend.Services.ProjectService
         private readonly IGoogleDriveService _googleDriveService;
         private readonly IMaterialService _materialService;
         private readonly ILogger<ProjectService> _logger;
+        private readonly IServiceProvider _serviceProvider;
 
         public ProjectService(
             BackendContext context, 
@@ -45,7 +47,8 @@ namespace Sep490_Backend.Services.ProjectService
             IHelperService helperService,
             IGoogleDriveService googleDriveService,
             IMaterialService materialService,
-            ILogger<ProjectService> logger)
+            ILogger<ProjectService> logger,
+            IServiceProvider serviceProvider)
         {
             _context = context;
             _cacheService = cacheService;
@@ -54,6 +57,7 @@ namespace Sep490_Backend.Services.ProjectService
             _googleDriveService = googleDriveService;
             _materialService = materialService;
             _logger = logger;
+            _serviceProvider = serviceProvider;
         } 
 
         public async Task<int> Delete(int id, int actionBy)
@@ -741,6 +745,9 @@ namespace Sep490_Backend.Services.ProjectService
                     _logger.LogInformation($"Rolled back {rollbackCount} materials from project {project.Id} during status change to {model.TargetStatus}");
                 }
                 
+                // Store the old status for notification
+                var oldStatus = project.Status;
+                
                 // Update project status
                 project.Status = model.TargetStatus;
                 project.UpdatedAt = DateTime.Now;
@@ -753,6 +760,28 @@ namespace Sep490_Backend.Services.ProjectService
                 await InvalidateProjectCaches(project.Id);
                 
                 await transaction.CommitAsync();
+                
+                // Send email notification for status change
+                if (oldStatus != model.TargetStatus)
+                {
+                    try
+                    {
+                        var emailService = _serviceProvider.GetService<IProjectEmailService>();
+                        if (emailService != null)
+                        {
+                            // Queue a background task to send emails
+                            _ = Task.Run(async () =>
+                            {
+                                await emailService.SendProjectStatusChangeNotification(project.Id, model.TargetStatus, actionBy);
+                            });
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log but don't fail the operation if email sending fails
+                        _logger.LogError(ex, "Failed to send project status change email notification: {Message}", ex.Message);
+                    }
+                }
                 
                 return true;
             }
