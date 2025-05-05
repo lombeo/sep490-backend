@@ -958,36 +958,36 @@ namespace Sep490_Backend.Services.ProjectService
             // Calculate statistics for all projects the user has access to
             
             // 1. Get all contract details sums (planned value)
-            decimal planned = await _context.ContractDetails
+            decimal userPlanned = await _context.ContractDetails
                 .Where(cd => userProjects.Contains(cd.Contract.ProjectId) && !cd.Deleted)
                 .SumAsync(cd => cd.Total);
 
             // 2. Get all progress items with status = InProgress (1)
-            decimal inProgress = await _context.ConstructionProgressItems
+            decimal userInProgress = await _context.ConstructionProgressItems
                 .Where(pi => userProjects.Contains(pi.ConstructionProgress.ProjectId) && 
                             pi.Status == Infra.Enums.ProgressStatusEnum.InProgress && 
                             !pi.Deleted)
                 .SumAsync(pi => pi.UsedQuantity * pi.UnitPrice);
 
             // 3. Get all progress items with status = Done (2)
-            decimal inspected = await _context.ConstructionProgressItems
+            decimal userInspected = await _context.ConstructionProgressItems
                 .Where(pi => userProjects.Contains(pi.ConstructionProgress.ProjectId) && 
                             pi.Status == Infra.Enums.ProgressStatusEnum.Done && 
                             !pi.Deleted)
                 .SumAsync(pi => pi.UsedQuantity * pi.UnitPrice);
 
             // 4. Calculate remaining value
-            decimal remain = planned - inProgress - inspected;
+            decimal userRemain = userPlanned - userInProgress - userInspected;
 
             // Create result object
             return new ProjectStatisticsDTO
             {
                 Statistics = new List<ProjectStatisticItemDTO>
                 {
-                    new ProjectStatisticItemDTO { Label = "planned", Value = planned },
-                    new ProjectStatisticItemDTO { Label = "inprogress", Value = inProgress },
-                    new ProjectStatisticItemDTO { Label = "inspected", Value = inspected },
-                    new ProjectStatisticItemDTO { Label = "remain", Value = remain }
+                    new ProjectStatisticItemDTO { Label = "planned", Value = userPlanned },
+                    new ProjectStatisticItemDTO { Label = "inprogress", Value = userInProgress },
+                    new ProjectStatisticItemDTO { Label = "inspected", Value = userInspected },
+                    new ProjectStatisticItemDTO { Label = "remain", Value = userRemain }
                 }
             };
         }
@@ -1029,36 +1029,36 @@ namespace Sep490_Backend.Services.ProjectService
             // Calculate statistics for the specific project
             
             // 1. Get all contract details sums for the project (planned value)
-            decimal planned = await _context.ContractDetails
+            decimal projectPlanned = await _context.ContractDetails
                 .Where(cd => cd.Contract.ProjectId == projectId && !cd.Deleted)
                 .SumAsync(cd => cd.Total);
 
             // 2. Get all progress items with status = InProgress (1)
-            decimal inProgress = await _context.ConstructionProgressItems
+            decimal projectInProgress = await _context.ConstructionProgressItems
                 .Where(pi => pi.ConstructionProgress.ProjectId == projectId && 
                             pi.Status == Infra.Enums.ProgressStatusEnum.InProgress && 
                             !pi.Deleted)
                 .SumAsync(pi => pi.UsedQuantity * pi.UnitPrice);
 
             // 3. Get all progress items with status = Done (2)
-            decimal inspected = await _context.ConstructionProgressItems
+            decimal projectInspected = await _context.ConstructionProgressItems
                 .Where(pi => pi.ConstructionProgress.ProjectId == projectId && 
                             pi.Status == Infra.Enums.ProgressStatusEnum.Done && 
                             !pi.Deleted)
                 .SumAsync(pi => pi.UsedQuantity * pi.UnitPrice);
 
             // 4. Calculate remaining value
-            decimal remain = planned - inProgress - inspected;
+            decimal projectRemain = projectPlanned - projectInProgress - projectInspected;
 
             // Create result object
             return new ProjectStatisticsDTO
             {
                 Statistics = new List<ProjectStatisticItemDTO>
                 {
-                    new ProjectStatisticItemDTO { Label = "planned", Value = planned },
-                    new ProjectStatisticItemDTO { Label = "inprogress", Value = inProgress },
-                    new ProjectStatisticItemDTO { Label = "inspected", Value = inspected },
-                    new ProjectStatisticItemDTO { Label = "remain", Value = remain }
+                    new ProjectStatisticItemDTO { Label = "planned", Value = projectPlanned },
+                    new ProjectStatisticItemDTO { Label = "inprogress", Value = projectInProgress },
+                    new ProjectStatisticItemDTO { Label = "inspected", Value = projectInspected },
+                    new ProjectStatisticItemDTO { Label = "remain", Value = projectRemain }
                 }
             };
         }
