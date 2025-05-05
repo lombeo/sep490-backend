@@ -1326,7 +1326,6 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
             
             // Add all progress items
             await _context.ConstructionProgressItems.AddRangeAsync(progressItems);
-            await _context.SaveChangesAsync();
             
             // Now get the plan item details and create progress item details
             foreach (var progressItem in progressItems)
@@ -1375,13 +1374,30 @@ private async Task SetResourceDirectly(int detailId, ResourceType resourceType, 
             // Save everything
             await _context.SaveChangesAsync();
             
-            // Clear related caches
-            // Invalidate cache for the newly created progress
+            // Clear related caches comprehensively
             await _cacheService.DeleteAsync(string.Format(RedisCacheKey.CONSTRUCTION_PROGRESS_BY_ID_CACHE_KEY, constructionProgress.Id));
             await _cacheService.DeleteAsync(string.Format(RedisCacheKey.CONSTRUCTION_PROGRESS_BY_PLAN_CACHE_KEY, planId));
             await _cacheService.DeleteAsync(string.Format(RedisCacheKey.CONSTRUCTION_PROGRESS_BY_PROJECT_CACHE_KEY, projectId));
             await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PROGRESS_CACHE_KEY);
             await _cacheService.DeleteByPatternAsync(RedisCacheKey.CONSTRUCTION_PROGRESS_ALL_PATTERN);
+            
+            // Also invalidate construction plan caches
+            await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY);
+            await _cacheService.DeleteByPatternAsync("CONSTRUCTION_PLAN:*");
+            
+            // Invalidate project caches
+            await _cacheService.DeleteAsync(string.Format(RedisCacheKey.PROJECT_BY_ID_CACHE_KEY, projectId));
+            await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_CACHE_KEY);
+            await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_LIST_CACHE_KEY);
+            
+            // Invalidate progress item caches
+            await _cacheService.DeleteByPatternAsync("ConstructionProgressItem:*");
+            await _cacheService.DeleteByPatternAsync($"ConstructionProgressItem:Project:{projectId}:*");
+            
+            // Invalidate dashboard/statistics caches
+            await _cacheService.DeleteByPatternAsync("DASHBOARD:*");
+            await _cacheService.DeleteByPatternAsync("STATISTICS:*");
+            await _cacheService.DeleteByPatternAsync("REPORT:*");
         }
 
         /// <summary>

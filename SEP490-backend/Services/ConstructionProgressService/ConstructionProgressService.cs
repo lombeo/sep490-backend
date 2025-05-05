@@ -354,8 +354,9 @@ namespace Sep490_Backend.Services.ConstructionProgressService
                 // Commit transaction
                 await transaction.CommitAsync();
 
-                // Clear cache
-                await InvalidateProgressCache(progress.Id, progress.ProjectId, progress.PlanId);
+                // Use comprehensive cache invalidation for all affected entities
+                // Since this is a bulk update, we'll clear all caches related to progress items
+                await InvalidateProgressItemRelatedCaches(0, progress.Id, progress.ProjectId, progress.PlanId);
 
                 return true;
             }
@@ -375,134 +376,82 @@ namespace Sep490_Backend.Services.ConstructionProgressService
         /// <param name="actionBy">ID of the user performing the action</param>
         private async Task RollbackMaterialsFromCompletedItem(int progressItemId, int projectId, int actionBy)
         {
-            _logger.LogInformation($"Rolling back materials from completed progress item {progressItemId} to project inventory");
-            
-            // Get progress item details with material resources
+            // Get progress item details containing materials
             var progressItemDetails = await _context.ConstructionProgressItemDetails
                 .Where(pid => pid.ProgressItemId == progressItemId && 
-                              pid.ResourceType == ResourceType.MATERIAL && 
-                              pid.ResourceId.HasValue &&
-                              !pid.Deleted)
+                             pid.ResourceType == ResourceType.MATERIAL && 
+                             pid.ResourceId.HasValue && 
+                             pid.Quantity > pid.UsedQuantity && 
+                             !pid.Deleted)
                 .ToListAsync();
-                
-            // Get vehicle resources to update their status
-            var vehicleDetails = await _context.ConstructionProgressItemDetails
-                .Where(pid => pid.ProgressItemId == progressItemId && 
-                              pid.ResourceType == ResourceType.MACHINE && 
-                              pid.ResourceId.HasValue &&
-                              !pid.Deleted)
-                .ToListAsync();
-                
-            // Update vehicle status to Available
-            if (vehicleDetails.Any())
-            {
-                foreach (var vehicleDetail in vehicleDetails)
-                {
-                    var vehicle = await _context.Vehicles
-                        .FirstOrDefaultAsync(v => v.Id == vehicleDetail.ResourceId.Value && !v.Deleted);
-                        
-                    if (vehicle != null)
-                    {
-                        // Set vehicle status to Available
-                        vehicle.Status = VehicleStatus.Available;
-                        vehicle.UpdatedAt = DateTime.UtcNow;
-                        vehicle.Updater = actionBy;
-                        
-                        _context.Vehicles.Update(vehicle);
-                        
-                        _logger.LogInformation($"Set vehicle {vehicle.Id} ({vehicle.VehicleName}) status to Available when progress item was canceled");
-                    }
-                }
-            }
-                
+
             if (!progressItemDetails.Any())
             {
-                _logger.LogInformation($"No material details found for progress item {progressItemId}");
                 return;
             }
-            
+
             foreach (var detail in progressItemDetails)
             {
-                // Get the material to check if it can be rolled back
+                // Get the material to check rollback flag
                 var material = await _context.Materials
                     .FirstOrDefaultAsync(m => m.Id == detail.ResourceId.Value && !m.Deleted);
-                
+
                 if (material == null)
                 {
-                    _logger.LogWarning($"Material with ID {detail.ResourceId.Value} not found or deleted, skipping rollback");
                     continue;
                 }
-                
-                // Only process materials that can be rolled back
-                if (!material.CanRollBack)
-                {
-                    _logger.LogInformation($"Material {material.Id} ({material.MaterialName}) has CanRollBack=false, skipping");
-                    continue;
-                }
-                
+
                 // Calculate quantity to roll back (remaining quantity that wasn't used)
-                int unusedQuantity = detail.Quantity - detail.UsedQuantity;
-                
-                if (unusedQuantity <= 0)
+                int rollbackQuantity = detail.Quantity - detail.UsedQuantity;
+
+                // Check if material can be rolled back
+                if (material.CanRollBack)
                 {
-                    _logger.LogInformation($"No unused quantity to roll back for material {material.Id} in progress item detail {detail.Id}");
-                    continue;
-                }
-                
-                // Check if this material already exists in the project's inventory
-                var existingInventory = await _context.ResourceInventory
-                    .FirstOrDefaultAsync(ri => ri.ProjectId == projectId && 
-                                              ri.ResourceId == detail.ResourceId.Value && 
-                                              ri.ResourceType == ResourceType.MATERIAL && 
-                                              !ri.Deleted);
-                
-                if (existingInventory != null)
-                {
-                    // Update existing inventory record
-                    existingInventory.Quantity += unusedQuantity;
-                    existingInventory.UpdatedAt = DateTime.Now;
-                    existingInventory.Updater = actionBy;
-                    
-                    _context.ResourceInventory.Update(existingInventory);
-                    
-                    _logger.LogInformation($"Added {unusedQuantity} of material {material.Id} ({material.MaterialName}) " +
-                                         $"to existing project inventory (new total: {existingInventory.Quantity})");
-                }
-                else
-                {
-                    // Create new inventory record
-                    var newInventory = new ResourceInventory
+                    // Check if this material already exists in inventory
+                    var existingInventory = await _context.ResourceInventory
+                        .FirstOrDefaultAsync(ri => ri.ProjectId == projectId && 
+                                                 ri.ResourceId == material.Id &&
+                                                 ri.ResourceType == ResourceType.MATERIAL && 
+                                                 !ri.Deleted);
+                    if (existingInventory != null)
                     {
-                        Name = material.MaterialName,
-                        ResourceId = material.Id,
-                        ProjectId = projectId,
-                        ResourceType = ResourceType.MATERIAL,
-                        Quantity = unusedQuantity,
-                        Unit = material.Unit ?? "unit",
-                        Status = true,
-                        Creator = actionBy,
-                        Updater = actionBy,
-                        CreatedAt = DateTime.Now,
-                        UpdatedAt = DateTime.Now
-                    };
-                    
-                    await _context.ResourceInventory.AddAsync(newInventory);
-                    
-                    _logger.LogInformation($"Created new project inventory record with {unusedQuantity} of material {material.Id} ({material.MaterialName})");
+                        // Update existing inventory
+                        existingInventory.Quantity += rollbackQuantity;
+                        existingInventory.Updater = actionBy;
+                        existingInventory.UpdatedAt = DateTime.Now;
+                        
+                        _context.ResourceInventory.Update(existingInventory);
+                    }
+                    else
+                    {
+                        // Create new inventory entry
+                        var newInventory = new ResourceInventory
+                        {
+                            ProjectId = projectId,
+                            ResourceId = material.Id,
+                            ResourceType = ResourceType.MATERIAL,
+                            Name = material.MaterialName,
+                            Unit = material.Unit,
+                            Quantity = rollbackQuantity,
+                            Status = true,
+                            Creator = actionBy,
+                            Updater = actionBy,
+                            CreatedAt = DateTime.Now,
+                            UpdatedAt = DateTime.Now
+                        };
+                        
+                        await _context.ResourceInventory.AddAsync(newInventory);
+                    }
+
+                    // Update progress item detail used quantity
+                    detail.UsedQuantity = detail.Quantity;
                 }
-                
-                // Update the detail to mark the rolled back quantity
-                detail.UsedQuantity = detail.Quantity; // Mark all as used, since we're rolling back the unused portion
-                detail.UpdatedAt = DateTime.Now;
-                detail.Updater = actionBy;
                 
                 _context.ConstructionProgressItemDetails.Update(detail);
             }
             
-            // Invalidate resource inventory caches after rollback
-            await InvalidateResourceInventoryCachesByProject(projectId);
-            // Invalidate vehicle caches
-            await _cacheService.DeleteByPatternAsync("VEHICLE:*");
+            // Note: Cache invalidation is now handled by the comprehensive 
+            // InvalidateProgressItemRelatedCaches method, so we don't need to invalidate caches here.
             
             // Save is handled by the calling method in its transaction
         }
@@ -906,11 +855,8 @@ namespace Sep490_Backend.Services.ConstructionProgressService
                 // Commit transaction
                 await transaction.CommitAsync();
 
-                // Clear cache
-                await InvalidateProgressCache(progress.Id, progress.ProjectId, progress.PlanId);
-                
-                // Also invalidate project caches since the project status might have changed
-                await InvalidateProjectCaches(progress.ProjectId);
+                // Use comprehensive cache invalidation for all affected entities
+                await InvalidateProgressItemRelatedCaches(progressItem.Id, progress.Id, progress.ProjectId, progress.PlanId);
 
                 // Map to DTO and return
                 var itemDto = new ProgressItemDTO
@@ -1124,11 +1070,8 @@ namespace Sep490_Backend.Services.ConstructionProgressService
                 // Commit transaction
                 await transaction.CommitAsync();
 
-                // Clear cache
-                await InvalidateProgressCache(progress.Id, progress.ProjectId, progress.PlanId);
-                
-                // Also invalidate project caches since the project status might have changed
-                await InvalidateProjectCaches(progress.ProjectId);
+                // Use comprehensive cache invalidation for all affected entities
+                await InvalidateProgressItemRelatedCaches(progressItem.Id, progress.Id, progress.ProjectId, progress.PlanId);
 
                 // Map to DTO and return
                 var itemDto = new ProgressItemDTO
@@ -1369,6 +1312,74 @@ namespace Sep490_Backend.Services.ConstructionProgressService
             
             // Clear all resource inventory related caches
             await _cacheService.DeleteByPatternAsync("RESOURCE_INVENTORY:*");
+        }
+
+        /// <summary>
+        /// A comprehensive cache invalidation method for ConstructionProgressItems and related entities
+        /// </summary>
+        /// <param name="progressItemId">The ID of the progress item</param>
+        /// <param name="progressId">The ID of the construction progress</param>
+        /// <param name="projectId">The ID of the project</param>
+        /// <param name="planId">The ID of the construction plan</param>
+        private async Task InvalidateProgressItemRelatedCaches(int progressItemId, int progressId, int projectId, int planId)
+        {
+            try
+            {
+                _logger.LogInformation($"Invalidating all related caches for progress item {progressItemId} in project {projectId}");
+                
+                // 1. Invalidate construction progress item caches - no specific constants for these, use patterns
+                await _cacheService.DeleteByPatternAsync("ConstructionProgressItem:*");
+                await _cacheService.DeleteByPatternAsync($"ConstructionProgressItem:Project:{projectId}:*");
+                await _cacheService.DeleteByPatternAsync($"ConstructionProgressItem:ID:{progressItemId}");
+                
+                // 2. Invalidate construction progress detail caches
+                await _cacheService.DeleteByPatternAsync("ConstructionProgressItemDetail:*");
+                await _cacheService.DeleteByPatternAsync($"ConstructionProgressItemDetail:ProgressItem:{progressItemId}:*");
+                
+                // 3. Invalidate construction progress caches
+                await InvalidateProgressCache(progressId, projectId, planId);
+                
+                // 4. Invalidate construction plan caches
+                await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY);
+                await _cacheService.DeleteByPatternAsync($"CONSTRUCTION_PLAN:*");
+                
+                // 5. Invalidate project caches
+                await InvalidateProjectCaches(projectId);
+                
+                // 6. Invalidate inspection report caches that might depend on progress item status
+                await _cacheService.DeleteAsync(RedisCacheKey.INSPECTION_REPORT_CACHE_KEY);
+                await _cacheService.DeleteAsync(string.Format(RedisCacheKey.INSPECTION_REPORT_BY_PROJECT_CACHE_KEY, projectId));
+                await _cacheService.DeleteByPatternAsync(RedisCacheKey.INSPECTION_REPORT_ALL_PATTERN);
+                
+                // 7. Invalidate resource inventory caches (materials/resources might be affected)
+                await _cacheService.DeleteAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
+                await _cacheService.DeleteByPatternAsync($"RESOURCE_INVENTORY:*");
+                await _cacheService.DeleteByPatternAsync($"RESOURCE_INVENTORY:PROJECT:{projectId}:*");
+                
+                // 8. Invalidate construction log caches (they display progress data)
+                await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_LOG_CACHE_KEY);
+                await _cacheService.DeleteAsync(string.Format(RedisCacheKey.CONSTRUCTION_LOG_BY_PROJECT_CACHE_KEY, projectId));
+                await _cacheService.DeleteByPatternAsync(RedisCacheKey.CONSTRUCTION_LOG_ALL_PATTERN);
+                
+                // 9. Invalidate dashboard/statistics caches
+                await _cacheService.DeleteByPatternAsync($"DASHBOARD:*");
+                await _cacheService.DeleteByPatternAsync($"STATISTICS:*");
+                await _cacheService.DeleteByPatternAsync($"REPORT:*");
+                
+                // 10. Invalidate project statistics cache
+                await _cacheService.DeleteAsync(string.Format(RedisCacheKey.PROJECT_STATISTICS_PROJECT_CACHE_KEY, projectId));
+                
+                // 11. Invalidate vehicle caches if vehicle allocations are affected
+                await _cacheService.DeleteByPatternAsync($"VEHICLE:*");
+                await _cacheService.DeleteByPatternAsync($"MACHINE:*");
+                
+                _logger.LogInformation($"Cache invalidation completed for progress item {progressItemId}");
+            }
+            catch (Exception ex)
+            {
+                // Log error but don't fail the operation
+                _logger.LogError(ex, $"Error during cache invalidation for progress item {progressItemId}: {ex.Message}");
+            }
         }
     }
 } 

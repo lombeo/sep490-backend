@@ -339,7 +339,18 @@ namespace Sep490_Backend.Services.InspectionReportService
             // Invalidate construction progress caches
             var progressId = progressItem.ConstructionProgress.Id;
             var planId = progressItem.ConstructionProgress.PlanId;
-            await InvalidateProgressCache(progressId, projectId, planId);
+            
+            // Use comprehensive cache invalidation if this is a new Approved report or status changed to Approved
+            if (model.Status == InspectionReportStatus.Approved && 
+                (model.Id == 0 || model.InspectionDecision.HasValue))
+            {
+                await InvalidateAllRelatedCaches(inspectionReport.Id, projectId, progressId, planId);
+            }
+            else
+            {
+                // For non-approved reports, just invalidate basic caches
+                await InvalidateProgressCache(progressId, projectId, planId);
+            }
             
             // Return the updated data with additional details
             return await MapToInspectionReportDTO(inspectionReport);
@@ -371,6 +382,12 @@ namespace Sep490_Backend.Services.InspectionReportService
             
             _context.Set<InspectionReport>().Update(report);
             
+            // Track if progress item was updated to invalidate related caches later
+            bool progressItemUpdated = false;
+            int projectId = report.ConstructionProgressItem.ConstructionProgress.ProjectId;
+            var progressId = report.ConstructionProgressItem.ConstructionProgress.Id;
+            var planId = report.ConstructionProgressItem.ConstructionProgress.PlanId;
+
             // If status is being set to Approved and the inspection decision is Pass,
             // update the construction progress item status and progress
             if (status == InspectionReportStatus.Approved)
@@ -382,6 +399,8 @@ namespace Sep490_Backend.Services.InspectionReportService
                 
                 if (progressItem != null)
                 {
+                    progressItemUpdated = true;
+                    
                     if ((InspectionDecision)report.InspectionDecision == InspectionDecision.Pass)
                     {
                         // Record the old progress value
@@ -510,20 +529,104 @@ namespace Sep490_Backend.Services.InspectionReportService
                 _logger.LogError(ex, "Failed to send email notification for inspection report {ReportId}", report.Id);
             }
             
-            // Invalidate cache
-            int projectId = report.ConstructionProgressItem.ConstructionProgress.ProjectId;
-            await InvalidateInspectionReportCaches(report.Id, projectId);
-            
-            // Invalidate construction progress caches if we updated a progress item
-            if (status == InspectionReportStatus.Approved)
+            // Perform comprehensive cache invalidation if progress item was updated
+            if (progressItemUpdated && status == InspectionReportStatus.Approved)
             {
-                var progressId = report.ConstructionProgressItem.ConstructionProgress.Id;
-                var planId = report.ConstructionProgressItem.ConstructionProgress.PlanId;
-                await InvalidateProgressCache(progressId, projectId, planId);
+                await InvalidateAllRelatedCaches(report.Id, projectId, progressId, planId);
+            }
+            else
+            {
+                // For non-approval status changes or when no progress items are affected, 
+                // just invalidate inspection report caches
+                await InvalidateInspectionReportCaches(report.Id, projectId);
             }
             
             // Return updated report
             return await MapToInspectionReportDTO(report);
+        }
+
+        /// <summary>
+        /// Invalidates all caches that could be affected when an inspection report is approved and updates progress items
+        /// </summary>
+        /// <param name="reportId">The ID of the inspection report that was approved</param>
+        /// <param name="projectId">The ID of the project</param>
+        /// <param name="progressId">The ID of the construction progress</param>
+        /// <param name="planId">The ID of the construction plan</param>
+        /// <returns>Task</returns>
+        private async Task InvalidateAllRelatedCaches(int reportId, int projectId, int progressId, int planId)
+        {
+            try
+            {
+                _logger.LogInformation($"Invalidating all related caches for inspection report {reportId} in project {projectId}");
+                
+                // 1. Invalidate inspection report caches
+                await InvalidateInspectionReportCaches(reportId, projectId);
+                
+                // 2. Invalidate construction progress caches
+                await InvalidateProgressCache(progressId, projectId, planId);
+                
+                // 3. Invalidate construction progress item caches - no specific constants for these, use patterns
+                await _cacheService.DeleteByPatternAsync("ConstructionProgressItem:*");
+                await _cacheService.DeleteByPatternAsync($"ConstructionProgressItem:Project:{projectId}:*");
+                
+                // 4. Invalidate construction plan caches
+                await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_PLAN_CACHE_KEY);
+                await _cacheService.DeleteByPatternAsync($"CONSTRUCTION_PLAN:*");
+                
+                // 5. Invalidate project caches more comprehensively
+                await InvalidateProjectCaches(projectId);
+                await _cacheService.DeleteByPatternAsync($"{RedisCacheKey.PROJECT_ALL_PATTERN}*");
+                
+                // 6. Invalidate resource inventory caches
+                await _cacheService.DeleteAsync(RedisCacheKey.RESOURCE_INVENTORY_CACHE_KEY);
+                await _cacheService.DeleteByPatternAsync($"RESOURCE_INVENTORY:*");
+                await _cacheService.DeleteAsync(string.Format(RedisCacheKey.RESOURCE_INVENTORY_BY_TYPE_CACHE_KEY, "*"));
+                await _cacheService.DeleteByPatternAsync($"RESOURCE_INVENTORY:PROJECT:{projectId}:*");
+                
+                // 7. Invalidate vehicle caches (affected by RollbackMaterials method)
+                await _cacheService.DeleteByPatternAsync($"VEHICLE:*");
+                await _cacheService.DeleteByPatternAsync($"MACHINE:*");
+                
+                // 8. Invalidate construction log caches (they display progress data)
+                await _cacheService.DeleteAsync(RedisCacheKey.CONSTRUCTION_LOG_CACHE_KEY);
+                await _cacheService.DeleteAsync(string.Format(RedisCacheKey.CONSTRUCTION_LOG_BY_PROJECT_CACHE_KEY, projectId));
+                await _cacheService.DeleteByPatternAsync(RedisCacheKey.CONSTRUCTION_LOG_ALL_PATTERN);
+                
+                // 9. Invalidate task-related caches (using pattern as there's no dedicated constant)
+                await _cacheService.DeleteByPatternAsync($"TASK:*");
+                await _cacheService.DeleteByPatternAsync($"TASK:PROJECT:{projectId}:*");
+                
+                // 10. Invalidate dashboard/statistics/report caches
+                await _cacheService.DeleteByPatternAsync($"DASHBOARD:*");
+                await _cacheService.DeleteByPatternAsync($"STATISTICS:*");
+                await _cacheService.DeleteByPatternAsync($"REPORT:*");
+                
+                // 11. Invalidate project statistics cache
+                await _cacheService.DeleteAsync(string.Format(RedisCacheKey.PROJECT_STATISTICS_PROJECT_CACHE_KEY, projectId));
+                
+                // 12. Invalidate user-related caches for project members
+                var projectUserIds = await _context.ProjectUsers
+                    .Where(pu => pu.ProjectId == projectId && !pu.Deleted)
+                    .Select(pu => pu.UserId)
+                    .ToListAsync();
+                
+                // Also invalidate project user cache
+                await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_USER_CACHE_KEY);
+                
+                foreach (var userId in projectUserIds)
+                {
+                    await _cacheService.DeleteByPatternAsync($"USER:{userId}:*");
+                    await _cacheService.DeleteByPatternAsync($"NOTIFICATIONS:USER:{userId}:*");
+                    await _cacheService.DeleteAsync(string.Format(RedisCacheKey.PROJECT_STATISTICS_USER_CACHE_KEY, userId));
+                }
+                
+                _logger.LogInformation($"Cache invalidation completed for inspection report {reportId} approval");
+            }
+            catch (Exception ex)
+            {
+                // Log error but don't fail the operation
+                _logger.LogError(ex, $"Error during cache invalidation after inspection report approval: {ex.Message}");
+            }
         }
 
         public async Task<int> Delete(int id, int actionBy)
@@ -1121,8 +1224,8 @@ namespace Sep490_Backend.Services.InspectionReportService
                 }
             }
             
-            // Invalidate vehicle caches
-            await _cacheService.DeleteByPatternAsync("VEHICLE:*");
+            // Note: Cache invalidation for vehicle and resource inventory is now handled
+            // at a higher level in the InvalidateAllRelatedCaches method
             
             await _context.SaveChangesAsync();
         }
@@ -1226,8 +1329,15 @@ namespace Sep490_Backend.Services.InspectionReportService
                         // Log the project status change
                         _logger.LogInformation($"All progress items for project {relatedProjectId} are marked as Done, changing status to WaitingApproveCompleted");
                         
-                        // Invalidate project caches after status update
+                        // Invalidate project caches after status update - use more comprehensive invalidation
                         await InvalidateProjectCaches(relatedProjectId);
+                        await _cacheService.DeleteByPatternAsync($"{RedisCacheKey.PROJECT_ALL_PATTERN}*");
+                        await _cacheService.DeleteAsync(RedisCacheKey.PROJECT_STATUS_CACHE_KEY);
+                        
+                        // Also invalidate dashboard and statistics caches since project status is shown there
+                        await _cacheService.DeleteByPatternAsync($"DASHBOARD:*");
+                        await _cacheService.DeleteByPatternAsync($"STATISTICS:*");
+                        await _cacheService.DeleteAsync(string.Format(RedisCacheKey.PROJECT_STATISTICS_PROJECT_CACHE_KEY, relatedProjectId));
                         
                         // Send email notification for the status change
                         if (oldStatus != ProjectStatusEnum.WaitingApproveCompleted)
