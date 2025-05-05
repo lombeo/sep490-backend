@@ -132,6 +132,8 @@ namespace Sep490_Backend
             builder.Services.AddScoped<IConstructionPlanEmailService, ConstructionPlanEmailService>();
             builder.Services.AddScoped<IInspectionReportEmailService, InspectionReportEmailService>();
             builder.Services.AddScoped<IProjectEmailService, ProjectEmailService>();
+            builder.Services.AddScoped<IResourceMobilizationEmailService, ResourceMobilizationEmailService>();
+            builder.Services.AddScoped<IResourceAllocationEmailService, ResourceAllocationEmailService>();
             
             builder.Services.AddHostedService<DefaultBackgroundService>();
             builder.Services.AddHostedService<LockCleanupHostedService>();

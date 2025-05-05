@@ -15,6 +15,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Sep490_Backend.Services.ResourceReqService
 {
@@ -56,19 +57,22 @@ namespace Sep490_Backend.Services.ResourceReqService
         private readonly IHelperService _helperService;
         private readonly IDataService _dataService;
         private readonly ILogger<ResourceReqService> _logger;
+        private readonly IServiceProvider _serviceProvider;
 
         public ResourceReqService(
             BackendContext context,
             ICacheService cacheService,
             IHelperService helperService,
             IDataService dataService,
-            ILogger<ResourceReqService> logger)
+            ILogger<ResourceReqService> logger,
+            IServiceProvider serviceProvider)
         {
             _context = context;
             _cacheService = cacheService;
             _helperService = helperService;
             _dataService = dataService;
             _logger = logger;
+            _serviceProvider = serviceProvider;
         }
 
         /// <summary>
@@ -974,6 +978,34 @@ namespace Sep490_Backend.Services.ResourceReqService
                 // Invalidate cache
                 await InvalidateResourceMobilizationReqCache(request.Id, request.ProjectId);
                 
+                // Send email notification
+                try
+                {
+                    // Use IServiceProvider to get the email service to avoid circular dependencies
+                    var emailService = _serviceProvider.GetService<IResourceMobilizationEmailService>();
+                    if (emailService != null)
+                    {
+                        // Fire and forget - don't await this
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await emailService.SendMobilizationStatusChangeNotification(request.Id, request.Status, actionBy);
+                            }
+                            catch (Exception ex)
+                            {
+                                // Log the error but don't stop execution
+                                _logger.LogError(ex, "Error sending mobilization email notification: {Message}", ex.Message);
+                            }
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Log but don't fail the operation if email sending fails
+                    _logger.LogError(ex, "Failed to send mobilization status change notification: {Message}", ex.Message);
+                }
+                
                 return request;
             }
             catch (Exception ex)
@@ -1117,6 +1149,34 @@ namespace Sep490_Backend.Services.ResourceReqService
                 
                 // Invalidate cache
                 await InvalidateResourceMobilizationReqCache(request.Id, request.ProjectId);
+
+                // Send email notification
+                try
+                {
+                    // Use IServiceProvider to get the email service to avoid circular dependencies
+                    var emailService = _serviceProvider.GetService<IResourceMobilizationEmailService>();
+                    if (emailService != null)
+                    {
+                        // Fire and forget - don't await this
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await emailService.SendMobilizationStatusChangeNotification(request.Id, request.Status, actionBy);
+                            }
+                            catch (Exception ex)
+                            {
+                                // Log the error but don't stop execution
+                                _logger.LogError(ex, "Error sending mobilization rejection email notification: {Message}", ex.Message);
+                            }
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Log but don't fail the operation if email sending fails
+                    _logger.LogError(ex, "Failed to send mobilization rejection notification: {Message}", ex.Message);
+                }
 
                 return request;
             }
@@ -2235,6 +2295,34 @@ namespace Sep490_Backend.Services.ResourceReqService
                 // Invalidate cache
                 await InvalidateResourceAllocationReqCache(request.Id, request.FromProjectId, request.ToProjectId);
 
+                // Send email notification
+                try
+                {
+                    // Use IServiceProvider to get the email service to avoid circular dependencies
+                    var emailService = _serviceProvider.GetService<IResourceAllocationEmailService>();
+                    if (emailService != null)
+                    {
+                        // Fire and forget - don't await this
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await emailService.SendAllocationStatusChangeNotification(request.Id, request.Status, actionBy);
+                            }
+                            catch (Exception ex)
+                            {
+                                // Log the error but don't stop execution
+                                _logger.LogError(ex, "Error sending allocation approval email notification: {Message}", ex.Message);
+                            }
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Log but don't fail the operation if email sending fails
+                    _logger.LogError(ex, "Failed to send allocation approval notification: {Message}", ex.Message);
+                }
+
                 return request;
             }
             catch (Exception ex)
@@ -2840,6 +2928,34 @@ namespace Sep490_Backend.Services.ResourceReqService
                 
                 // Invalidate cache
                 await InvalidateResourceAllocationReqCache(request.Id, request.FromProjectId, request.ToProjectId);
+
+                // Send email notification
+                try
+                {
+                    // Use IServiceProvider to get the email service to avoid circular dependencies
+                    var emailService = _serviceProvider.GetService<IResourceAllocationEmailService>();
+                    if (emailService != null)
+                    {
+                        // Fire and forget - don't await this
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await emailService.SendAllocationStatusChangeNotification(request.Id, request.Status, actionBy);
+                            }
+                            catch (Exception ex)
+                            {
+                                // Log the error but don't stop execution
+                                _logger.LogError(ex, "Error sending allocation rejection email notification: {Message}", ex.Message);
+                            }
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Log but don't fail the operation if email sending fails
+                    _logger.LogError(ex, "Failed to send allocation rejection notification: {Message}", ex.Message);
+                }
 
                 return request;
             }

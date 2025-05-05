@@ -111,7 +111,6 @@
             public const string DELETE_SUCCESS = "S-CTR-002"; //Delete contract successfully!
             public const string SAVE_SUCCESS = "S-CTR-003"; //Save contract successfully!
             //Error
-            public const string CONTRACT_CODE_EXIST = "E-CTR-001"; //Contract code has already exist
             public const string PROJECT_ALREADY_HAS_CONTRACT = "E-CTR-002"; //Project already has a contract, each project can only have one contract
         }
 

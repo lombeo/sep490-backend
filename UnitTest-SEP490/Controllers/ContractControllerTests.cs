@@ -154,38 +154,6 @@ namespace UnitTest_SEP490.Controllers
         }
 
         [Fact]
-        public async Task SaveContract_ReturnsFailureResponse_WhenContractCodeExists()
-        {
-            // Arrange
-            var model = new SaveContractDTO
-            {
-                Id = 0,
-                ContractCode = "C001",
-                ContractName = "Test Contract",
-                ProjectId = 1,
-                StartDate = DateTime.Now,
-                EndDate = DateTime.Now.AddMonths(3),
-                EstimatedDays = 90,
-                Status = Sep490_Backend.Infra.Enums.ContractStatusEnum.Active,
-                Tax = 10,
-                SignDate = DateTime.Now
-            };
-
-            _mockContractService
-                .Setup(s => s.Save(It.IsAny<SaveContractDTO>()))
-                .ThrowsAsync(new ArgumentException(Message.ContractMessage.CONTRACT_CODE_EXIST));
-
-            // Act
-            var result = await _controller.SaveContract(model);
-
-            // Assert
-            result.Should().NotBeNull();
-            result.Success.Should().BeFalse();
-            result.Code.Should().Be(400);
-            result.Message.Should().Be(Message.ContractMessage.CONTRACT_CODE_EXIST);
-        }
-
-        [Fact]
         public async Task SaveContract_ReturnsFailureResponse_WhenProjectAlreadyHasContract()
         {
             // Arrange

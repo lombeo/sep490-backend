@@ -473,16 +473,6 @@ namespace Sep490_Backend.Services.ContractService
                 {
                     throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
                 }
-
-                // Check for duplicate contract code excluding current contract
-                bool isDuplicateCode = await _context.Contracts
-                    .AsNoTracking()
-                    .AnyAsync(t => t.ContractCode == model.ContractCode && t.Id != model.Id && !t.Deleted);
-                    
-                if (isDuplicateCode)
-                {
-                    throw new ArgumentException(Message.ContractMessage.CONTRACT_CODE_EXIST);
-                }
             }
 
             // Handle file attachments
