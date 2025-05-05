@@ -893,15 +893,48 @@ namespace Sep490_Backend.Services.ProjectService
         /// <returns>Project statistics including planned, inprogress, inspected and remain values</returns>
         public async Task<ProjectStatisticsDTO> GetUserProjectStatistics(int actionBy)
         {
-            // Try to get from cache first
-            string cacheKey = string.Format(RedisCacheKey.PROJECT_STATISTICS_USER_CACHE_KEY, actionBy);
-            var cachedResult = await _cacheService.GetAsync<ProjectStatisticsDTO>(cacheKey);
-            if (cachedResult != null)
+            // Check if user has Executive Board role
+            bool isExecutiveBoard = _helperService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD);
+
+            // If user is Executive Board, get statistics for all projects
+            if (isExecutiveBoard)
             {
-                return cachedResult;
+                // Calculate statistics for all projects
+            
+                // 1. Get all contract details sums (planned value)
+                decimal planned = await _context.ContractDetails
+                    .Where(cd => !cd.Deleted)
+                    .SumAsync(cd => cd.Total);
+
+                // 2. Get all progress items with status = InProgress (1)
+                decimal inProgress = await _context.ConstructionProgressItems
+                    .Where(pi => pi.Status == Infra.Enums.ProgressStatusEnum.InProgress && !pi.Deleted)
+                    .SumAsync(pi => pi.UsedQuantity * pi.UnitPrice);
+
+                // 3. Get all progress items with status = Done (2)
+                decimal inspected = await _context.ConstructionProgressItems
+                    .Where(pi => pi.Status == Infra.Enums.ProgressStatusEnum.Done && !pi.Deleted)
+                    .SumAsync(pi => pi.UsedQuantity * pi.UnitPrice);
+
+                // 4. Calculate remaining value
+                decimal remain = planned - inProgress - inspected;
+
+                // Create result object
+                var result = new ProjectStatisticsDTO
+                {
+                    Statistics = new List<ProjectStatisticItemDTO>
+                    {
+                        new ProjectStatisticItemDTO { Label = "planned", Value = planned },
+                        new ProjectStatisticItemDTO { Label = "inprogress", Value = inProgress },
+                        new ProjectStatisticItemDTO { Label = "inspected", Value = inspected },
+                        new ProjectStatisticItemDTO { Label = "remain", Value = remain }
+                    }
+                };
+
+                return result;
             }
 
-            // Get projects that the user has access to
+            // For non-Executive Board users, only get projects they have access to
             var userProjects = await _context.ProjectUsers
                 .Where(pu => pu.UserId == actionBy && !pu.Deleted)
                 .Select(pu => pu.ProjectId)
@@ -910,7 +943,7 @@ namespace Sep490_Backend.Services.ProjectService
             // If user is not part of any project, return empty statistics
             if (!userProjects.Any())
             {
-                var emptyResult = new ProjectStatisticsDTO
+                return new ProjectStatisticsDTO
                 {
                     Statistics = new List<ProjectStatisticItemDTO>
                     {
@@ -920,9 +953,6 @@ namespace Sep490_Backend.Services.ProjectService
                         new ProjectStatisticItemDTO { Label = "remain", Value = 0 }
                     }
                 };
-
-                await _cacheService.SetAsync(cacheKey, emptyResult, TimeSpan.FromMinutes(30));
-                return emptyResult;
             }
 
             // Calculate statistics for all projects the user has access to
@@ -950,7 +980,7 @@ namespace Sep490_Backend.Services.ProjectService
             decimal remain = planned - inProgress - inspected;
 
             // Create result object
-            var result = new ProjectStatisticsDTO
+            return new ProjectStatisticsDTO
             {
                 Statistics = new List<ProjectStatisticItemDTO>
                 {
@@ -960,11 +990,6 @@ namespace Sep490_Backend.Services.ProjectService
                     new ProjectStatisticItemDTO { Label = "remain", Value = remain }
                 }
             };
-
-            // Cache the result
-            await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(30));
-
-            return result;
         }
 
         /// <summary>
@@ -984,24 +1009,21 @@ namespace Sep490_Backend.Services.ProjectService
                 throw new KeyNotFoundException(Message.CommonMessage.NOT_FOUND);
             }
 
-            // Check if user has access to the project
-            bool userHasAccess = _helperService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD) ||
-                                 await _context.ProjectUsers
-                                     .AnyAsync(pu => pu.ProjectId == projectId && 
-                                              pu.UserId == actionBy && 
-                                              !pu.Deleted);
+            // Check if user has Executive Board role
+            bool isExecutiveBoard = _helperService.IsInRole(actionBy, RoleConstValue.EXECUTIVE_BOARD);
 
-            if (!userHasAccess)
+            // If not Executive Board, check project access
+            if (!isExecutiveBoard)
             {
-                throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED_PROJECT);
-            }
+                bool userHasAccess = await _context.ProjectUsers
+                    .AnyAsync(pu => pu.ProjectId == projectId && 
+                             pu.UserId == actionBy && 
+                             !pu.Deleted);
 
-            // Try to get from cache
-            string cacheKey = string.Format(RedisCacheKey.PROJECT_STATISTICS_PROJECT_CACHE_KEY, projectId);
-            var cachedResult = await _cacheService.GetAsync<ProjectStatisticsDTO>(cacheKey);
-            if (cachedResult != null)
-            {
-                return cachedResult;
+                if (!userHasAccess)
+                {
+                    throw new UnauthorizedAccessException(Message.CommonMessage.NOT_ALLOWED_PROJECT);
+                }
             }
 
             // Calculate statistics for the specific project
@@ -1029,7 +1051,7 @@ namespace Sep490_Backend.Services.ProjectService
             decimal remain = planned - inProgress - inspected;
 
             // Create result object
-            var result = new ProjectStatisticsDTO
+            return new ProjectStatisticsDTO
             {
                 Statistics = new List<ProjectStatisticItemDTO>
                 {
@@ -1039,11 +1061,6 @@ namespace Sep490_Backend.Services.ProjectService
                     new ProjectStatisticItemDTO { Label = "remain", Value = remain }
                 }
             };
-
-            // Cache the result
-            await _cacheService.SetAsync(cacheKey, result, TimeSpan.FromMinutes(30));
-
-            return result;
         }
     }
 }
